@@ -141,10 +141,14 @@ async function checkNaver(): Promise<Partial<HealthCheck>> {
   );
   if (err) return { status: "error", detail: msg(err), latencyMs };
   if (res!.status === 401) {
-    const hint =
-      secret.length !== 10
-        ? ` (Client Secret 이 ${secret.length}자입니다 — 네이버 Secret 은 보통 10자)`
-        : " (애플리케이션에 '검색' API 가 추가되어 있는지 확인)";
+    // 네이버 클라우드 플랫폼(NCP) 자격증명과 혼동하는 경우가 많다.
+    // NCP 는 X-NCP-APIGW-API-KEY(40자) 를 쓰며 검색 API 를 제공하지 않는다.
+    const looksLikeNcp = secret.length === 40 && id.length === 10;
+    const hint = looksLikeNcp
+      ? " — 네이버 클라우드 플랫폼(NCP) 키로 보입니다. NCP 는 검색 API 를 제공하지 않습니다. developers.naver.com 에서 별도 애플리케이션을 등록하고 '검색' API 를 추가하세요 (Secret 은 10자)"
+      : secret.length !== 10
+        ? ` (Client Secret 이 ${secret.length}자입니다 — 네이버 개발자센터 Secret 은 보통 10자)`
+        : " (애플리케이션 '사용 API' 에 검색이 추가되어 있는지 확인)";
     return { status: "error", detail: `401 인증 실패${hint}`, latencyMs };
   }
   if (!res!.ok)
