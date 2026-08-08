@@ -1,9 +1,12 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import useSWR from "swr";
 import { swrFetcher } from "@/lib/fetcher";
+import { useDebounced } from "@/lib/useDebounced";
+import { parseUrlState, useSyncUrl, shareUrl } from "@/lib/urlState";
 import { UIWANG, DONGS, LANDMARKS, type CategoryKey } from "@/lib/uiwang";
 import { UIWANG_BBOX } from "@/lib/uiwang-boundary";
 import type {
@@ -36,13 +39,16 @@ const POLL = {
 type MobileTab = "map" | "places" | "live";
 
 export default function Dashboard({ appKey }: { appKey?: string }) {
+  // 초기 상태는 URL 에서 복원한다 (공유 링크로 들어온 경우)
+  const initial = parseUrlState(useSearchParams());
+
   const [center, setCenter] = useState<{ lat: number; lng: number }>({
-    lat: UIWANG.center.lat,
-    lng: UIWANG.center.lng,
+    lat: initial.lat,
+    lng: initial.lng,
   });
-  const [level, setLevel] = useState(6);
-  const [radius, setRadius] = useState<number>(UIWANG.defaultRadius);
-  const [categories, setCategories] = useState<CategoryKey[]>(["SC4", "HP8", "MT1", "CS2"]);
+  const [level, setLevel] = useState(initial.level);
+  const [radius, setRadius] = useState<number>(initial.radius);
+  const [categories, setCategories] = useState<CategoryKey[]>(initial.categories);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const [newsQuery, setNewsQuery] = useState("의왕시");
   const [layers, setLayers] = useState({
@@ -54,11 +60,35 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
   });
   const [tab, setTab] = useState<MobileTab>("map");
 
-  const geo = `lat=${center.lat.toFixed(4)}&lng=${center.lng.toFixed(4)}`;
+  // 지도 드래그·슬라이더 조작 중에는 요청을 보내지 않는다.
+  // 이 값들이 그대로 SWR 키가 되므로 디바운스 없이는 중간값마다 호출된다.
+  const dCenter = useDebounced(center, 500);
+  const dRadius = useDebounced(radius, 500);
+
+  const urlState = useMemo(
+    () => ({ lat: center.lat, lng: center.lng, level, radius, categories }),
+    [center.lat, center.lng, level, radius, categories],
+  );
+  useSyncUrl(urlState);
+
+  const [copied, setCopied] = useState(false);
+  const share = useCallback(async () => {
+    const url = shareUrl(urlState);
+    try {
+      if (navigator.share) await navigator.share({ title: "의왕 인사이드", url });
+      else await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      /* 사용자가 공유를 취소한 경우 — 무시 */
+    }
+  }, [urlState]);
+
+  const geo = `lat=${dCenter.lat.toFixed(4)}&lng=${dCenter.lng.toFixed(4)}`;
 
   const places = useSWR<ApiEnvelope<PlacesPayload>>(
     categories.length
-      ? `/api/places?categories=${categories.join(",")}&${geo}&radius=${radius}`
+      ? `/api/places?categories=${categories.join(",")}&${geo}&radius=${dRadius}`
       : null,
     swrFetcher,
     { keepPreviousData: true, revalidateOnFocus: false },
@@ -172,6 +202,14 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             {/* SWR 은 클라이언트에서만 fetch 하므로 SSR 결과와 첫 렌더가 일치한다 */}
             {traffic.data ? `갱신 ${hhmm(traffic.data.data.updatedAt)}` : ""}
           </span>
+          <button
+            type="button"
+            onClick={share}
+            title="현재 화면을 링크로 공유"
+            className="rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-[11.5px] font-bold transition hover:border-[var(--brand)] hover:text-[var(--brand)]"
+          >
+            {copied ? "✓ 복사됨" : "🔗 공유"}
+          </button>
           <button
             type="button"
             onClick={refreshAll}

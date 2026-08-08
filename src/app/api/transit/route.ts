@@ -6,6 +6,9 @@ import type { TransitPayload, BusStop, BusArrival } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
+/** CDN 캐시 수명(초) — 버스 도착은 아주 짧게 */
+const CACHE_SEC = 20;
+
 /** 경기도 버스정보(GBIS) — 공공데이터포털 6410000 */
 const GBIS = "https://apis.data.go.kr/6410000";
 
@@ -191,6 +194,7 @@ export async function GET(req: Request) {
       return ok(
         { stops: [], source: "gbis", updatedAt: nowISO() } satisfies TransitPayload,
         "주변에 조회된 정류소가 없습니다.",
+        CACHE_SEC,
       );
     }
 
@@ -228,7 +232,11 @@ export async function GET(req: Request) {
       }),
     );
 
-    return ok({ stops, source: "gbis", updatedAt: nowISO() } satisfies TransitPayload);
+    return ok(
+      { stops, source: "gbis", updatedAt: nowISO() } satisfies TransitPayload,
+      undefined,
+      CACHE_SEC,
+    );
   } catch (e) {
     console.error("[transit:arrivals]", e);
     const reason = e instanceof Error ? e.message : String(e);

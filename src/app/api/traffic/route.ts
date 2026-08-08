@@ -9,6 +9,9 @@ import type {
 
 export const dynamic = "force-dynamic";
 
+/** CDN 캐시 수명(초) — 교통 상황은 짧게 */
+const CACHE_SEC = 45;
+
 /** ITS 국가교통정보센터 오픈API */
 const ITS = "https://openapi.its.go.kr:9443";
 
@@ -138,17 +141,22 @@ export async function GET() {
       return ok(
         { incidents, links, source: "its", updatedAt: nowISO() } satisfies TrafficPayload,
         "현재 의왕시 범위에 보고된 돌발상황이 없습니다.",
+        CACHE_SEC,
       );
     }
 
     // 정체 심한 구간 우선
     links.sort((a, b) => a.speed - b.speed);
-    return ok({
-      incidents,
-      links: links.slice(0, 30),
-      source: "its",
-      updatedAt: nowISO(),
-    } satisfies TrafficPayload);
+    return ok(
+      {
+        incidents,
+        links: links.slice(0, 30),
+        source: "its",
+        updatedAt: nowISO(),
+      } satisfies TrafficPayload,
+      undefined,
+      CACHE_SEC,
+    );
   } catch (e) {
     console.error("[traffic]", e);
     return fail(sampleTraffic(), "ITS API 호출 실패 — 샘플 교통정보를 표시합니다.");

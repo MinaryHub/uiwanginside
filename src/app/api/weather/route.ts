@@ -4,6 +4,9 @@ import type { WeatherPayload, WeatherForecastItem } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
+/** CDN 캐시 수명(초) — 기상청 실황은 매시 갱신 */
+const CACHE_SEC = 600;
+
 const KMA_BASE = "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0";
 
 const SKY: Record<string, string> = { "1": "맑음", "3": "구름많음", "4": "흐림" };
@@ -175,7 +178,7 @@ export async function GET() {
       source: "kma",
       updatedAt: nowISO(),
     };
-    return ok(payload);
+    return ok(payload, undefined, CACHE_SEC);
   } catch (e) {
     console.error("[weather]", e);
     return fail(sampleWeather(), "기상청 API 호출 실패 — 샘플 날씨를 표시합니다.");

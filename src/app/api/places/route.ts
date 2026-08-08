@@ -1,4 +1,4 @@
-import { timedFetch, ok, fail } from "@/lib/fetcher";
+import { timedFetch, ok, fail, createTtlCache } from "@/lib/fetcher";
 import { fetchOverpassPlaces } from "@/lib/overpass";
 import { UIWANG, CATEGORY_MAP, type CategoryKey } from "@/lib/uiwang";
 import type { Place } from "@/lib/types";
@@ -117,6 +117,13 @@ function samplePlaces(codes: CategoryKey[]): Place[] {
   return out;
 }
 
+/**
+ * 5분 캐시. 좌표는 소수점 3자리(약 100m)로 뭉뚱그려 키를 만든다.
+ * 지도를 조금씩 움직일 때마다 캐시가 빗나가면 캐시가 의미가 없다.
+ */
+const cache = createTtlCache<{ places: Place[]; source: "kakao" | "osm" }>(5 * 60_000);
+const CACHE_TTL_SEC = 300;
+
 export async function GET(req: Request) {
   const sp = new URL(req.url).searchParams;
   const codes = (sp.get("categories") ?? "SC4,HP8,MT1,CS2")
@@ -125,6 +132,14 @@ export async function GET(req: Request) {
   const lat = Number(sp.get("lat") ?? UIWANG.center.lat);
   const lng = Number(sp.get("lng") ?? UIWANG.center.lng);
   const radius = Math.min(Number(sp.get("radius") ?? UIWANG.defaultRadius), 20000);
+
+  if (codes.length === 0) {
+    return ok({ places: [], source: "kakao" as const }, undefined, CACHE_TTL_SEC);
+  }
+
+  const cacheKey = `${codes.slice().sort().join(",")}|${lat.toFixed(3)}|${lng.toFixed(3)}|${radius}`;
+  const cached = cache.get(cacheKey);
+  if (cached) return ok(cached, undefined, CACHE_TTL_SEC);
 
   const key = process.env.KAKAO_REST_KEY;
 
@@ -136,7 +151,9 @@ export async function GET(req: Request) {
       );
       const places = results.flat();
       places.sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
-      return ok({ places, source: "kakao" as const });
+      const payload = { places, source: "kakao" as const };
+      cache.set(cacheKey, payload);
+      return ok(payload, undefined, CACHE_TTL_SEC);
     } catch (e) {
       console.error("[places:kakao]", e);
       // 카카오 실패 시 아래 OSM 폴백으로 계속 진행
@@ -146,6 +163,7 @@ export async function GET(req: Request) {
   // 2순위: OpenStreetMap — 무인증이지만 샘플이 아닌 실제 데이터
   try {
     const places = await fetchOverpassPlaces(codes, lat, lng, radius);
+    cache.set(cacheKey, { places, source: "osm" as const });
     return ok(
       { places, source: "osm" as const },
       key

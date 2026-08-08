@@ -2,6 +2,9 @@ import { timedFetch, ok, fail, nowISO } from "@/lib/fetcher";
 import type { NewsPayload, NewsItem } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+
+/** CDN 캐시 수명(초) — 뉴스는 5분이면 충분 */
+const CACHE_SEC = 300;
 export const revalidate = 0;
 
 function stripTags(s: string) {
@@ -98,7 +101,11 @@ export async function GET(req: Request) {
         source: hostOf(link),
       };
     });
-    return ok({ items, source: "naver", updatedAt: nowISO() } satisfies NewsPayload);
+    return ok(
+      { items, source: "naver", updatedAt: nowISO() } satisfies NewsPayload,
+      undefined,
+      CACHE_SEC,
+    );
   } catch (e) {
     console.error("[news]", e);
     const m = e instanceof Error ? e.message : "";
