@@ -47,7 +47,23 @@ export default function TransitPanel({
   const stops = d?.stops ?? [];
 
   return (
-    <Card title="대중교통" icon="🚌" right={<LiveDot live={d?.source === "gbis"} />}>
+    <Card
+      title="대중교통"
+      icon="🚌"
+      right={
+        d?.source === "osm" ? (
+          <span
+            title="OpenStreetMap 실제 정류소 위치 · 도착 예정 시간은 경기버스 정류소 조회 승인 후 표시"
+            className="inline-flex items-center gap-1 text-[10.5px] font-bold text-blue-500"
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+            OSM 위치만
+          </span>
+        ) : (
+          <LiveDot live={d?.source === "gbis"} />
+        )
+      }
+    >
       {isLoading && !d ? (
         <Skeleton rows={3} />
       ) : (
@@ -84,7 +100,9 @@ export default function TransitPanel({
                     </ul>
                   ) : (
                     <p className="py-1 text-[11.5px] text-[var(--muted)]">
-                      운행 중인 버스 정보가 없습니다.
+                      {d?.source === "osm"
+                        ? "도착정보 연동 대기 중"
+                        : "운행 중인 버스 정보가 없습니다."}
                     </p>
                   )}
                 </div>

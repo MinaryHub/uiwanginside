@@ -83,6 +83,10 @@ export async function GET(req: Request) {
     return ok({ items, source: "naver", updatedAt: nowISO() } satisfies NewsPayload);
   } catch (e) {
     console.error("[news]", e);
-    return fail(sampleNews(query), "네이버 뉴스 API 호출 실패 — 샘플 뉴스를 표시합니다.");
+    const reason =
+      e instanceof Error && e.message.includes("401")
+        ? "인증 실패 (Client ID/Secret 확인, 애플리케이션에 '검색' API 추가 필요)"
+        : "호출 실패";
+    return fail(sampleNews(query), `네이버 뉴스 API ${reason} — 샘플 뉴스를 표시합니다.`);
   }
 }

@@ -1,5 +1,6 @@
 import { XMLParser } from "fast-xml-parser";
 import { timedFetch, ok, fail, nowISO } from "@/lib/fetcher";
+import { fetchOverpassBusStops } from "@/lib/overpass";
 import { UIWANG } from "@/lib/uiwang";
 import type { TransitPayload, BusStop, BusArrival } from "@/lib/types";
 
@@ -15,15 +16,40 @@ function asArray<T>(v: T | T[] | undefined): T[] {
   return Array.isArray(v) ? v : [v];
 }
 
-async function getXml(url: string) {
+/**
+ * GBIS 는 정상 응답을 XML 로 주지만, data.go.kr 게이트웨이 단계의 인증/쿼터 오류는
+ * JSON(OpenAPI_ServiceResponse) 으로 내려온다. 두 형태를 모두 해석해야
+ * 오류가 "데이터 없음" 으로 둔갑하지 않는다.
+ */
+async function getGbis(url: string) {
   const res = await timedFetch(url);
   const text = await res.text();
+  const trimmed = text.trimStart();
+
+  if (trimmed.startsWith("{")) {
+    const j = JSON.parse(text);
+    const h = j?.OpenAPI_ServiceResponse?.cmmMsgHeader;
+    if (h) {
+      throw new Error(
+        `GBIS ${h.returnReasonCode}: ${h.returnAuthMsg ?? h.errMsg ?? "알 수 없는 오류"}`,
+      );
+    }
+    return j;
+  }
+
   const json = parser.parse(text);
-  const header = json?.response?.msgHeader ?? json?.msgHeader ?? json?.OpenAPI_ServiceResponse?.cmmMsgHeader;
-  const code = header?.resultCode ?? header?.returnReasonCode;
-  // GBIS 는 정상 시 resultCode 0, 데이터 없음은 4
+  const gwHeader = json?.OpenAPI_ServiceResponse?.cmmMsgHeader;
+  if (gwHeader) {
+    throw new Error(
+      `GBIS ${gwHeader.returnReasonCode}: ${gwHeader.returnAuthMsg ?? gwHeader.errMsg}`,
+    );
+  }
+
+  const header = json?.response?.msgHeader ?? json?.msgHeader;
+  const code = header?.resultCode;
+  // 정상 0, 데이터 없음 4
   if (code != null && Number(code) !== 0 && Number(code) !== 4) {
-    throw new Error(`GBIS ${code}: ${header?.resultMessage ?? header?.returnAuthMsg ?? text.slice(0, 150)}`);
+    throw new Error(`GBIS ${code}: ${header?.resultMessage ?? text.slice(0, 150)}`);
   }
   return json;
 }
@@ -111,15 +137,44 @@ export async function GET(req: Request) {
     return fail(sampleTransit(), "GBIS_SERVICE_KEY 미설정 — 샘플 버스정보를 표시합니다.");
   }
 
+  let rawStops: RawStop[];
   try {
     const aroundUrl =
       `${GBIS}/busstationservice/v2/getBusStationAroundListv2` +
       `?serviceKey=${key}&x=${lng}&y=${lat}`;
-    const aroundJson = await getXml(aroundUrl);
-    const rawStops = asArray<RawStop>(
-      aroundJson?.response?.msgBody?.busStationAroundList,
-    );
+    const aroundJson = await getGbis(aroundUrl);
+    rawStops = asArray<RawStop>(aroundJson?.response?.msgBody?.busStationAroundList);
+  } catch (e) {
+    // 정류소 조회 서비스만 미승인인 경우가 흔하다 (도착정보와 별개 활용신청).
+    // 이때는 OSM 정류소 위치라도 실제 데이터로 보여준다.
+    console.error("[transit:station]", e);
+    const reason = e instanceof Error ? e.message : String(e);
+    try {
+      const osm = await fetchOverpassBusStops(lat, lng, 1200, limit);
+      return ok(
+        {
+          stops: osm.map((s) => ({
+            stationId: s.id,
+            mobileNo: s.ref,
+            name: s.name,
+            lat: s.lat,
+            lng: s.lng,
+            distance: s.distance,
+            arrivals: [],
+          })),
+          source: "osm" as const,
+          updatedAt: nowISO(),
+        } satisfies TransitPayload,
+        `정류소 위치는 OpenStreetMap 실제 데이터입니다. 도착 예정 시간을 보려면 ` +
+          `data.go.kr 에서 '경기도_버스정류소 조회' 활용신청이 추가로 필요합니다. (${reason})`,
+      );
+    } catch (osmErr) {
+      console.error("[transit:osm]", osmErr);
+      return fail(sampleTransit(), `경기버스 정류소 조회 실패: ${reason}`);
+    }
+  }
 
+  try {
     const stops: BusStop[] = rawStops
       .map((s) => ({
         stationId: String(s.stationId),
@@ -142,7 +197,7 @@ export async function GET(req: Request) {
     await Promise.all(
       stops.map(async (stop) => {
         try {
-          const j = await getXml(
+          const j = await getGbis(
             `${GBIS}/busarrivalservice/v2/getBusArrivalListv2` +
               `?serviceKey=${key}&stationId=${stop.stationId}`,
           );
@@ -175,7 +230,8 @@ export async function GET(req: Request) {
 
     return ok({ stops, source: "gbis", updatedAt: nowISO() } satisfies TransitPayload);
   } catch (e) {
-    console.error("[transit]", e);
-    return fail(sampleTransit(), "경기버스 API 호출 실패 — 샘플 버스정보를 표시합니다.");
+    console.error("[transit:arrivals]", e);
+    const reason = e instanceof Error ? e.message : String(e);
+    return fail(sampleTransit(), `경기버스 도착정보 조회 실패: ${reason}`);
   }
 }

@@ -8,6 +8,7 @@ import { UIWANG, DONGS, LANDMARKS, type CategoryKey } from "@/lib/uiwang";
 import type {
   ApiEnvelope,
   Place,
+  PlacesPayload,
   WeatherPayload,
   NewsPayload,
   TrafficPayload,
@@ -47,7 +48,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
 
   const geo = `lat=${center.lat.toFixed(4)}&lng=${center.lng.toFixed(4)}`;
 
-  const places = useSWR<ApiEnvelope<{ places: Place[] }>>(
+  const places = useSWR<ApiEnvelope<PlacesPayload>>(
     categories.length
       ? `/api/places?categories=${categories.join(",")}&${geo}&radius=${radius}`
       : null,
@@ -175,7 +176,10 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
       {anySample && (
         <div className="shrink-0 bg-amber-500/12 px-3 py-1 text-center text-[11px] font-semibold text-amber-700 md:px-4 dark:text-amber-300">
           일부 데이터가 샘플입니다 — <code>.env.local</code> 에 API 키를 설정하면 실시간으로
-          전환됩니다. (README 참고)
+          전환됩니다.{" "}
+          <a href="/status" className="underline underline-offset-2">
+            연동 상태 확인 →
+          </a>
         </div>
       )}
 

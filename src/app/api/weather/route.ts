@@ -71,7 +71,7 @@ async function callKma(path: string, params: Record<string, string>, key: string
   const qs = new URLSearchParams({
     serviceKey: key,
     dataType: "JSON",
-    numOfRows: "300",
+    numOfRows: "1000",
     pageNo: "1",
     nx: String(UIWANG.grid.nx),
     ny: String(UIWANG.grid.ny),
@@ -145,9 +145,9 @@ export async function GET() {
       b[it.category] = it.fcstValue ?? "";
       buckets.set(k, b);
     }
+    const cutoff = Date.now() - 30 * 60_000; // 현재 시각대는 남기고 그 이전만 제외
     const forecast: WeatherForecastItem[] = [...buckets.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
-      .slice(0, 8)
       .map(([k, v]) => {
         const iso = `${k.slice(0, 4)}-${k.slice(4, 6)}-${k.slice(6, 8)}T${k.slice(8, 10)}:00:00+09:00`;
         return {
@@ -157,7 +157,9 @@ export async function GET() {
           precipitation: PTY[v.PTY] ?? "없음",
           pop: v.POP ? Number(v.POP) : null,
         };
-      });
+      })
+      .filter((f) => new Date(f.time).getTime() >= cutoff)
+      .slice(0, 8);
 
     const payload: WeatherPayload = {
       now: {

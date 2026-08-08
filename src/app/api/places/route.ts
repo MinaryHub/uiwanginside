@@ -1,4 +1,5 @@
 import { timedFetch, ok, fail } from "@/lib/fetcher";
+import { fetchOverpassPlaces } from "@/lib/overpass";
 import { UIWANG, CATEGORY_MAP, type CategoryKey } from "@/lib/uiwang";
 import type { Place } from "@/lib/types";
 
@@ -123,25 +124,36 @@ export async function GET(req: Request) {
   const radius = Math.min(Number(sp.get("radius") ?? UIWANG.defaultRadius), 20000);
 
   const key = process.env.KAKAO_REST_KEY;
-  if (!key) {
-    return fail(
-      { places: samplePlaces(codes) },
-      "KAKAO_REST_KEY 미설정 — 샘플 데이터를 표시합니다.",
-    );
+
+  // 1순위: 카카오 로컬 (전화번호·상세페이지까지 제공)
+  if (key) {
+    try {
+      const results = await Promise.all(
+        codes.map((c) => searchCategory(key, c, lat, lng, radius)),
+      );
+      const places = results.flat();
+      places.sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
+      return ok({ places, source: "kakao" as const });
+    } catch (e) {
+      console.error("[places:kakao]", e);
+      // 카카오 실패 시 아래 OSM 폴백으로 계속 진행
+    }
   }
 
+  // 2순위: OpenStreetMap — 무인증이지만 샘플이 아닌 실제 데이터
   try {
-    const results = await Promise.all(
-      codes.map((c) => searchCategory(key, c, lat, lng, radius)),
+    const places = await fetchOverpassPlaces(codes, lat, lng, radius);
+    return ok(
+      { places, source: "osm" as const },
+      key
+        ? "카카오 로컬 호출에 실패해 OpenStreetMap 데이터로 대체했습니다. (© OpenStreetMap contributors)"
+        : "KAKAO_REST_KEY 미설정 — OpenStreetMap 실제 데이터로 표시 중입니다. (© OpenStreetMap contributors)",
     );
-    const places = results.flat();
-    places.sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
-    return ok({ places });
   } catch (e) {
-    console.error("[places]", e);
+    console.error("[places:osm]", e);
     return fail(
-      { places: samplePlaces(codes) },
-      "카카오 로컬 API 호출에 실패했습니다. 샘플 데이터를 표시합니다.",
+      { places: samplePlaces(codes), source: "sample" as const },
+      "카카오·OpenStreetMap 모두 조회에 실패했습니다. 샘플 데이터를 표시합니다.",
     );
   }
 }

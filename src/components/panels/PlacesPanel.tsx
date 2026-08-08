@@ -3,7 +3,32 @@
 import { useMemo, useState } from "react";
 import { Notice, Skeleton, Empty } from "@/components/ui";
 import { CATEGORIES, CATEGORY_MAP, type CategoryKey } from "@/lib/uiwang";
-import type { Place, ApiEnvelope } from "@/lib/types";
+import type { PlacesPayload, ApiEnvelope, Place, PlaceSource } from "@/lib/types";
+
+const SOURCE_META: Record<PlaceSource, { label: string; color: string; title: string }> = {
+  kakao: { label: "카카오 LIVE", color: "#10b981", title: "카카오 로컬 API 실시간 데이터" },
+  osm: {
+    label: "OSM",
+    color: "#3b82f6",
+    title: "OpenStreetMap 실제 데이터 © OpenStreetMap contributors (ODbL)",
+  },
+  sample: { label: "SAMPLE", color: "#9ca3af", title: "예시용 샘플 데이터" },
+};
+
+function SourceBadge({ source }: { source?: PlaceSource }) {
+  if (!source) return null;
+  const m = SOURCE_META[source];
+  return (
+    <span
+      title={m.title}
+      className="inline-flex items-center gap-1 text-[10px] font-bold"
+      style={{ color: m.color }}
+    >
+      <span className="h-1.5 w-1.5 rounded-full" style={{ background: m.color }} />
+      {m.label}
+    </span>
+  );
+}
 
 export default function PlacesPanel({
   res,
@@ -15,7 +40,7 @@ export default function PlacesPanel({
   selectedPlaceId,
   onSelectPlace,
 }: {
-  res?: ApiEnvelope<{ places: Place[] }>;
+  res?: ApiEnvelope<PlacesPayload>;
   isLoading: boolean;
   selected: CategoryKey[];
   onToggle: (c: CategoryKey) => void;
@@ -100,10 +125,16 @@ export default function PlacesPanel({
           <Skeleton rows={6} />
         ) : (
           <>
-            <Notice>{res?.notice}</Notice>
-            <p className="mb-2 text-[11px] font-semibold text-[var(--muted)]">
-              {filtered.length}곳 · 가까운 순
-            </p>
+            {/* OSM 폴백은 정상 동작이므로 경고가 아닌 출처 표기로 다룬다 */}
+            {res?.ok === false && <Notice>{res?.notice}</Notice>}
+            <div className="mb-2 flex items-center gap-1.5">
+              <p className="text-[11px] font-semibold text-[var(--muted)]">
+                {filtered.length}곳 · 가까운 순
+              </p>
+              <span className="ml-auto">
+                <SourceBadge source={res?.data.source} />
+              </span>
+            </div>
             {filtered.length === 0 ? (
               <Empty>표시할 장소가 없습니다. 카테고리나 반경을 조정해 보세요.</Empty>
             ) : (

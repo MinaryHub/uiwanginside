@@ -14,6 +14,13 @@ export interface Place {
   url: string;
 }
 
+export type PlaceSource = "kakao" | "osm" | "sample";
+
+export interface PlacesPayload {
+  places: Place[];
+  source: PlaceSource;
+}
+
 export interface WeatherNow {
   temp: number | null;
   humidity: number | null;
@@ -107,7 +114,8 @@ export interface BusStop {
 
 export interface TransitPayload {
   stops: BusStop[];
-  source: "gbis" | "sample";
+  /** osm = 정류소 위치만 실제 데이터, 도착 예정 시간 없음 */
+  source: "gbis" | "osm" | "sample";
   updatedAt: string;
 }
 
