@@ -34,6 +34,20 @@ declare namespace kakao.maps {
     setMap(map: Map | null): void;
     setPosition(latlng: LatLng): void;
   }
+  class Polygon {
+    /** path 가 LatLng[][] 이면 첫 배열이 외곽, 이후 배열은 구멍(hole)이다 */
+    constructor(options: {
+      path: LatLng[] | LatLng[][];
+      strokeWeight?: number;
+      strokeColor?: string;
+      strokeOpacity?: number;
+      strokeStyle?: string;
+      fillColor?: string;
+      fillOpacity?: number;
+      zIndex?: number;
+    });
+    setMap(map: Map | null): void;
+  }
   class Circle {
     constructor(options: {
       center: LatLng;

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { CATEGORY_MAP } from "@/lib/uiwang";
+import { UIWANG_BOUNDARY } from "@/lib/uiwang-boundary";
 import type { Place, Incident, BusStop, TrafficLink } from "@/lib/types";
 
 let sdkPromise: Promise<void> | null = null;
@@ -77,6 +78,10 @@ export interface KakaoMapProps {
   showIncidents: boolean;
   showBus: boolean;
   showTraffic: boolean;
+  /** 의왕시 행정경계 표시 */
+  showBoundary: boolean;
+  /** 경계 바깥을 어둡게 덮어 시 영역을 강조 */
+  dimOutside: boolean;
   selectedPlaceId: string | null;
   onSelectPlace: (p: Place) => void;
   onMapMoved: (c: { lat: number; lng: number }) => void;
@@ -94,6 +99,8 @@ export default function KakaoMap({
   showIncidents,
   showBus,
   showTraffic,
+  showBoundary,
+  dimOutside,
   selectedPlaceId,
   onSelectPlace,
   onMapMoved,
@@ -102,6 +109,7 @@ export default function KakaoMap({
   const mapRef = useRef<kakao.maps.Map | null>(null);
   const overlaysRef = useRef<kakao.maps.CustomOverlay[]>([]);
   const circleRef = useRef<kakao.maps.Circle | null>(null);
+  const boundaryRef = useRef<kakao.maps.Polygon[]>([]);
   const movedRef = useRef(onMapMoved);
   const [ready, setReady] = useState(false);
   const [sdkError, setSdkError] = useState<string | null>(null);
@@ -154,6 +162,53 @@ export default function KakaoMap({
     if (!ready || !mapRef.current) return;
     mapRef.current.setLevel(level, { animate: true });
   }, [ready, level]);
+
+  // 의왕시 행정경계 + 바깥 영역 딤 처리
+  useEffect(() => {
+    if (!ready || !mapRef.current) return;
+    const map = mapRef.current;
+    boundaryRef.current.forEach((p) => p.setMap(null));
+    boundaryRef.current = [];
+    if (!showBoundary) return;
+
+    const ring = UIWANG_BOUNDARY.map(
+      ([lat, lng]) => new window.kakao.maps.LatLng(lat, lng),
+    );
+
+    if (dimOutside) {
+      // 넓은 사각형을 외곽으로, 시 경계를 구멍으로 둬서 바깥만 덮는다.
+      const world = [
+        new window.kakao.maps.LatLng(30, 120),
+        new window.kakao.maps.LatLng(30, 134),
+        new window.kakao.maps.LatLng(44, 134),
+        new window.kakao.maps.LatLng(44, 120),
+      ];
+      const mask = new window.kakao.maps.Polygon({
+        path: [world, ring],
+        strokeWeight: 0,
+        strokeOpacity: 0,
+        fillColor: "#0b0f14",
+        // 구멍이 적용되지 않더라도 지도가 가려지지 않도록 낮게 유지한다
+        fillOpacity: 0.28,
+        zIndex: 1,
+      });
+      mask.setMap(map);
+      boundaryRef.current.push(mask);
+    }
+
+    const outline = new window.kakao.maps.Polygon({
+      path: ring,
+      strokeWeight: 3,
+      strokeColor: "#0b6b5b",
+      strokeOpacity: 0.95,
+      strokeStyle: "solid",
+      fillColor: "#0b6b5b",
+      fillOpacity: dimOutside ? 0 : 0.06,
+      zIndex: 2,
+    });
+    outline.setMap(map);
+    boundaryRef.current.push(outline);
+  }, [ready, showBoundary, dimOutside]);
 
   // 검색 반경 원
   useEffect(() => {

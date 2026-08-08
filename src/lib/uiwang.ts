@@ -6,8 +6,12 @@ export const UIWANG = {
   center: { lat: 37.3448, lng: 126.9683 },
   /** 기상청 동네예보 격자 좌표 */
   grid: { nx: 60, ny: 122 },
-  /** 시 경계 대략 bbox (ITS 돌발/소통정보 조회용, 여유분 포함) */
-  bbox: { minX: 126.92, maxX: 127.03, minY: 37.29, maxY: 37.41 },
+  /**
+   * ITS 돌발/소통정보 조회 범위.
+   * 실제 행정경계 bbox(uiwang-boundary.ts)에 약 0.01도 여유를 둔 값이다.
+   * 이전에 쓰던 maxX 127.03 은 실제 동쪽 끝(127.047)보다 좁아 청계동 일대가 빠졌다.
+   */
+  bbox: { minX: 126.919, maxX: 127.057, minY: 37.29, maxY: 37.426 },
   /** 지도 기본 반경(m) */
   defaultRadius: 4000,
 } as const;
@@ -22,12 +26,16 @@ export const DONGS: { name: string; lat: number; lng: number }[] = [
   { name: "청계동", lat: 37.3946, lng: 126.9986 },
 ];
 
-/** 주요 랜드마크 */
+/**
+ * 주요 랜드마크.
+ * 좌표는 OSM/Nominatim 기준이며 행정경계 내부에 있음을 확인했다.
+ * (초기 추정 좌표는 왕송호수·철도박물관이 경계 밖으로 벗어나 있었다)
+ */
 export const LANDMARKS: { name: string; lat: number; lng: number; desc: string }[] = [
-  { name: "왕송호수", lat: 37.3283, lng: 126.9265, desc: "레일바이크·자연학습공원" },
-  { name: "철도박물관", lat: 37.3268, lng: 126.9412, desc: "국내 유일 철도 전문 박물관" },
-  { name: "백운호수", lat: 37.3742, lng: 126.9959, desc: "카페거리·둘레길" },
-  { name: "모락산", lat: 37.3620, lng: 126.9803, desc: "해발 385m 도심 등산로" },
+  { name: "왕송호수", lat: 37.3179, lng: 126.9458, desc: "레일바이크·자연학습공원" },
+  { name: "철도박물관", lat: 37.314, lng: 126.9508, desc: "국내 유일 철도 전문 박물관" },
+  { name: "백운호수", lat: 37.3795, lng: 127.0024, desc: "카페거리·둘레길" },
+  { name: "모락산", lat: 37.3705, lng: 126.9786, desc: "해발 385m 도심 등산로" },
   { name: "의왕시청", lat: 37.3448, lng: 126.9683, desc: "행정 중심" },
 ];
 

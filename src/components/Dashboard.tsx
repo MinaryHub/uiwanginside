@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import useSWR from "swr";
 import { swrFetcher } from "@/lib/fetcher";
 import { UIWANG, DONGS, LANDMARKS, type CategoryKey } from "@/lib/uiwang";
+import { UIWANG_BBOX } from "@/lib/uiwang-boundary";
 import type {
   ApiEnvelope,
   Place,
@@ -43,7 +44,13 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
   const [categories, setCategories] = useState<CategoryKey[]>(["SC4", "HP8", "MT1", "CS2"]);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const [newsQuery, setNewsQuery] = useState("의왕시");
-  const [layers, setLayers] = useState({ incidents: true, bus: true, traffic: true });
+  const [layers, setLayers] = useState({
+    incidents: true,
+    bus: true,
+    traffic: true,
+    boundary: true,
+    dim: true,
+  });
   const [tab, setTab] = useState<MobileTab>("map");
 
   const geo = `lat=${center.lat.toFixed(4)}&lng=${center.lng.toFixed(4)}`;
@@ -219,6 +226,8 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             showIncidents={layers.incidents}
             showBus={layers.bus}
             showTraffic={layers.traffic}
+            showBoundary={layers.boundary}
+            dimOutside={layers.boundary && layers.dim}
             selectedPlaceId={selectedPlaceId}
             onSelectPlace={handleSelectPlace}
             onMapMoved={setCenter}
@@ -228,6 +237,8 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           <div className="absolute left-3 top-3 z-10 flex gap-1.5 rounded-xl border border-[var(--border)] bg-[var(--surface)]/95 p-1.5 shadow-lg backdrop-blur">
             {(
               [
+                ["boundary", "🗾 시경계"],
+                ["dim", "🔦 강조"],
                 ["incidents", "🚨 사고"],
                 ["traffic", "🚗 속도"],
                 ["bus", "🚌 정류소"],
@@ -251,6 +262,20 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
 
           {/* 줌 / 중심복귀 */}
           <div className="absolute bottom-4 right-3 z-10 flex flex-col gap-1.5">
+            <button
+              type="button"
+              onClick={() =>
+                focus(
+                  (UIWANG_BBOX.minLat + UIWANG_BBOX.maxLat) / 2,
+                  (UIWANG_BBOX.minLng + UIWANG_BBOX.maxLng) / 2,
+                  8,
+                )
+              }
+              className="grid h-9 w-9 place-items-center rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[15px] shadow-lg"
+              title="의왕시 전체보기"
+            >
+              🗾
+            </button>
             <button
               type="button"
               onClick={() => focus(UIWANG.center.lat, UIWANG.center.lng, 6)}
