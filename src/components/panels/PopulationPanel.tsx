@@ -16,9 +16,12 @@ type SortKey = "population" | "density" | "name";
 const fmt = (n: number) => n.toLocaleString("ko-KR");
 
 export default function PopulationPanel({
-  onFocus,
+  onSelectDong,
+  activeDong,
 }: {
-  onFocus: (lat: number, lng: number) => void;
+  /** 누르면 지도에서 해당 동 경계를 강조한다 */
+  onSelectDong: (d: { name: string; lat: number; lng: number }) => void;
+  activeDong: string | null;
 }) {
   const [sort, setSort] = useState<SortKey>("population");
 
@@ -108,9 +111,15 @@ export default function PopulationPanel({
             <li key={d.name}>
               <button
                 type="button"
-                onClick={() => onFocus(d.lat, d.lng)}
+                onClick={() => onSelectDong(d)}
+                aria-pressed={activeDong === d.name}
                 className="w-full rounded-lg px-2 py-1.5 text-left transition hover:bg-[var(--surface-2)]"
-                title={`법정동: ${d.legalDongs.join(", ")}`}
+                style={
+                  activeDong === d.name
+                    ? { background: "color-mix(in srgb, #c026d3 12%, transparent)", outline: "1px solid #c026d3" }
+                    : undefined
+                }
+                title={`${d.name} 경계 보기 · 법정동: ${d.legalDongs.join(", ")}`}
               >
                 <div className="flex items-baseline gap-1.5">
                   <span className="text-[12.5px] font-bold">{d.name}</span>

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CATEGORY_MAP } from "@/lib/uiwang";
 import { UIWANG_BOUNDARY } from "@/lib/uiwang-boundary";
+import { DONG_BOUNDARIES } from "@/lib/dong-boundaries";
 import type { Place, Incident, BusStop, TrafficLink } from "@/lib/types";
 
 let sdkPromise: Promise<void> | null = null;
@@ -92,6 +93,8 @@ export interface KakaoMapProps {
   landmarks: { name: string; lat: number; lng: number; desc: string }[];
   /** 의왕시 행정경계 표시 */
   showBoundary: boolean;
+  /** 강조할 행정동 이름 (null 이면 없음) */
+  activeDong: string | null;
   /** 경계 바깥을 어둡게 덮어 시 영역을 강조 */
   dimOutside: boolean;
   selectedPlaceId: string | null;
@@ -111,6 +114,7 @@ export default function KakaoMap({
   medicalOpen,
   landmarks,
   showBoundary,
+  activeDong,
   dimOutside,
   selectedPlaceId,
   onSelectPlace,
@@ -121,6 +125,7 @@ export default function KakaoMap({
   const overlaysRef = useRef<kakao.maps.CustomOverlay[]>([]);
   const circleRef = useRef<kakao.maps.Circle | null>(null);
   const boundaryRef = useRef<kakao.maps.Polygon[]>([]);
+  const dongRef = useRef<kakao.maps.Polygon[]>([]);
   const movedRef = useRef(onMapMoved);
   const [ready, setReady] = useState(false);
   const [sdkError, setSdkError] = useState<string | null>(null);
@@ -220,6 +225,33 @@ export default function KakaoMap({
     outline.setMap(map);
     boundaryRef.current.push(outline);
   }, [ready, showBoundary, dimOutside]);
+
+  // 선택한 행정동 경계 강조
+  useEffect(() => {
+    if (!ready || !mapRef.current) return;
+    const map = mapRef.current;
+    dongRef.current.forEach((p) => p.setMap(null));
+    dongRef.current = [];
+    if (!activeDong) return;
+
+    const ring = DONG_BOUNDARIES[activeDong];
+    if (!ring) return;
+
+    const path = ring.map(([lat, lng]) => new window.kakao.maps.LatLng(lat, lng));
+    const poly = new window.kakao.maps.Polygon({
+      path,
+      strokeWeight: 3,
+      strokeColor: "#c026d3",
+      strokeOpacity: 0.95,
+      strokeStyle: "solid",
+      fillColor: "#c026d3",
+      fillOpacity: 0.12,
+      // 시 경계(2)보다 위, 마커(10+)보다 아래
+      zIndex: 5,
+    });
+    poly.setMap(map);
+    dongRef.current.push(poly);
+  }, [ready, activeDong]);
 
   // 검색 반경 원
   useEffect(() => {

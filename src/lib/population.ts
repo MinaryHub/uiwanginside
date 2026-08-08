@@ -12,6 +12,29 @@
  * - 세대수: 의왕시청 일반현황 (기준일이 달라 별도 표기)
  */
 
+import { DONG_BOUNDARIES } from "./dong-boundaries";
+
+/**
+ * 폴리곤 무게중심. 동을 대표하는 지점으로 쓴다.
+ * 좌표를 손으로 적으면 경계와 어긋난다 — 실제로 오전동·내손2동 좌표가
+ * 자기 동 경계 밖에 있었다. 경계에서 유도해 그 가능성을 없앤다.
+ */
+function centroid(ring: readonly (readonly [number, number])[]) {
+  let a = 0;
+  let cy = 0;
+  let cx = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const [y1, x1] = ring[i];
+    const [y2, x2] = ring[(i + 1) % ring.length];
+    const cross = x1 * y2 - x2 * y1;
+    a += cross;
+    cx += (x1 + x2) * cross;
+    cy += (y1 + y2) * cross;
+  }
+  a *= 0.5;
+  return { lat: cy / (6 * a), lng: cx / (6 * a) };
+}
+
 export interface DongPopulation {
   name: string;
   population: number;
@@ -26,56 +49,50 @@ export interface DongPopulation {
 /** 동별 인구 기준 시점 — UI 에 반드시 함께 표시한다 */
 export const POPULATION_AS_OF = "2026년 6월";
 
-export const DONG_POPULATION: DongPopulation[] = [
+const RAW: Omit<DongPopulation, "lat" | "lng">[] = [
   {
     name: "고천동",
     population: 17_719,
     area: 8.9,
     legalDongs: ["고천동", "왕곡동"],
-    lat: 37.3435,
-    lng: 126.9702,
   },
   {
     name: "부곡동",
     population: 28_551,
     area: 11.3,
     legalDongs: ["삼동", "월암동", "이동", "초평동"],
-    lat: 37.3186,
-    lng: 126.9575,
   },
   {
     name: "오전동",
     population: 32_595,
     area: 6.8,
     legalDongs: ["오전동"],
-    lat: 37.3517,
-    lng: 126.9642,
   },
   {
     name: "내손1동",
     population: 19_590,
     area: 2.55,
     legalDongs: ["내손동(일부)"],
-    lat: 37.3742,
-    lng: 126.9686,
   },
   {
     name: "내손2동",
     population: 28_131,
     area: 2.5,
     legalDongs: ["내손동(일부)", "포일동(일부)"],
-    lat: 37.3801,
-    lng: 126.9744,
   },
   {
     name: "청계동",
     population: 37_635,
     area: 22.08,
     legalDongs: ["내손동(일부)", "청계동", "포일동(일부)", "학의동"],
-    lat: 37.3946,
-    lng: 126.9986,
   },
 ];
+
+/** 좌표는 행정동 경계에서 유도한다 (하드코딩하지 않는다) */
+export const DONG_POPULATION: DongPopulation[] = RAW.map((d) => ({
+  ...d,
+  ...centroid(DONG_BOUNDARIES[d.name]),
+}));
 
 /** 시 세대수 — 동별 인구와 기준일이 다르므로 따로 관리한다 */
 export const HOUSEHOLDS = {

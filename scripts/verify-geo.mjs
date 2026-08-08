@@ -36,6 +36,34 @@ function parsePoints(file, exportName) {
     .filter(Boolean);
 }
 
+function parseDongRings() {
+  const src = readFileSync(join(root, "src/lib/dong-boundaries.ts"), "utf8");
+  const body = src.split("DONG_BOUNDARIES")[1];
+  const rings = {};
+  for (const m of body.matchAll(/"([^"]+)":\s*\[((?:\[[-\d.,]+\],?)+)\]/g)) {
+    rings[m[1]] = [...m[2].matchAll(/\[(-?[\d.]+),(-?[\d.]+)\]/g)].map((p) => [
+      Number(p[1]),
+      Number(p[2]),
+    ]);
+  }
+  return rings;
+}
+
+/** 폴리곤 무게중심 — population.ts 와 같은 방식이어야 한다 */
+function centroid(ring) {
+  let a = 0, cx = 0, cy = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const [y1, x1] = ring[i];
+    const [y2, x2] = ring[(i + 1) % ring.length];
+    const cross = x1 * y2 - x2 * y1;
+    a += cross;
+    cx += (x1 + x2) * cross;
+    cy += (y1 + y2) * cross;
+  }
+  a *= 0.5;
+  return { lat: cy / (6 * a), lng: cx / (6 * a) };
+}
+
 function inside(lat, lng, poly) {
   let c = false;
   for (let i = 0, n = poly.length; i < n; i++) {
@@ -62,21 +90,62 @@ const check = (label, ok, detail) => {
 
 console.log(`경계 꼭짓점 ${ring.length}개\n`);
 console.log("경계 내부여야 하는 좌표");
-const points = [
-  ...parsePoints("src/lib/population.ts", "DONG_POPULATION"),
-  ...parsePoints("src/lib/uiwang.ts", "LANDMARKS"),
-];
+const dongRings = parseDongRings();
+const dongPoints = Object.entries(dongRings).map(([name, r]) => ({
+  name,
+  ...centroid(r),
+}));
+const points = [...dongPoints, ...parsePoints("src/lib/uiwang.ts", "LANDMARKS")];
 for (const p of points) {
   check(p.name, inside(p.lat, p.lng, ring), `${p.lat}, ${p.lng}`);
 }
 console.log("\n경계 외부여야 하는 좌표");
 for (const p of OUTSIDE) check(p.name, !inside(p.lat, p.lng, ring));
 
+// 동 경계 — 대표점이 자기 동 안에 있고 다른 동에는 없어야 한다
+console.log("\n행정동 경계");
+{
+  const names = Object.keys(dongRings);
+  check(`경계 6개`, names.length === 6, `${names.length}개`);
+
+  for (const d of dongPoints) {
+    const own = dongRings[d.name];
+    const inOwn = inside(d.lat, d.lng, own);
+    // 대표점이 다른 동에도 들어가면 경계가 겹치거나 데이터가 잘못된 것
+    const alsoIn = names.filter((n) => n !== d.name && inside(d.lat, d.lng, dongRings[n]));
+    check(
+      `${d.name} (${own.length}점)`,
+      inOwn && alsoIn.length === 0,
+      inOwn ? (alsoIn.length ? `다른 동에도 포함: ${alsoIn.join(",")}` : "") : "자기 동 밖",
+    );
+  }
+
+  // 꼭짓점 단위 검사는 의미가 없다. 동 경계는 시 경계와 선을 공유하므로
+  // 공유 구간의 꼭짓점은 미세한 수치 차이로 내외 판정이 뒤집힌다.
+  // 대신 대표점이 시 경계 안에 있는지만 확인한다.
+  const outsideCity = dongPoints.filter((d) => !inside(d.lat, d.lng, ring));
+  check(
+    `대표점 전부 시 경계 내부`,
+    outsideCity.length === 0,
+    outsideCity.map((d) => d.name).join(",") || "",
+  );
+
+  // population.ts 의 동 이름과 경계 키가 일치해야 한다 (오타로 조용히 빠지는 것 방지)
+  const popNames = [
+    ...readFileSync(join(root, "src/lib/population.ts"), "utf8").matchAll(
+      /name:\s*"([^"]+)"/g,
+    ),
+  ].map((m) => m[1]);
+  const missing = popNames.filter((n) => !names.includes(n));
+  check(`인구 데이터의 동 이름과 경계 키 일치`, missing.length === 0, missing.join(","));
+}
+
 // 인구 데이터 정합성 — 기준월이 섞이면 여기서 걸린다
 console.log("\n인구 데이터");
 {
   const src = readFileSync(join(root, "src/lib/population.ts"), "utf8");
-  const body = src.split("export const DONG_POPULATION")[1].split("];")[0];
+  // 인구·면적 원본은 RAW 에 있다 (DONG_POPULATION 은 좌표를 덧붙인 유도값)
+  const body = src.split("const RAW")[1].split("];")[0];
   const pops = [...body.matchAll(/population:\s*([\d_]+)/g)].map((m) =>
     Number(m[1].replace(/_/g, "")),
   );

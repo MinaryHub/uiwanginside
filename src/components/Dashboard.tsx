@@ -57,6 +57,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
   const [newsQuery, setNewsQuery] = useState("의왕시");
   const [tab, setTab] = useState<MobileTab>("map");
   const [showBoundary, setShowBoundary] = useState(true);
+  const [activeDong, setActiveDong] = useState<string | null>(null);
 
   const def = MODE_MAP[mode];
 
@@ -136,9 +137,22 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
   const changeMode = useCallback((next: ModeId) => {
     setMode(next);
     setSelectedPlaceId(null);
+    setActiveDong(null);
     setLevel(MODE_MAP[next].level);
     setTab("map");
   }, []);
+
+  /** 동을 누르면 경계를 강조하고 그리로 이동. 같은 동을 다시 누르면 해제한다. */
+  const toggleDong = useCallback(
+    (d: { name: string; lat: number; lng: number }) => {
+      setActiveDong((cur) => {
+        if (cur === d.name) return null;
+        focus(d.lat, d.lng, 5);
+        return d.name;
+      });
+    },
+    [focus],
+  );
 
   const handleSelectPlace = useCallback(
     (p: Place) => {
@@ -200,7 +214,9 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
       case "waste":
         return <WastePanel key={id} />;
       case "population":
-        return <PopulationPanel key={id} onFocus={(lat, lng) => focus(lat, lng, 5)} />;
+        return (
+          <PopulationPanel key={id} onSelectDong={toggleDong} activeDong={activeDong} />
+        );
       case "news":
         return (
           <NewsPanel
@@ -332,6 +348,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             medicalOpen={medicalMarkers}
             landmarks={mode === "explore" ? LANDMARKS : []}
             showBoundary={showBoundary}
+            activeDong={activeDong}
             dimOutside={showBoundary && mode === "explore"}
             selectedPlaceId={selectedPlaceId}
             onSelectPlace={handleSelectPlace}
@@ -351,17 +368,26 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
 
           {/* 동 바로가기 */}
           <div className="thin-scroll absolute bottom-3 left-3 right-14 z-10 flex gap-1 overflow-x-auto">
-            {DONGS.map((d) => (
-              <button
-                key={d.name}
-                type="button"
-                title={`인구 ${d.population.toLocaleString("ko-KR")}명`}
-                onClick={() => focus(d.lat, d.lng, 5)}
-                className="shrink-0 rounded-full border border-[var(--border)] bg-[var(--surface)]/95 px-2.5 py-1 text-[11px] font-bold shadow-md backdrop-blur transition hover:border-[var(--brand)] hover:text-[var(--brand)]"
-              >
-                {d.name}
-              </button>
-            ))}
+            {DONGS.map((d) => {
+              const on = activeDong === d.name;
+              return (
+                <button
+                  key={d.name}
+                  type="button"
+                  aria-pressed={on}
+                  title={`${d.name} 경계 보기 · 인구 ${d.population.toLocaleString("ko-KR")}명`}
+                  onClick={() => toggleDong(d)}
+                  className="shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-bold shadow-md backdrop-blur transition"
+                  style={
+                    on
+                      ? { background: "#c026d3", borderColor: "#c026d3", color: "#fff" }
+                      : { borderColor: "var(--border)", background: "color-mix(in srgb, var(--surface) 95%, transparent)" }
+                  }
+                >
+                  {d.name}
+                </button>
+              );
+            })}
           </div>
 
           <div className="absolute right-3 top-3 z-10 flex flex-col gap-1.5">
