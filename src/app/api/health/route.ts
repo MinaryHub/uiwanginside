@@ -134,27 +134,34 @@ async function checkNaver(): Promise<Partial<HealthCheck>> {
   const id = process.env.NAVER_CLIENT_ID;
   const secret = process.env.NAVER_CLIENT_SECRET;
   if (!id || !secret) return { status: "missing", detail: "키 없음 — 샘플 뉴스 표시 중" };
+  // 검색 API 는 NCP NAVER API HUB 로 이전됐다. 키 형태로 어느 쪽인지 판별한다.
+  const useNcp = secret.length > 20 || id.length === 10;
+  const url = useNcp
+    ? "https://naverapihub.apigw.ntruss.com/search/v1/news?query=%EC%9D%98%EC%99%95&display=1&format=json"
+    : "https://openapi.naver.com/v1/search/news.json?query=%EC%9D%98%EC%99%95&display=1";
+
   const [res, latencyMs, err] = await timed(() =>
-    timedFetch("https://openapi.naver.com/v1/search/news.json?query=%EC%9D%98%EC%99%95&display=1", {
-      headers: { "X-Naver-Client-Id": id, "X-Naver-Client-Secret": secret },
+    timedFetch(url, {
+      headers: useNcp
+        ? { "X-NCP-APIGW-API-KEY-ID": id, "X-NCP-APIGW-API-KEY": secret }
+        : { "X-Naver-Client-Id": id, "X-Naver-Client-Secret": secret },
     }),
   );
   if (err) return { status: "error", detail: msg(err), latencyMs };
-  if (res!.status === 401) {
-    // 네이버 클라우드 플랫폼(NCP) 자격증명과 혼동하는 경우가 많다.
-    // NCP 는 X-NCP-APIGW-API-KEY(40자) 를 쓰며 검색 API 를 제공하지 않는다.
-    const looksLikeNcp = secret.length === 40 && id.length === 10;
-    const hint = looksLikeNcp
-      ? " — 네이버 클라우드 플랫폼(NCP) 키로 보입니다. NCP 는 검색 API 를 제공하지 않습니다. developers.naver.com 에서 별도 애플리케이션을 등록하고 '검색' API 를 추가하세요 (Secret 은 10자)"
-      : secret.length !== 10
-        ? ` (Client Secret 이 ${secret.length}자입니다 — 네이버 개발자센터 Secret 은 보통 10자)`
-        : " (애플리케이션 '사용 API' 에 검색이 추가되어 있는지 확인)";
-    return { status: "error", detail: `401 인증 실패${hint}`, latencyMs };
+  if (!res!.ok) {
+    const body = (await res!.text()).slice(0, 160);
+    return {
+      status: "error",
+      detail: `HTTP ${res!.status} (${useNcp ? "NCP NAVER API HUB" : "구 개발자센터"}) — ${body}`,
+      latencyMs,
+    };
   }
-  if (!res!.ok)
-    return { status: "error", detail: `HTTP ${res!.status}`, latencyMs };
   const j = await res!.json();
-  return { status: "live", detail: `정상 · 총 ${j.total}건 색인됨`, latencyMs };
+  return {
+    status: "live",
+    detail: `정상 · ${useNcp ? "NCP NAVER API HUB" : "개발자센터"} · 총 ${j.total?.toLocaleString?.() ?? j.total}건 색인됨`,
+    latencyMs,
+  };
 }
 
 async function checkIts(): Promise<Partial<HealthCheck>> {
@@ -262,7 +269,8 @@ const SPECS: Omit<HealthCheck, "status" | "detail" | "configured">[] = [
     id: "naver",
     label: "네이버 검색 (뉴스)",
     envVars: ["NAVER_CLIENT_ID", "NAVER_CLIENT_SECRET"],
-    howTo: "developers.naver.com → 애플리케이션 등록 → 사용 API 에 '검색' 추가",
+    howTo:
+      "NCP 콘솔 → Application Service → NAVER API HUB → 검색 이용 신청 후 Application 키 (X-NCP-APIGW-API-KEY-ID / KEY)",
   },
   {
     id: "its",

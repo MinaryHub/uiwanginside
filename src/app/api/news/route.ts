@@ -46,6 +46,20 @@ function sampleNews(query: string): NewsPayload {
   };
 }
 
+/**
+ * 검색 API 는 네이버 클라우드 플랫폼의 NAVER API HUB 로 이전됐다.
+ * 구 developers.naver.com(openapi.naver.com + X-Naver-Client-*) 자격증명도
+ * 아직 쓰는 곳이 있어 둘 다 지원한다.
+ * https://api.ncloud-docs.com/docs/naver-api-hub-search-news
+ */
+const NCP_NEWS = "https://naverapihub.apigw.ntruss.com/search/v1/news";
+const LEGACY_NEWS = "https://openapi.naver.com/v1/search/news.json";
+
+/** NCP 키는 ID 10자 + Secret 40자, 구 개발자센터 키는 Secret 10자 */
+function isNcpCredential(id: string, secret: string) {
+  return secret.length > 20 || id.length === 10;
+}
+
 export async function GET(req: Request) {
   const sp = new URL(req.url).searchParams;
   const query = sp.get("q") ?? "의왕시";
@@ -59,12 +73,16 @@ export async function GET(req: Request) {
     );
   }
 
+  const useNcp = isNcpCredential(id, secret);
+
   try {
-    const url =
-      `https://openapi.naver.com/v1/search/news.json` +
-      `?query=${encodeURIComponent(query)}&display=20&sort=date`;
+    const url = useNcp
+      ? `${NCP_NEWS}?query=${encodeURIComponent(query)}&display=20&sort=date&format=json`
+      : `${LEGACY_NEWS}?query=${encodeURIComponent(query)}&display=20&sort=date`;
     const res = await timedFetch(url, {
-      headers: { "X-Naver-Client-Id": id, "X-Naver-Client-Secret": secret },
+      headers: useNcp
+        ? { "X-NCP-APIGW-API-KEY-ID": id, "X-NCP-APIGW-API-KEY": secret }
+        : { "X-Naver-Client-Id": id, "X-Naver-Client-Secret": secret },
     });
     if (!res.ok) throw new Error(`naver ${res.status}: ${await res.text()}`);
     const json = (await res.json()) as {
@@ -83,9 +101,13 @@ export async function GET(req: Request) {
     return ok({ items, source: "naver", updatedAt: nowISO() } satisfies NewsPayload);
   } catch (e) {
     console.error("[news]", e);
-    const reason =
-      e instanceof Error && e.message.includes("401")
-        ? "인증 실패 (Client ID/Secret 확인, 애플리케이션에 '검색' API 추가 필요)"
+    const m = e instanceof Error ? e.message : "";
+    const reason = m.includes("401")
+      ? useNcp
+        ? "인증 실패 (NCP 콘솔에서 NAVER API HUB > 검색 이용 신청 확인)"
+        : "인증 실패 (Client ID/Secret 확인)"
+      : m.includes("404")
+        ? "엔드포인트 없음 (검색 API 는 NCP NAVER API HUB 로 이전됨)"
         : "호출 실패";
     return fail(sampleNews(query), `네이버 뉴스 API ${reason} — 샘플 뉴스를 표시합니다.`);
   }
