@@ -173,6 +173,21 @@ export interface MedicalPayload {
   updatedAt: string;
 }
 
+export interface PlaceRating {
+  /** 평균 별점 (1~5) */
+  avg: number;
+  /** 평가 수 */
+  count: number;
+  /** 이 기기가 남긴 별점. 없으면 null */
+  mine: number | null;
+}
+
+export interface RatingsPayload {
+  /** placeId → 집계 */
+  ratings: Record<string, PlaceRating>;
+  updatedAt: string;
+}
+
 export interface ApiEnvelope<T> {
   /** false = 데이터를 가져오지 못했다. 이때 data 는 비어 있다. */
   ok: boolean;

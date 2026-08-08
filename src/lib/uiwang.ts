@@ -38,6 +38,8 @@ export const LANDMARKS: { name: string; lat: number; lng: number; desc: string }
 
 /** 카카오 로컬 카테고리 그룹 코드 */
 export type CategoryKey =
+  | "FD6"
+  | "CE7"
   | "SC4"
   | "HP8"
   | "PM9"
@@ -59,6 +61,8 @@ export interface CategoryDef {
 }
 
 export const CATEGORIES: CategoryDef[] = [
+  { code: "FD6", label: "음식점", emoji: "🍽️", color: "#e11d48" },
+  { code: "CE7", label: "카페", emoji: "☕", color: "#a16207" },
   { code: "SC4", label: "학교", emoji: "🏫", color: "#2563eb" },
   { code: "HP8", label: "병원", emoji: "🏥", color: "#dc2626" },
   { code: "PM9", label: "약국", emoji: "💊", color: "#16a34a" },

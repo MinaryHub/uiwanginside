@@ -10,6 +10,7 @@
     "verify:geo": "node scripts/verify-geo.mjs"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
     "fast-xml-parser": "^5.10.1",
     "next": "16.3.0",
     "react": "19.2.8",

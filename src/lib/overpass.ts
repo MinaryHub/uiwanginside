@@ -17,6 +17,8 @@ const ENDPOINTS = [
 
 /** 카테고리 → OSM 태그 필터 (node/way 공통으로 적용) */
 const OSM_FILTERS: Record<CategoryKey, string[]> = {
+  FD6: ['["amenity"~"^(restaurant|fast_food)$"]'],
+  CE7: ['["amenity"~"^(cafe|dessert)$"]'],
   SC4: ['["amenity"~"^(school|college|university|kindergarten)$"]'],
   HP8: ['["amenity"~"^(hospital|clinic|doctors)$"]'],
   PM9: ['["amenity"="pharmacy"]'],
@@ -69,6 +71,12 @@ function classify(tags: Record<string, string>, codes: CategoryKey[]): CategoryK
   const shop = tags.shop ?? "";
   for (const code of codes) {
     switch (code) {
+      case "FD6":
+        if (/^(restaurant|fast_food)$/.test(amenity)) return code;
+        break;
+      case "CE7":
+        if (/^(cafe|dessert)$/.test(amenity)) return code;
+        break;
       case "SC4":
         if (/^(school|college|university|kindergarten)$/.test(amenity)) return code;
         break;

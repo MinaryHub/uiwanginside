@@ -20,6 +20,7 @@ import type {
   NewsPayload,
   TrafficPayload,
   TransitPayload,
+  RatingsPayload,
 } from "@/lib/types";
 import SummaryStrip from "@/components/SummaryStrip";
 import PlacesPanel from "@/components/panels/PlacesPanel";
@@ -31,6 +32,8 @@ import TransitPanel from "@/components/panels/TransitPanel";
 import NewsPanel from "@/components/panels/NewsPanel";
 import WastePanel from "@/components/panels/WastePanel";
 import PopulationPanel from "@/components/panels/PopulationPanel";
+import RatingPanel from "@/components/panels/RatingPanel";
+import { getDeviceId } from "@/lib/deviceId";
 
 const KakaoMap = dynamic(() => import("@/components/KakaoMap"), { ssr: false });
 
@@ -123,6 +126,18 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     { refreshInterval: POLL.news, keepPreviousData: true },
   );
 
+  /** 지금 화면에 있는 가게들의 별점만 조회한다 */
+  const placeList = useMemo(() => places.data?.data.places ?? [], [places.data]);
+  const ratingKey =
+    mode === "food" && placeList.length > 0
+      ? `/api/ratings?placeIds=${placeList.slice(0, 120).map((p) => p.id).join(",")}` +
+        `&deviceId=${encodeURIComponent(getDeviceId())}`
+      : null;
+  const ratings = useSWR<ApiEnvelope<RatingsPayload>>(ratingKey, swrFetcher, {
+    keepPreviousData: true,
+    revalidateOnFocus: false,
+  });
+
   const refreshAll = useCallback(() => {
     [places, weather, air, traffic, medical, transit, news].forEach((s) => s.mutate());
   }, [places, weather, air, traffic, medical, transit, news]);
@@ -162,6 +177,11 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     [focus],
   );
 
+  const selectedPlace = useMemo(
+    () => placeList.find((p) => p.id === selectedPlaceId) ?? null,
+    [placeList, selectedPlaceId],
+  );
+
   /** 의료 모드에서는 "진료중" 인 곳을 지도에 함께 띄운다 */
   const medicalMarkers = useMemo(
     () =>
@@ -180,6 +200,17 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
   // ── 카드 렌더 ─────────────────────────────────────────
   const card = (id: CardId) => {
     switch (id) {
+      case "rating":
+        return (
+          <RatingPanel
+            key={id}
+            selected={selectedPlace}
+            ratings={ratings.data?.data.ratings ?? {}}
+            places={placeList}
+            onRated={() => ratings.mutate()}
+            onSelectPlace={handleSelectPlace}
+          />
+        );
       case "weather":
         return <WeatherPanel key={id} res={weather.data} isLoading={weather.isLoading} />;
       case "air":
@@ -346,6 +377,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             busStops={def.layers.bus ? (transit.data?.data.stops ?? []) : []}
             trafficLinks={def.layers.traffic ? (traffic.data?.data.links ?? []) : []}
             medicalOpen={medicalMarkers}
+            ratings={mode === "food" ? (ratings.data?.data.ratings ?? {}) : {}}
             landmarks={mode === "explore" ? LANDMARKS : []}
             showBoundary={showBoundary}
             activeDong={activeDong}

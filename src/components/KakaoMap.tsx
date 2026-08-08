@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { CATEGORY_MAP } from "@/lib/uiwang";
 import { UIWANG_BOUNDARY } from "@/lib/uiwang-boundary";
 import { DONG_BOUNDARIES } from "@/lib/dong-boundaries";
-import type { Place, Incident, BusStop, TrafficLink } from "@/lib/types";
+import type { Place, Incident, BusStop, TrafficLink, PlaceRating } from "@/lib/types";
 
 let sdkPromise: Promise<void> | null = null;
 
@@ -89,6 +89,8 @@ export interface KakaoMapProps {
   trafficLinks: TrafficLink[];
   /** 진료중인 병원·약국 (의료 모드) */
   medicalOpen: { id: string; name: string; kind: string; lat: number | null; lng: number | null }[];
+  /** placeId → 별점 집계. 있으면 마커에 함께 표시한다 */
+  ratings: Record<string, PlaceRating>;
   /** 랜드마크 (둘러보기 모드) */
   landmarks: { name: string; lat: number; lng: number; desc: string }[];
   /** 의왕시 행정경계 표시 */
@@ -112,6 +114,7 @@ export default function KakaoMap({
   busStops,
   trafficLinks,
   medicalOpen,
+  ratings,
   landmarks,
   showBoundary,
   activeDong,
@@ -312,11 +315,14 @@ export default function KakaoMap({
       const def = CATEGORY_MAP[p.category];
       if (!def) continue;
       const active = selectedPlaceId === p.id;
+      const r = ratings[p.id];
+      // 별점이 있으면 이름 뒤에 붙여 지도만 보고도 고를 수 있게 한다
+      const label = r ? `${p.name} ★${r.avg.toFixed(1)}` : p.name;
       add(
         p.lat,
         p.lng,
         active || labelled
-          ? pinEl(def.emoji, def.color, p.name, { active })
+          ? pinEl(def.emoji, def.color, label, { active })
           : dotEl(def.color, def.emoji),
         active ? 90 : 10,
         () => onSelectPlace(p),
@@ -367,6 +373,7 @@ export default function KakaoMap({
     trafficLinks,
     medicalOpen,
     landmarks,
+    ratings,
     selectedPlaceId,
     onSelectPlace,
   ]);

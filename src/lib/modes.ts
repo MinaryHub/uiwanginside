@@ -8,10 +8,11 @@ import type { CategoryKey } from "./uiwang";
  * 찾으러 오므로, 목적을 고르면 지도 레이어와 카드 구성이 함께 정해지도록 한다.
  */
 
-export type ModeId = "explore" | "life" | "medical" | "transit" | "edu";
+export type ModeId = "explore" | "food" | "life" | "medical" | "transit" | "edu";
 
 /** 우측에 띄울 카드 */
 export type CardId =
+  | "rating"
   | "weather"
   | "air"
   | "medical"
@@ -58,6 +59,16 @@ export const MODES: ModeDef[] = [
     layers: NO_LAYERS,
     cards: ["population", "news"],
     level: 7,
+  },
+  {
+    id: "food",
+    label: "맛집",
+    emoji: "🍽️",
+    hint: "의왕 음식점·카페 — 시민이 매긴 별점",
+    categories: ["FD6", "CE7"],
+    layers: { ...NO_LAYERS, places: true },
+    cards: ["rating"],
+    level: 4,
   },
   {
     id: "life",
