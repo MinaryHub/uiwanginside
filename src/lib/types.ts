@@ -95,15 +95,22 @@ export interface TrafficPayload {
 export interface BusArrival {
   routeId: string;
   routeName: string;
+  /** 종점 방향 — 같은 노선의 상·하행을 구분해준다 */
+  destName: string;
   /** 초 단위 예정 시간 */
   predictSec: number | null;
   predictSec2: number | null;
   remainSeats: number | null;
+  /** 혼잡도 0=정보없음 1=여유 2=보통 3=혼잡 4=매우혼잡 */
+  crowded: number | null;
+  /** 남은 정류소 수 */
+  stationsLeft: number | null;
   plateNo: string;
   lowPlate: boolean;
 }
 
 export interface BusStop {
+  /** 정류소 번호(ARS) — 표지판에 적힌 숫자 */
   stationId: string;
   mobileNo: string;
   name: string;
@@ -115,7 +122,7 @@ export interface BusStop {
 
 export interface TransitPayload {
   stops: BusStop[];
-  /** osm = 정류소 위치만 실제 데이터, 도착 예정 시간 없음 */
+  /** gbis = 실시간 도착정보 · osm = 위치만 (도착시간 없음) */
   source: "gbis" | "osm";
   updatedAt: string;
 }
