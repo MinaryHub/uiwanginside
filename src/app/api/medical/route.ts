@@ -1,0 +1,202 @@
+import { XMLParser } from "fast-xml-parser";
+import {
+  timedFetch,
+  ok,
+  fail,
+  nowISO,
+  createTtlCache,
+  parseDataGoKr,
+} from "@/lib/fetcher";
+import type { MedicalPayload, MedicalPlace } from "@/lib/types";
+
+export const dynamic = "force-dynamic";
+
+/** 진료시간은 자주 바뀌지 않지만 "지금 열림" 판정이 시간에 의존하므로 짧게 */
+const CACHE_SEC = 600;
+
+/**
+ * 국립중앙의료원 병·의원 / 약국 정보 (공공데이터포털 B552657).
+ * 엔드포인트는 실제 호출로 확인했다. 미구독 시 403 +
+ * SERVICE_KEY_IS_NOT_REGISTERED_ERROR 가 온다.
+ */
+const HOSPITAL =
+  "https://apis.data.go.kr/B552657/HsptlAsembySearchService/getHsptlMdcncListInfoInqire";
+const PHARMACY =
+  "https://apis.data.go.kr/B552657/ErmctInsttInfoInqireService/getParmacyListInfoInqire";
+
+const parser = new XMLParser({ ignoreAttributes: true, parseTagValue: false });
+
+function asArray<T>(v: T | T[] | undefined): T[] {
+  if (v == null) return [];
+  return Array.isArray(v) ? v : [v];
+}
+
+/** KST 기준 요일(1=월 … 7=일)과 HHMM */
+function kstNow() {
+  const d = new Date(Date.now() + 9 * 3600_000);
+  const dow = d.getUTCDay(); // 0=일
+  return {
+    /** 공공데이터 규격: 1~7 = 월~일 */
+    day: dow === 0 ? 7 : dow,
+    hhmm: d.getUTCHours() * 100 + d.getUTCMinutes(),
+  };
+}
+
+/** "0900" 형태를 분 단위 숫자로. 자정 넘김(예: 2000~0200)도 처리한다. */
+function isOpenNow(start?: string, end?: string, nowHHMM?: number): boolean | null {
+  if (!start || !end || nowHHMM == null) return null;
+  const s = Number(start);
+  const e = Number(end);
+  if (!Number.isFinite(s) || !Number.isFinite(e)) return null;
+  // 종료가 시작보다 작으면 익일까지 운영하는 것으로 본다
+  return e >= s ? nowHHMM >= s && nowHHMM < e : nowHHMM >= s || nowHHMM < e;
+}
+
+function fmtTime(t?: string) {
+  if (!t || t.length < 3) return "";
+  const p = t.padStart(4, "0");
+  return `${p.slice(0, 2)}:${p.slice(2, 4)}`;
+}
+
+interface RawItem {
+  dutyName?: string;
+  dutyAddr?: string;
+  dutyTel1?: string;
+  wgs84Lat?: string;
+  wgs84Lon?: string;
+  hpid?: string;
+  dutyDivNam?: string;
+  [k: string]: string | undefined;
+}
+
+async function fetchList(
+  url: string,
+  key: string,
+  kind: MedicalPlace["kind"],
+  day: number,
+  hhmm: number,
+): Promise<MedicalPlace[]> {
+  const qs =
+    `?serviceKey=${key}&Q0=${encodeURIComponent("경기도")}` +
+    `&Q1=${encodeURIComponent("의왕시")}&numOfRows=100&pageNo=1`;
+  const res = await timedFetch(`${url}${qs}`, {}, 15_000);
+  const text = await res.text();
+
+  if (text.includes("SERVICE_KEY_IS_NOT_REGISTERED")) {
+    throw new Error("등록되지 않은 서비스키 — 해당 서비스 활용신청 필요");
+  }
+  // 이 서비스는 정상 응답이 XML 이라 XML 파서를 쓰되,
+  // 게이트웨이 오류(JSON 봉투)는 공용 파서로 먼저 걸러낸다.
+  if (text.trimStart().startsWith("{")) parseDataGoKr(text);
+
+  const json = parser.parse(text);
+  const header = json?.response?.header;
+  if (header?.resultCode && String(header.resultCode) !== "00") {
+    throw new Error(`${header.resultCode}: ${header.resultMsg}`);
+  }
+
+  const items = asArray<RawItem>(json?.response?.body?.items?.item);
+
+  return items.map((it) => {
+    // dutyTime{1..8}s / {1..8}c = 요일별 시작/종료. 8은 공휴일.
+    const start = it[`dutyTime${day}s`];
+    const close = it[`dutyTime${day}c`];
+    return {
+      id: it.hpid ?? `${kind}-${it.dutyName}`,
+      kind,
+      name: it.dutyName ?? "",
+      address: it.dutyAddr ?? "",
+      phone: it.dutyTel1 ?? "",
+      lat: it.wgs84Lat ? Number(it.wgs84Lat) : null,
+      lng: it.wgs84Lon ? Number(it.wgs84Lon) : null,
+      category: it.dutyDivNam ?? "",
+      todayStart: fmtTime(start),
+      todayClose: fmtTime(close),
+      openNow: isOpenNow(start, close, hhmm),
+    };
+  });
+}
+
+function sampleMedical(): MedicalPayload {
+  const { day, hhmm } = kstNow();
+  const mk = (
+    kind: MedicalPlace["kind"],
+    name: string,
+    addr: string,
+    tel: string,
+    lat: number,
+    lng: number,
+    s: string,
+    c: string,
+  ): MedicalPlace => ({
+    id: `sample-${name}`,
+    kind,
+    name,
+    address: addr,
+    phone: tel,
+    lat,
+    lng,
+    category: kind === "hospital" ? "병원" : "약국",
+    todayStart: fmtTime(s),
+    todayClose: fmtTime(c),
+    openNow: isOpenNow(s, c, hhmm),
+  });
+  return {
+    places: [
+      mk("hospital", "샘플 의왕종합병원", "경기 의왕시", "031-000-0000", 37.3452, 126.9695, "0000", "2400"),
+      mk("hospital", "샘플 내손소아과", "경기 의왕시", "031-000-0001", 37.3749, 126.9693, "0900", "1800"),
+      mk("pharmacy", "샘플 고천약국", "경기 의왕시", "031-000-0002", 37.3438, 126.9709, "0900", "2100"),
+    ],
+    day,
+    source: "sample",
+    updatedAt: nowISO(),
+  };
+}
+
+const cache = createTtlCache<MedicalPayload>(10 * 60_000, 8);
+
+export async function GET() {
+  const key = process.env.EMERGENCY_SERVICE_KEY ?? process.env.KMA_SERVICE_KEY;
+  if (!key) {
+    return fail(sampleMedical(), "data.go.kr 인증키 미설정 — 샘플을 표시합니다.");
+  }
+
+  const { day, hhmm } = kstNow();
+  const cacheKey = `d${day}`;
+  const cached = cache.get(cacheKey);
+  if (cached) {
+    // 캐시된 목록에 "지금 열림" 만 다시 계산한다 (시간이 흐르므로)
+    const places = cached.places.map((p) => ({
+      ...p,
+      openNow: isOpenNow(
+        p.todayStart.replace(":", ""),
+        p.todayClose.replace(":", ""),
+        hhmm,
+      ),
+    }));
+    return ok({ ...cached, places, updatedAt: nowISO() }, undefined, 60);
+  }
+
+  try {
+    const [hospitals, pharmacies] = await Promise.all([
+      fetchList(HOSPITAL, key, "hospital", day, hhmm),
+      fetchList(PHARMACY, key, "pharmacy", day, hhmm),
+    ]);
+    const places = [...hospitals, ...pharmacies].filter((p) => p.name);
+    if (places.length === 0) {
+      return fail(sampleMedical(), "의왕시 조회 결과가 없습니다 — 샘플을 표시합니다.");
+    }
+    const payload: MedicalPayload = {
+      places,
+      day,
+      source: "nmc",
+      updatedAt: nowISO(),
+    };
+    cache.set(cacheKey, payload);
+    return ok(payload, undefined, CACHE_SEC);
+  } catch (e) {
+    console.error("[medical]", e);
+    const reason = e instanceof Error ? e.message : String(e);
+    return fail(sampleMedical(), `응급의료 API: ${reason}`);
+  }
+}

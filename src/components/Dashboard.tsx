@@ -14,6 +14,8 @@ import type {
   Place,
   PlacesPayload,
   WeatherPayload,
+  AirPayload,
+  MedicalPayload,
   NewsPayload,
   TrafficPayload,
   TransitPayload,
@@ -24,6 +26,9 @@ import TrafficPanel from "@/components/panels/TrafficPanel";
 import TransitPanel from "@/components/panels/TransitPanel";
 import NewsPanel from "@/components/panels/NewsPanel";
 import PopulationPanel from "@/components/panels/PopulationPanel";
+import AirPanel from "@/components/panels/AirPanel";
+import MedicalPanel from "@/components/panels/MedicalPanel";
+import WastePanel from "@/components/panels/WastePanel";
 import { hhmm } from "@/components/ui";
 
 const KakaoMap = dynamic(() => import("@/components/KakaoMap"), { ssr: false });
@@ -34,6 +39,8 @@ const POLL = {
   traffic: 60_000,
   transit: 30_000,
   news: 5 * 60_000,
+  air: 10 * 60_000,
+  medical: 10 * 60_000,
 };
 
 type MobileTab = "map" | "places" | "live";
@@ -106,6 +113,14 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     swrFetcher,
     { refreshInterval: POLL.transit, keepPreviousData: true },
   );
+  const air = useSWR<ApiEnvelope<AirPayload>>("/api/air", swrFetcher, {
+    refreshInterval: POLL.air,
+    keepPreviousData: true,
+  });
+  const medical = useSWR<ApiEnvelope<MedicalPayload>>("/api/medical", swrFetcher, {
+    refreshInterval: POLL.medical,
+    keepPreviousData: true,
+  });
   const news = useSWR<ApiEnvelope<NewsPayload>>(
     `/api/news?q=${encodeURIComponent(newsQuery)}`,
     swrFetcher,
@@ -115,10 +130,12 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
   const refreshAll = useCallback(() => {
     places.mutate();
     weather.mutate();
+    air.mutate();
+    medical.mutate();
     traffic.mutate();
     transit.mutate();
     news.mutate();
-  }, [places, weather, traffic, transit, news]);
+  }, [places, weather, air, medical, traffic, transit, news]);
 
   const toggleCategory = useCallback((c: CategoryKey) => {
     setCategories((prev) =>
@@ -145,7 +162,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     [traffic.data],
   );
 
-  const anySample = [places, weather, traffic, transit, news].some(
+  const anySample = [places, weather, air, medical, traffic, transit, news].some(
     (s) => s.data && s.data.ok === false,
   );
 
@@ -348,7 +365,12 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           }`}
         >
           <WeatherPanel res={weather.data} isLoading={weather.isLoading} />
-          <PopulationPanel onFocus={(lat, lng) => focus(lat, lng, 5)} />
+          <AirPanel res={air.data} isLoading={air.isLoading} />
+          <MedicalPanel
+            res={medical.data}
+            isLoading={medical.isLoading}
+            onFocus={(lat, lng) => focus(lat, lng, 4)}
+          />
           <TrafficPanel
             res={traffic.data}
             isLoading={traffic.isLoading}
@@ -359,6 +381,8 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             isLoading={transit.isLoading}
             onFocus={(lat, lng) => focus(lat, lng, 3)}
           />
+          <WastePanel />
+          <PopulationPanel onFocus={(lat, lng) => focus(lat, lng, 5)} />
           <NewsPanel
             res={news.data}
             isLoading={news.isLoading}

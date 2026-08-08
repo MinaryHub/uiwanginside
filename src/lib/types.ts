@@ -119,6 +119,52 @@ export interface TransitPayload {
   updatedAt: string;
 }
 
+export type AirGrade = "좋음" | "보통" | "나쁨" | "매우나쁨";
+
+export interface AirStation {
+  name: string;
+  pm10: number | null;
+  pm25: number | null;
+  o3: number | null;
+  no2: number | null;
+  pm10Grade: AirGrade | null;
+  pm25Grade: AirGrade | null;
+  /** 통합대기환경지수 */
+  khai: number | null;
+  khaiGrade: AirGrade | null;
+  measuredAt: string;
+}
+
+export interface AirPayload {
+  stations: AirStation[];
+  source: "airkorea" | "sample";
+  updatedAt: string;
+}
+
+export interface MedicalPlace {
+  id: string;
+  kind: "hospital" | "pharmacy";
+  name: string;
+  address: string;
+  phone: string;
+  lat: number | null;
+  lng: number | null;
+  category: string;
+  /** 오늘 진료 시작/종료 (HH:MM). 정보 없으면 빈 문자열 */
+  todayStart: string;
+  todayClose: string;
+  /** 지금 진료 중인지. 시간 정보가 없으면 null */
+  openNow: boolean | null;
+}
+
+export interface MedicalPayload {
+  places: MedicalPlace[];
+  /** 1=월 … 7=일 */
+  day: number;
+  source: "nmc" | "sample";
+  updatedAt: string;
+}
+
 export interface ApiEnvelope<T> {
   ok: boolean;
   data: T;
