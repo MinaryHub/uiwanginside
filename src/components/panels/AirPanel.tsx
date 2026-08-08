@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, Notice, Skeleton, Empty, LiveDot } from "@/components/ui";
+import { Card, Skeleton, LiveDot, Unavailable } from "@/components/ui";
 import type { AirPayload, ApiEnvelope, AirGrade } from "@/lib/types";
 
 const GRADE_STYLE: Record<AirGrade, { color: string; emoji: string }> = {
@@ -65,13 +65,9 @@ export default function AirPanel({
       {isLoading && !d ? (
         <Skeleton rows={2} />
       ) : !primary ? (
-        <>
-          <Notice>{res?.notice}</Notice>
-          <Empty>측정소 데이터가 없습니다.</Empty>
-        </>
+        <Unavailable reason={res?.notice} />
       ) : (
         <>
-          <Notice>{res?.notice}</Notice>
 
           <div className="grid grid-cols-4 gap-1.5">
             <Metric label="미세" value={primary.pm10} unit="㎍/㎥" grade={primary.pm10Grade} />

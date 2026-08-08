@@ -14,7 +14,8 @@ export interface Place {
   url: string;
 }
 
-export type PlaceSource = "kakao" | "osm" | "sample";
+/** 모두 실제 데이터 출처다. 샘플/가짜 데이터는 표시하지 않는다. */
+export type PlaceSource = "kakao" | "osm";
 
 export interface PlacesPayload {
   places: Place[];
@@ -43,7 +44,7 @@ export interface WeatherForecastItem {
 export interface WeatherPayload {
   now: WeatherNow | null;
   forecast: WeatherForecastItem[];
-  source: "kma" | "sample";
+  source: "kma";
   updatedAt: string;
 }
 
@@ -57,7 +58,7 @@ export interface NewsItem {
 
 export interface NewsPayload {
   items: NewsItem[];
-  source: "naver" | "sample";
+  source: "naver";
   updatedAt: string;
 }
 
@@ -87,7 +88,7 @@ export interface TrafficLink {
 export interface TrafficPayload {
   incidents: Incident[];
   links: TrafficLink[];
-  source: "its" | "sample";
+  source: "its";
   updatedAt: string;
 }
 
@@ -115,7 +116,7 @@ export interface BusStop {
 export interface TransitPayload {
   stops: BusStop[];
   /** osm = 정류소 위치만 실제 데이터, 도착 예정 시간 없음 */
-  source: "gbis" | "osm" | "sample";
+  source: "gbis" | "osm";
   updatedAt: string;
 }
 
@@ -137,7 +138,7 @@ export interface AirStation {
 
 export interface AirPayload {
   stations: AirStation[];
-  source: "airkorea" | "sample";
+  source: "airkorea";
   updatedAt: string;
 }
 
@@ -161,13 +162,14 @@ export interface MedicalPayload {
   places: MedicalPlace[];
   /** 1=월 … 7=일 */
   day: number;
-  source: "nmc" | "sample";
+  source: "nmc";
   updatedAt: string;
 }
 
 export interface ApiEnvelope<T> {
+  /** false = 데이터를 가져오지 못했다. 이때 data 는 비어 있다. */
   ok: boolean;
   data: T;
-  /** 키 미설정 등으로 샘플 데이터를 반환한 경우 안내 메시지 */
+  /** ok:false 인 이유. 화면에 그대로 노출한다. */
   notice?: string;
 }

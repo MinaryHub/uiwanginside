@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, Notice, Skeleton, Badge, Empty, LiveDot, timeAgo } from "@/components/ui";
+import { Card, Skeleton, Badge, Empty, LiveDot, Unavailable, timeAgo } from "@/components/ui";
 import type { TrafficPayload, ApiEnvelope, Incident } from "@/lib/types";
 
 const KIND_META: Record<Incident["kind"], { label: string; color: string; emoji: string }> = {
@@ -39,10 +39,10 @@ export default function TrafficPanel({
     <Card title="교통 · 사고" icon="🚗" right={<LiveDot live={d?.source === "its"} />}>
       {isLoading && !d ? (
         <Skeleton rows={3} />
+      ) : res?.ok === false ? (
+        <Unavailable reason={res.notice} />
       ) : (
         <>
-          <Notice>{res?.notice}</Notice>
-
           {links.length > 0 && (
             <div className="mb-3 flex gap-1.5">
               {(["congested", "slow", "smooth"] as const).map((lv) => (

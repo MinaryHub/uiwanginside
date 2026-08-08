@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, Notice, Skeleton, LiveDot, hhmm } from "@/components/ui";
+import { Card, Skeleton, LiveDot, Unavailable, hhmm } from "@/components/ui";
 import type { WeatherPayload, ApiEnvelope } from "@/lib/types";
 
 const SKY_ICON: Record<string, string> = {
@@ -37,9 +37,10 @@ export default function WeatherPanel({
     >
       {isLoading && !d ? (
         <Skeleton rows={2} />
+      ) : !d?.now ? (
+        <Unavailable reason={res?.notice} />
       ) : (
         <>
-          <Notice>{res?.notice}</Notice>
           {d?.now && (
             <div className="mb-3 flex items-center gap-3">
               <span className="text-4xl leading-none">

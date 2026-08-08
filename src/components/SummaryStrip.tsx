@@ -69,7 +69,10 @@ export default function SummaryStrip({
   const grade = station?.pm25Grade ?? station?.pm10Grade ?? null;
   const accidents =
     traffic?.data.incidents.filter((i) => i.kind === "accident").length ?? 0;
-  const openClinics = medical?.data.places.filter((p) => p.openNow === true).length;
+  // 연동 전에는 0 이 아니라 표시 자체를 생략한다
+  const openClinics = medical?.ok
+    ? medical.data.places.filter((p) => p.openNow === true).length
+    : null;
 
   const icon =
     now && now.precipitation !== "없음"
@@ -78,29 +81,36 @@ export default function SummaryStrip({
 
   return (
     <div className="thin-scroll flex items-center gap-0.5 overflow-x-auto">
-      <Item onClick={() => onOpen("life")} title="날씨 상세 보기">
-        <span className="text-[14px]">{icon}</span>
-        <span className="tabular-nums">{now?.temp ?? "-"}°</span>
-      </Item>
+      {/* 값을 못 가져온 항목은 아예 표시하지 않는다 — 빈칸이 기본값처럼 보이면 안 된다 */}
+      {now?.temp != null && (
+        <Item onClick={() => onOpen("life")} title="날씨 상세 보기">
+          <span className="text-[14px]">{icon}</span>
+          <span className="tabular-nums">{now.temp}°</span>
+        </Item>
+      )}
 
-      <span className="h-3 w-px shrink-0 bg-[var(--border)]" />
+      {grade && (
+        <>
+          <span className="h-3 w-px shrink-0 bg-[var(--border)]" />
+          <Item onClick={() => onOpen("medical")} title="대기질 상세 보기">
+            <span className="text-[var(--muted)]">미세</span>
+            <span style={{ color: GRADE_COLOR[grade] }}>{grade}</span>
+          </Item>
+        </>
+      )}
 
-      <Item onClick={() => onOpen("medical")} title="대기질 상세 보기">
-        <span className="text-[var(--muted)]">미세</span>
-        <span style={{ color: grade ? GRADE_COLOR[grade] : undefined }}>
-          {grade ?? "-"}
-        </span>
-      </Item>
-
-      <span className="h-3 w-px shrink-0 bg-[var(--border)]" />
-
-      <Item onClick={() => onOpen("transit")} title="교통 상황 보기">
-        {accidents > 0 ? (
-          <span className="text-red-600 dark:text-red-400">🚨 사고 {accidents}</span>
-        ) : (
-          <span className="text-[var(--muted)]">🚗 사고없음</span>
-        )}
-      </Item>
+      {traffic?.ok && (
+        <>
+          <span className="h-3 w-px shrink-0 bg-[var(--border)]" />
+          <Item onClick={() => onOpen("transit")} title="교통 상황 보기">
+            {accidents > 0 ? (
+              <span className="text-red-600 dark:text-red-400">🚨 사고 {accidents}</span>
+            ) : (
+              <span className="text-[var(--muted)]">🚗 사고없음</span>
+            )}
+          </Item>
+        </>
+      )}
 
       {openClinics != null && (
         <>

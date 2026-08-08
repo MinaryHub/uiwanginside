@@ -30,40 +30,14 @@ function speedLevel(speed: number): TrafficLink["level"] {
   return "congested";
 }
 
-function sampleTraffic(): TrafficPayload {
-  return {
-    incidents: [
-      {
-        id: "s1",
-        kind: "accident",
-        type: "교통사고",
-        message: "영동고속도로 안산방향 북의왕IC 부근 2차로 차량 접촉사고, 서행",
-        road: "영동고속도로",
-        lat: 37.3852,
-        lng: 126.9931,
-        startedAt: new Date(Date.now() - 25 * 60_000).toISOString(),
-      },
-      {
-        id: "s2",
-        kind: "construction",
-        type: "도로공사",
-        message: "과천봉담도시고속화도로 의왕 구간 포장보수 공사 (1개 차로 통제)",
-        road: "과천봉담도시고속화도로",
-        lat: 37.3405,
-        lng: 126.9598,
-        startedAt: new Date(Date.now() - 4 * 3600_000).toISOString(),
-      },
-    ],
-    links: [
-      { id: "l1", name: "1번국도 고천사거리→오전동", speed: 18, level: "congested", lat: 37.3466, lng: 126.9701 },
-      { id: "l2", name: "봉담과천로 의왕TG 부근", speed: 32, level: "slow", lat: 37.3374, lng: 126.9612 },
-      { id: "l3", name: "백운호수로 내손동 방면", speed: 47, level: "smooth", lat: 37.3745, lng: 126.9903 },
-      { id: "l4", name: "학의천로 청계동 방면", speed: 55, level: "smooth", lat: 37.3931, lng: 126.9958 },
-    ],
-    source: "sample",
-    updatedAt: nowISO(),
-  };
-}
+/** 데이터를 못 가져왔을 때 내보내는 빈 응답.
+ * 교통사고를 가짜로 만들어 보여주면 시민을 실제로 잘못 인도한다. */
+const EMPTY: TrafficPayload = {
+  incidents: [],
+  links: [],
+  source: "its",
+  updatedAt: "",
+};
 
 interface ItsEvent {
   linkId?: string;
@@ -88,7 +62,7 @@ interface ItsTraffic {
 export async function GET() {
   const key = process.env.ITS_API_KEY;
   if (!key) {
-    return fail(sampleTraffic(), "ITS_API_KEY 미설정 — 샘플 교통정보를 표시합니다.");
+    return fail(EMPTY, "ITS 인증키가 설정되지 않았습니다.");
   }
 
   const { minX, maxX, minY, maxY } = UIWANG.bbox;
@@ -159,6 +133,6 @@ export async function GET() {
     );
   } catch (e) {
     console.error("[traffic]", e);
-    return fail(sampleTraffic(), "ITS API 호출 실패 — 샘플 교통정보를 표시합니다.");
+    return fail(EMPTY, `ITS API 호출 실패: ${e instanceof Error ? e.message : e}`);
   }
 }

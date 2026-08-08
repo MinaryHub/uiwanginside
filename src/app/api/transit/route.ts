@@ -81,53 +81,8 @@ function num(v: unknown): number | null {
   return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
-function sampleTransit(): TransitPayload {
-  const mk = (
-    stationId: string,
-    name: string,
-    mobileNo: string,
-    lat: number,
-    lng: number,
-    distance: number,
-    arrivals: [string, number, number][],
-  ): BusStop => ({
-    stationId,
-    mobileNo,
-    name,
-    lat,
-    lng,
-    distance,
-    arrivals: arrivals.map(([routeName, m1, m2]) => ({
-      routeId: routeName,
-      routeName,
-      predictSec: m1 * 60,
-      predictSec2: m2 * 60,
-      remainSeats: null,
-      plateNo: "",
-      lowPlate: false,
-    })),
-  });
-
-  return {
-    stops: [
-      mk("s1", "의왕시청", "35123", 37.3449, 126.9689, 120, [
-        ["1-1", 3, 14],
-        ["10", 7, 22],
-        ["441", 11, 27],
-      ]),
-      mk("s2", "고천사거리", "35044", 37.3462, 126.9707, 310, [
-        ["777", 2, 18],
-        ["11-2", 9, 25],
-      ]),
-      mk("s3", "의왕역", "35210", 37.3447, 126.9686, 480, [
-        ["8", 5, 20],
-        ["30", 12, 31],
-      ]),
-    ],
-    source: "sample",
-    updatedAt: nowISO(),
-  };
-}
+/** 데이터를 못 가져왔을 때 내보내는 빈 응답 */
+const EMPTY: TransitPayload = { stops: [], source: "gbis", updatedAt: "" };
 
 export async function GET(req: Request) {
   const sp = new URL(req.url).searchParams;
@@ -137,7 +92,7 @@ export async function GET(req: Request) {
 
   const key = process.env.GBIS_SERVICE_KEY;
   if (!key) {
-    return fail(sampleTransit(), "GBIS_SERVICE_KEY 미설정 — 샘플 버스정보를 표시합니다.");
+    return fail(EMPTY, "경기버스 인증키가 설정되지 않았습니다.");
   }
 
   let rawStops: RawStop[];
@@ -173,7 +128,7 @@ export async function GET(req: Request) {
       );
     } catch (osmErr) {
       console.error("[transit:osm]", osmErr);
-      return fail(sampleTransit(), `경기버스 정류소 조회 실패: ${reason}`);
+      return fail(EMPTY, `경기버스 정류소 조회 실패: ${reason}`);
     }
   }
 
@@ -240,6 +195,6 @@ export async function GET(req: Request) {
   } catch (e) {
     console.error("[transit:arrivals]", e);
     const reason = e instanceof Error ? e.message : String(e);
-    return fail(sampleTransit(), `경기버스 도착정보 조회 실패: ${reason}`);
+    return fail(EMPTY, `경기버스 도착정보 조회 실패: ${reason}`);
   }
 }

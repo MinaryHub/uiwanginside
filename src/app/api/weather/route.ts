@@ -93,37 +93,18 @@ async function callKma(path: string, params: Record<string, string>, key: string
   return (json.response.body.items.item ?? []) as KmaItem[];
 }
 
-function sampleWeather(): WeatherPayload {
-  const base = new Date();
-  return {
-    now: {
-      temp: 27.4,
-      humidity: 62,
-      rain1h: 0,
-      windSpeed: 1.8,
-      precipitation: "없음",
-      sky: "구름많음",
-      observedAt: nowISO(),
-    },
-    forecast: Array.from({ length: 8 }, (_, i): WeatherForecastItem => {
-      const t = new Date(base.getTime() + (i + 1) * 3 * 3600 * 1000);
-      return {
-        time: t.toISOString(),
-        temp: Math.round(24 + Math.sin(i) * 4),
-        sky: i % 3 === 0 ? "맑음" : "구름많음",
-        precipitation: i === 4 ? "비" : "없음",
-        pop: i === 4 ? 60 : 10,
-      };
-    }),
-    source: "sample",
-    updatedAt: nowISO(),
-  };
-}
+/** 데이터를 못 가져왔을 때 내보내는 빈 응답 — 가짜 값을 만들지 않는다 */
+const EMPTY: WeatherPayload = {
+  now: null,
+  forecast: [],
+  source: "kma",
+  updatedAt: "",
+};
 
 export async function GET() {
   const key = process.env.KMA_SERVICE_KEY;
   if (!key) {
-    return fail(sampleWeather(), "KMA_SERVICE_KEY 미설정 — 샘플 날씨를 표시합니다.");
+    return fail(EMPTY, "기상청 인증키가 설정되지 않았습니다.");
   }
 
   try {
@@ -181,6 +162,6 @@ export async function GET() {
     return ok(payload, undefined, CACHE_SEC);
   } catch (e) {
     console.error("[weather]", e);
-    return fail(sampleWeather(), "기상청 API 호출 실패 — 샘플 날씨를 표시합니다.");
+    return fail(EMPTY, `기상청 API 호출 실패: ${e instanceof Error ? e.message : e}`);
   }
 }

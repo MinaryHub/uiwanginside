@@ -12,7 +12,6 @@ const SOURCE_META: Record<PlaceSource, { label: string; color: string; title: st
     color: "#3b82f6",
     title: "OpenStreetMap 실제 데이터 © OpenStreetMap contributors (ODbL)",
   },
-  sample: { label: "샘플", color: "#9ca3af", title: "예시용 샘플 데이터" },
 };
 
 export default function PlacesPanel({

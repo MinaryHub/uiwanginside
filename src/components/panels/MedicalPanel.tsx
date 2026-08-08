@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Card, Notice, Skeleton, Empty, LiveDot } from "@/components/ui";
+import { Card, Skeleton, Empty, LiveDot, Unavailable } from "@/components/ui";
 import type { MedicalPayload, ApiEnvelope, MedicalPlace } from "@/lib/types";
 
 type Filter = "open" | "hospital" | "pharmacy" | "all";
@@ -96,10 +96,10 @@ export default function MedicalPanel({
     >
       {isLoading && !d ? (
         <Skeleton rows={4} />
+      ) : res?.ok === false ? (
+        <Unavailable reason={res.notice} />
       ) : (
         <>
-          <Notice>{res?.notice}</Notice>
-
           <div className="mb-2 flex items-center gap-1.5">
             <span className="text-[11px] font-bold">
               지금 <span className="text-[var(--brand)]">{openCount}</span>곳 진료중

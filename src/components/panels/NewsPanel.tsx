@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, Notice, Skeleton, Empty, LiveDot, timeAgo } from "@/components/ui";
+import { Card, Skeleton, Empty, LiveDot, Unavailable, timeAgo } from "@/components/ui";
 import type { NewsPayload, ApiEnvelope } from "@/lib/types";
 
 export default function NewsPanel({
@@ -21,9 +21,10 @@ export default function NewsPanel({
     <Card title="주요 뉴스" icon="📰" right={<LiveDot live={d?.source === "naver"} />}>
       {isLoading && !d ? (
         <Skeleton rows={4} />
+      ) : res?.ok === false ? (
+        <Unavailable reason={res.notice} />
       ) : (
         <>
-          <Notice>{res?.notice}</Notice>
           <div className="thin-scroll mb-2.5 flex gap-1 overflow-x-auto pb-1">
             {presets.map((p) => (
               <button

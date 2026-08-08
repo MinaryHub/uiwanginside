@@ -64,58 +64,7 @@ async function searchCategory(
   return out;
 }
 
-/** 키가 없을 때 UI 검증용 최소 샘플 */
-function samplePlaces(codes: CategoryKey[]): Place[] {
-  const seeds: Record<string, [string, number, number][]> = {
-    SC4: [
-      ["의왕고등학교", 37.3467, 126.9714],
-      ["부곡중학교", 37.3201, 126.9591],
-      ["백운초등학교", 37.3758, 126.9702],
-    ],
-    HP8: [
-      ["의왕시립병원", 37.3441, 126.9671],
-      ["내손연합의원", 37.3749, 126.9693],
-    ],
-    PM9: [["고천약국", 37.3438, 126.9709]],
-    MT1: [
-      ["롯데마트 의왕점", 37.3452, 126.9723],
-      ["이마트 트레이더스 의왕", 37.3395, 126.9648],
-    ],
-    CS2: [
-      ["GS25 고천점", 37.3444, 126.9695],
-      ["CU 내손점", 37.3752, 126.9711],
-      ["세븐일레븐 부곡점", 37.3192, 126.9583],
-    ],
-    BK9: [["농협은행 의왕지점", 37.3450, 126.9688]],
-    PK6: [["의왕시청 공영주차장", 37.3446, 126.9679]],
-    OL7: [["SK주유소 고천점", 37.3421, 126.9731]],
-    SW8: [
-      ["의왕역", 37.3447, 126.9686],
-      ["인덕원역", 37.4013, 126.9767],
-    ],
-    PO3: [["의왕시청", 37.3448, 126.9683]],
-    CT1: [["철도박물관", 37.3268, 126.9412]],
-  };
-  const out: Place[] = [];
-  for (const code of codes) {
-    for (const [name, lat, lng] of seeds[code] ?? []) {
-      out.push({
-        id: `sample-${code}-${name}`,
-        name,
-        category: code,
-        categoryName: CATEGORY_MAP[code].label,
-        phone: "",
-        address: "경기 의왕시",
-        roadAddress: "경기 의왕시",
-        lat,
-        lng,
-        distance: null,
-        url: "",
-      });
-    }
-  }
-  return out;
-}
+
 
 /**
  * 5분 캐시. 좌표는 소수점 3자리(약 100m)로 뭉뚱그려 키를 만든다.
@@ -173,8 +122,8 @@ export async function GET(req: Request) {
   } catch (e) {
     console.error("[places:osm]", e);
     return fail(
-      { places: samplePlaces(codes), source: "sample" as const },
-      "카카오·OpenStreetMap 모두 조회에 실패했습니다. 샘플 데이터를 표시합니다.",
+      { places: [], source: "osm" as const },
+      "카카오·OpenStreetMap 모두 조회에 실패했습니다.",
     );
   }
 }

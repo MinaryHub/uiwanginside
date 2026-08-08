@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, Notice, Skeleton, Empty, LiveDot } from "@/components/ui";
+import { Card, Skeleton, Empty, LiveDot, Unavailable } from "@/components/ui";
 import type { TransitPayload, ApiEnvelope, BusArrival } from "@/lib/types";
 
 function eta(sec: number | null) {
@@ -66,9 +66,10 @@ export default function TransitPanel({
     >
       {isLoading && !d ? (
         <Skeleton rows={3} />
+      ) : res?.ok === false ? (
+        <Unavailable reason={res.notice} />
       ) : (
         <>
-          <Notice>{res?.notice}</Notice>
           {stops.length === 0 ? (
             <Empty>주변 정류소가 없습니다.</Empty>
           ) : (

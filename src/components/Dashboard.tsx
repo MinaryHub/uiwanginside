@@ -173,7 +173,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     [mode, medical.data],
   );
 
-  const sampleCount = [places, weather, air, medical, traffic, transit, news].filter(
+  const unavailableCount = [places, weather, air, medical, traffic, transit, news].filter(
     (s) => s.data && s.data.ok === false,
   ).length;
 
@@ -302,9 +302,9 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
         })}
       </nav>
 
-      {sampleCount > 0 && (
+      {unavailableCount > 0 && (
         <div className="shrink-0 bg-amber-500/12 px-3 py-1 text-center text-[10.5px] font-semibold text-amber-700 md:px-4 dark:text-amber-300">
-          일부 정보는 아직 연동 전입니다{" "}
+일부 정보는 아직 연동되지 않아 표시되지 않습니다{" "}
           <a href="/status" className="underline underline-offset-2">
             상태 보기 →
           </a>

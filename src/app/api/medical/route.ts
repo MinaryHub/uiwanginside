@@ -117,48 +117,21 @@ async function fetchList(
   });
 }
 
-function sampleMedical(): MedicalPayload {
-  const { day, hhmm } = kstNow();
-  const mk = (
-    kind: MedicalPlace["kind"],
-    name: string,
-    addr: string,
-    tel: string,
-    lat: number,
-    lng: number,
-    s: string,
-    c: string,
-  ): MedicalPlace => ({
-    id: `sample-${name}`,
-    kind,
-    name,
-    address: addr,
-    phone: tel,
-    lat,
-    lng,
-    category: kind === "hospital" ? "병원" : "약국",
-    todayStart: fmtTime(s),
-    todayClose: fmtTime(c),
-    openNow: isOpenNow(s, c, hhmm),
-  });
-  return {
-    places: [
-      mk("hospital", "샘플 의왕종합병원", "경기 의왕시", "031-000-0000", 37.3452, 126.9695, "0000", "2400"),
-      mk("hospital", "샘플 내손소아과", "경기 의왕시", "031-000-0001", 37.3749, 126.9693, "0900", "1800"),
-      mk("pharmacy", "샘플 고천약국", "경기 의왕시", "031-000-0002", 37.3438, 126.9709, "0900", "2100"),
-    ],
-    day,
-    source: "sample",
-    updatedAt: nowISO(),
-  };
-}
+/** 데이터를 못 가져왔을 때 내보내는 빈 응답.
+ * 존재하지 않는 병원을 만들어 보여주는 것은 위험하다. */
+const EMPTY: MedicalPayload = {
+  places: [],
+  day: 0,
+  source: "nmc",
+  updatedAt: "",
+};
 
 const cache = createTtlCache<MedicalPayload>(10 * 60_000, 8);
 
 export async function GET() {
   const key = process.env.EMERGENCY_SERVICE_KEY ?? process.env.KMA_SERVICE_KEY;
   if (!key) {
-    return fail(sampleMedical(), "data.go.kr 인증키 미설정 — 샘플을 표시합니다.");
+    return fail(EMPTY, "응급의료 인증키가 설정되지 않았습니다.");
   }
 
   const { day, hhmm } = kstNow();
@@ -184,7 +157,7 @@ export async function GET() {
     ]);
     const places = [...hospitals, ...pharmacies].filter((p) => p.name);
     if (places.length === 0) {
-      return fail(sampleMedical(), "의왕시 조회 결과가 없습니다 — 샘플을 표시합니다.");
+      return fail(EMPTY, "의왕시 조회 결과가 없습니다.");
     }
     const payload: MedicalPayload = {
       places,
@@ -197,6 +170,6 @@ export async function GET() {
   } catch (e) {
     console.error("[medical]", e);
     const reason = e instanceof Error ? e.message : String(e);
-    return fail(sampleMedical(), `응급의료 API: ${reason}`);
+    return fail(EMPTY, `응급의료 API: ${reason}`);
   }
 }

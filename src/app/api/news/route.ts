@@ -27,27 +27,8 @@ function hostOf(link: string) {
   }
 }
 
-function sampleNews(query: string): NewsPayload {
-  const now = Date.now();
-  const titles = [
-    "의왕시, 왕송호수 일대 야간경관 조명 개선사업 착수",
-    "의왕 백운밸리 교통체계 개편…출퇴근 정체 완화 기대",
-    "의왕시 보건소, 여름철 감염병 예방 집중 홍보",
-    "월곶~판교 복선전철 의왕 구간 공사 진행 현황 공개",
-    "의왕시, 청년 월세 지원 신청 접수 시작",
-  ];
-  return {
-    items: titles.map((t, i) => ({
-      title: t,
-      link: "https://www.uiwang.go.kr/",
-      description: `${query} 관련 샘플 기사입니다. NAVER_CLIENT_ID/SECRET을 설정하면 실시간 뉴스가 표시됩니다.`,
-      publishedAt: new Date(now - i * 3600_000 * 5).toISOString(),
-      source: "sample",
-    })),
-    source: "sample",
-    updatedAt: nowISO(),
-  };
-}
+/** 데이터를 못 가져왔을 때 내보내는 빈 응답 */
+const EMPTY: NewsPayload = { items: [], source: "naver", updatedAt: "" };
 
 /**
  * 검색 API 는 네이버 클라우드 플랫폼의 NAVER API HUB 로 이전됐다.
@@ -70,10 +51,7 @@ export async function GET(req: Request) {
   const secret = process.env.NAVER_CLIENT_SECRET;
 
   if (!id || !secret) {
-    return fail(
-      sampleNews(query),
-      "NAVER_CLIENT_ID / NAVER_CLIENT_SECRET 미설정 — 샘플 뉴스를 표시합니다.",
-    );
+    return fail(EMPTY, "네이버 검색 인증키가 설정되지 않았습니다.");
   }
 
   const useNcp = isNcpCredential(id, secret);
@@ -116,6 +94,6 @@ export async function GET(req: Request) {
       : m.includes("404")
         ? "엔드포인트 없음 (검색 API 는 NCP NAVER API HUB 로 이전됨)"
         : "호출 실패";
-    return fail(sampleNews(query), `네이버 뉴스 API ${reason} — 샘플 뉴스를 표시합니다.`);
+    return fail(EMPTY, `네이버 뉴스 API ${reason}`);
   }
 }

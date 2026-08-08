@@ -108,17 +108,42 @@ export function hhmm(iso: string): string {
 }
 
 export function LiveDot({ live }: { live: boolean }) {
+  // 연동 전에는 아무 뱃지도 달지 않는다.
+  // 가짜 데이터를 표시하지 않으므로 "SAMPLE" 같은 표시가 필요 없다.
+  if (!live) return null;
   return (
     <span
       className="inline-flex items-center gap-1 text-[10.5px] font-semibold"
-      style={{ color: live ? "var(--brand)" : "var(--muted)" }}
-      title={live ? "실시간 API 연동됨" : "샘플 데이터"}
+      style={{ color: "var(--brand)" }}
+      title="실시간 데이터"
     >
-      <span
-        className="h-1.5 w-1.5 rounded-full"
-        style={{ background: live ? "#10b981" : "#9ca3af" }}
-      />
-      {live ? "LIVE" : "SAMPLE"}
+      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+      LIVE
     </span>
+  );
+}
+
+/**
+ * 데이터를 가져오지 못했을 때의 표시.
+ * 값을 지어내지 않고 왜 없는지만 알린다.
+ */
+export function Unavailable({ reason }: { reason?: string }) {
+  return (
+    <div className="rounded-lg bg-[var(--surface-2)] px-3 py-4 text-center">
+      <p className="text-[12.5px] font-semibold text-[var(--muted)]">
+        아직 연동되지 않았습니다
+      </p>
+      {reason && (
+        <p className="mx-auto mt-1 max-w-[260px] text-[11px] leading-snug text-[var(--muted)]">
+          {reason}
+        </p>
+      )}
+      <a
+        href="/status"
+        className="mt-2 inline-block text-[11px] font-bold text-[var(--brand)] underline underline-offset-2"
+      >
+        연동 상태 보기 →
+      </a>
+    </div>
   );
 }

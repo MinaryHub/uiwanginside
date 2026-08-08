@@ -72,33 +72,15 @@ function gradeOf(code: string | undefined, value: number | null, kind: "pm10" | 
   return "매우나쁨";
 }
 
-function sampleAir(): AirPayload {
-  return {
-    stations: [
-      {
-        name: "고천동",
-        pm10: 24,
-        pm25: 12,
-        o3: 0.033,
-        no2: 0.012,
-        pm10Grade: "좋음",
-        pm25Grade: "좋음",
-        khai: 55,
-        khaiGrade: "보통",
-        measuredAt: "",
-      },
-    ],
-    source: "sample",
-    updatedAt: nowISO(),
-  };
-}
+/** 데이터를 못 가져왔을 때 내보내는 빈 응답 */
+const EMPTY: AirPayload = { stations: [], source: "airkorea", updatedAt: "" };
 
 const cache = createTtlCache<AirPayload>(9 * 60_000, 4);
 
 export async function GET() {
   const key = process.env.AIRKOREA_SERVICE_KEY ?? process.env.KMA_SERVICE_KEY;
   if (!key) {
-    return fail(sampleAir(), "data.go.kr 인증키 미설정 — 샘플 대기질을 표시합니다.");
+    return fail(EMPTY, "에어코리아 인증키가 설정되지 않았습니다.");
   }
 
   const cached = cache.get("air");
@@ -148,7 +130,7 @@ export async function GET() {
     }).filter((s): s is AirStation => s !== null);
 
     if (stations.length === 0) {
-      return fail(sampleAir(), "의왕 측정소 데이터를 찾지 못했습니다 — 샘플을 표시합니다.");
+      return fail(EMPTY, "의왕 측정소 데이터를 찾지 못했습니다.");
     }
 
     const payload: AirPayload = { stations, source: "airkorea", updatedAt: nowISO() };
@@ -157,6 +139,6 @@ export async function GET() {
   } catch (e) {
     console.error("[air]", e);
     const reason = e instanceof Error ? e.message : String(e);
-    return fail(sampleAir(), `에어코리아 API: ${reason}`);
+    return fail(EMPTY, `에어코리아 API: ${reason}`);
   }
 }
