@@ -7,8 +7,9 @@ import useSWR from "swr";
 import { swrFetcher } from "@/lib/fetcher";
 import { useDebounced } from "@/lib/useDebounced";
 import { parseUrlState, useSyncUrl, shareUrl } from "@/lib/urlState";
-import { UIWANG, DONGS, LANDMARKS, type CategoryKey } from "@/lib/uiwang";
+import { UIWANG, DONGS, LANDMARKS } from "@/lib/uiwang";
 import { UIWANG_BBOX } from "@/lib/uiwang-boundary";
+import { MODES, MODE_MAP, type ModeId, type CardId } from "@/lib/modes";
 import type {
   ApiEnvelope,
   Place,
@@ -20,61 +21,53 @@ import type {
   TrafficPayload,
   TransitPayload,
 } from "@/lib/types";
+import SummaryStrip from "@/components/SummaryStrip";
 import PlacesPanel from "@/components/panels/PlacesPanel";
 import WeatherPanel from "@/components/panels/WeatherPanel";
+import AirPanel from "@/components/panels/AirPanel";
+import MedicalPanel from "@/components/panels/MedicalPanel";
 import TrafficPanel from "@/components/panels/TrafficPanel";
 import TransitPanel from "@/components/panels/TransitPanel";
 import NewsPanel from "@/components/panels/NewsPanel";
-import PopulationPanel from "@/components/panels/PopulationPanel";
-import AirPanel from "@/components/panels/AirPanel";
-import MedicalPanel from "@/components/panels/MedicalPanel";
 import WastePanel from "@/components/panels/WastePanel";
-import { hhmm } from "@/components/ui";
+import PopulationPanel from "@/components/panels/PopulationPanel";
 
 const KakaoMap = dynamic(() => import("@/components/KakaoMap"), { ssr: false });
 
 /** 폴링 주기 (ms) */
 const POLL = {
   weather: 10 * 60_000,
+  air: 10 * 60_000,
+  medical: 10 * 60_000,
   traffic: 60_000,
   transit: 30_000,
   news: 5 * 60_000,
-  air: 10 * 60_000,
-  medical: 10 * 60_000,
 };
 
-type MobileTab = "map" | "places" | "live";
+type MobileTab = "map" | "list" | "info";
 
 export default function Dashboard({ appKey }: { appKey?: string }) {
-  // 초기 상태는 URL 에서 복원한다 (공유 링크로 들어온 경우)
   const initial = parseUrlState(useSearchParams());
 
-  const [center, setCenter] = useState<{ lat: number; lng: number }>({
-    lat: initial.lat,
-    lng: initial.lng,
-  });
+  const [mode, setMode] = useState<ModeId>(initial.mode);
+  const [center, setCenter] = useState({ lat: initial.lat, lng: initial.lng });
   const [level, setLevel] = useState(initial.level);
   const [radius, setRadius] = useState<number>(initial.radius);
-  const [categories, setCategories] = useState<CategoryKey[]>(initial.categories);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const [newsQuery, setNewsQuery] = useState("의왕시");
-  const [layers, setLayers] = useState({
-    incidents: true,
-    bus: true,
-    traffic: true,
-    boundary: true,
-    dim: true,
-  });
   const [tab, setTab] = useState<MobileTab>("map");
+  const [showBoundary, setShowBoundary] = useState(true);
 
-  // 지도 드래그·슬라이더 조작 중에는 요청을 보내지 않는다.
-  // 이 값들이 그대로 SWR 키가 되므로 디바운스 없이는 중간값마다 호출된다.
+  const def = MODE_MAP[mode];
+
+  // 조작 도중 값이 그대로 SWR 키가 되면 중간값마다 요청이 나간다
   const dCenter = useDebounced(center, 500);
   const dRadius = useDebounced(radius, 500);
+  const geo = `lat=${dCenter.lat.toFixed(4)}&lng=${dCenter.lng.toFixed(4)}`;
 
   const urlState = useMemo(
-    () => ({ lat: center.lat, lng: center.lng, level, radius, categories }),
-    [center.lat, center.lng, level, radius, categories],
+    () => ({ mode, lat: center.lat, lng: center.lng, level, radius }),
+    [mode, center.lat, center.lng, level, radius],
   );
   useSyncUrl(urlState);
 
@@ -87,15 +80,17 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     } catch {
-      /* 사용자가 공유를 취소한 경우 — 무시 */
+      /* 사용자가 공유를 취소한 경우 */
     }
   }, [urlState]);
 
-  const geo = `lat=${dCenter.lat.toFixed(4)}&lng=${dCenter.lng.toFixed(4)}`;
+  // ── 데이터 ────────────────────────────────────────────
+  // 모드가 쓰지 않는 데이터는 아예 요청하지 않는다 (SWR 키를 null 로)
+  const needs = (c: CardId) => def.cards.includes(c);
 
   const places = useSWR<ApiEnvelope<PlacesPayload>>(
-    categories.length
-      ? `/api/places?categories=${categories.join(",")}&${geo}&radius=${dRadius}`
+    def.categories.length
+      ? `/api/places?categories=${def.categories.join(",")}&${geo}&radius=${dRadius}`
       : null,
     swrFetcher,
     { keepPreviousData: true, revalidateOnFocus: false },
@@ -104,48 +99,44 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     refreshInterval: POLL.weather,
     keepPreviousData: true,
   });
-  const traffic = useSWR<ApiEnvelope<TrafficPayload>>("/api/traffic", swrFetcher, {
-    refreshInterval: POLL.traffic,
-    keepPreviousData: true,
-  });
-  const transit = useSWR<ApiEnvelope<TransitPayload>>(
-    `/api/transit?${geo}`,
-    swrFetcher,
-    { refreshInterval: POLL.transit, keepPreviousData: true },
-  );
   const air = useSWR<ApiEnvelope<AirPayload>>("/api/air", swrFetcher, {
     refreshInterval: POLL.air,
+    keepPreviousData: true,
+  });
+  const traffic = useSWR<ApiEnvelope<TrafficPayload>>("/api/traffic", swrFetcher, {
+    refreshInterval: POLL.traffic,
     keepPreviousData: true,
   });
   const medical = useSWR<ApiEnvelope<MedicalPayload>>("/api/medical", swrFetcher, {
     refreshInterval: POLL.medical,
     keepPreviousData: true,
   });
+  const transit = useSWR<ApiEnvelope<TransitPayload>>(
+    def.layers.bus || needs("transit") ? `/api/transit?${geo}` : null,
+    swrFetcher,
+    { refreshInterval: POLL.transit, keepPreviousData: true },
+  );
   const news = useSWR<ApiEnvelope<NewsPayload>>(
-    `/api/news?q=${encodeURIComponent(newsQuery)}`,
+    needs("news") ? `/api/news?q=${encodeURIComponent(newsQuery)}` : null,
     swrFetcher,
     { refreshInterval: POLL.news, keepPreviousData: true },
   );
 
   const refreshAll = useCallback(() => {
-    places.mutate();
-    weather.mutate();
-    air.mutate();
-    medical.mutate();
-    traffic.mutate();
-    transit.mutate();
-    news.mutate();
-  }, [places, weather, air, medical, traffic, transit, news]);
+    [places, weather, air, traffic, medical, transit, news].forEach((s) => s.mutate());
+  }, [places, weather, air, traffic, medical, transit, news]);
 
-  const toggleCategory = useCallback((c: CategoryKey) => {
-    setCategories((prev) =>
-      prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c],
-    );
-  }, []);
-
+  // ── 동작 ──────────────────────────────────────────────
   const focus = useCallback((lat: number, lng: number, lv = 4) => {
     setCenter({ lat, lng });
     setLevel(lv);
+    setTab("map");
+  }, []);
+
+  const changeMode = useCallback((next: ModeId) => {
+    setMode(next);
+    setSelectedPlaceId(null);
+    setLevel(MODE_MAP[next].level);
     setTab("map");
   }, []);
 
@@ -157,115 +148,173 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     [focus],
   );
 
-  const accidentCount = useMemo(
-    () => traffic.data?.data.incidents.filter((i) => i.kind === "accident").length ?? 0,
-    [traffic.data],
+  /** 의료 모드에서는 "진료중" 인 곳을 지도에 함께 띄운다 */
+  const medicalMarkers = useMemo(
+    () =>
+      mode === "medical"
+        ? (medical.data?.data.places ?? []).filter(
+            (p) => p.openNow === true && p.lat != null && p.lng != null,
+          )
+        : [],
+    [mode, medical.data],
   );
 
-  const anySample = [places, weather, air, medical, traffic, transit, news].some(
+  const sampleCount = [places, weather, air, medical, traffic, transit, news].filter(
     (s) => s.data && s.data.ok === false,
-  );
+  ).length;
+
+  // ── 카드 렌더 ─────────────────────────────────────────
+  const card = (id: CardId) => {
+    switch (id) {
+      case "weather":
+        return <WeatherPanel key={id} res={weather.data} isLoading={weather.isLoading} />;
+      case "air":
+        return <AirPanel key={id} res={air.data} isLoading={air.isLoading} />;
+      case "medical":
+        return (
+          <MedicalPanel
+            key={id}
+            res={medical.data}
+            isLoading={medical.isLoading}
+            onFocus={(lat, lng) => focus(lat, lng, 3)}
+          />
+        );
+      case "traffic":
+        return (
+          <TrafficPanel
+            key={id}
+            res={traffic.data}
+            isLoading={traffic.isLoading}
+            onFocus={(lat, lng) => focus(lat, lng, 4)}
+          />
+        );
+      case "transit":
+        return (
+          <TransitPanel
+            key={id}
+            res={transit.data}
+            isLoading={transit.isLoading}
+            onFocus={(lat, lng) => focus(lat, lng, 3)}
+          />
+        );
+      case "waste":
+        return <WastePanel key={id} />;
+      case "population":
+        return <PopulationPanel key={id} onFocus={(lat, lng) => focus(lat, lng, 5)} />;
+      case "news":
+        return (
+          <NewsPanel
+            key={id}
+            res={news.data}
+            isLoading={news.isLoading}
+            query={newsQuery}
+            onQueryChange={setNewsQuery}
+          />
+        );
+    }
+  };
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden">
-      {/* ── 헤더 ─────────────────────────────────────────── */}
-      <header className="z-30 flex shrink-0 items-center gap-3 border-b border-[var(--border)] bg-[var(--surface)] px-3 py-2 md:px-4">
-        <div className="flex items-center gap-2">
-          <span className="grid h-7 w-7 place-items-center rounded-lg bg-[var(--brand)] text-[15px]">
+      {/* ── 헤더: 이름 + 오늘 요약 ─────────────────────── */}
+      <header className="z-30 flex shrink-0 items-center gap-2 border-b border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 md:px-4">
+        <button
+          type="button"
+          onClick={() => changeMode("explore")}
+          className="flex shrink-0 items-center gap-1.5"
+        >
+          <span className="grid h-6 w-6 place-items-center rounded-md bg-[var(--brand)] text-[13px]">
             🏙️
           </span>
-          <div className="leading-tight">
-            <h1 className="text-[14px] font-extrabold tracking-tight">의왕 인사이드</h1>
-            <p className="hidden text-[10.5px] text-[var(--muted)] sm:block">
-              의왕시 생활·실시간 정보 포털
-            </p>
-          </div>
-        </div>
-
-        {/* 동 이동 */}
-        <nav className="thin-scroll hidden flex-1 gap-1 overflow-x-auto lg:flex">
-          {DONGS.map((d) => (
-            <button
-              key={d.name}
-              type="button"
-              title={`인구 ${d.population.toLocaleString("ko-KR")}명 · ${d.area}km²`}
-              onClick={() => focus(d.lat, d.lng, 5)}
-              className="shrink-0 rounded-full border border-[var(--border)] px-2.5 py-1 text-[11.5px] font-semibold text-[var(--muted)] transition hover:border-[var(--brand)] hover:text-[var(--brand)]"
-            >
-              {d.name}
-            </button>
-          ))}
-          <span className="mx-1 w-px bg-[var(--border)]" />
-          {LANDMARKS.map((l) => (
-            <button
-              key={l.name}
-              type="button"
-              title={l.desc}
-              onClick={() => focus(l.lat, l.lng, 4)}
-              className="shrink-0 rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11.5px] font-semibold transition hover:brightness-95"
-            >
-              📍 {l.name}
-            </button>
-          ))}
-        </nav>
-
-        <div className="ml-auto flex items-center gap-2">
-          {accidentCount > 0 && (
-            <span className="hidden items-center gap-1 rounded-full bg-red-600/12 px-2 py-1 text-[11px] font-bold text-red-600 sm:flex dark:text-red-400">
-              🚨 사고 {accidentCount}건
-            </span>
-          )}
-          <span className="hidden text-[10.5px] text-[var(--muted)] md:block">
-            {/* SWR 은 클라이언트에서만 fetch 하므로 SSR 결과와 첫 렌더가 일치한다 */}
-            {traffic.data ? `갱신 ${hhmm(traffic.data.data.updatedAt)}` : ""}
+          <span className="hidden text-[13px] font-extrabold tracking-tight sm:block">
+            의왕 인사이드
           </span>
-          <button
-            type="button"
-            onClick={share}
-            title="현재 화면을 링크로 공유"
-            className="rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-[11.5px] font-bold transition hover:border-[var(--brand)] hover:text-[var(--brand)]"
-          >
-            {copied ? "✓ 복사됨" : "🔗 공유"}
-          </button>
-          <button
-            type="button"
-            onClick={refreshAll}
-            className="rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-[11.5px] font-bold transition hover:border-[var(--brand)] hover:text-[var(--brand)]"
-          >
-            ↻ 새로고침
-          </button>
+        </button>
+
+        <span className="h-4 w-px shrink-0 bg-[var(--border)]" />
+
+        <div className="min-w-0 flex-1">
+          <SummaryStrip
+            weather={weather.data}
+            air={air.data}
+            traffic={traffic.data}
+            medical={medical.data}
+            onOpen={changeMode}
+          />
         </div>
+
+        <button
+          type="button"
+          onClick={share}
+          title="현재 화면 공유"
+          className="shrink-0 rounded-lg border border-[var(--border)] px-2 py-1 text-[11.5px] font-bold transition hover:border-[var(--brand)]"
+        >
+          {copied ? "✓" : "🔗"}
+        </button>
+        <button
+          type="button"
+          onClick={refreshAll}
+          title="새로고침"
+          className="shrink-0 rounded-lg border border-[var(--border)] px-2 py-1 text-[11.5px] font-bold transition hover:border-[var(--brand)]"
+        >
+          ↻
+        </button>
       </header>
 
-      {anySample && (
-        <div className="shrink-0 bg-amber-500/12 px-3 py-1 text-center text-[11px] font-semibold text-amber-700 md:px-4 dark:text-amber-300">
-          일부 데이터가 샘플입니다 — <code>.env.local</code> 에 API 키를 설정하면 실시간으로
-          전환됩니다.{" "}
+      {/* ── 모드 탭 ────────────────────────────────────── */}
+      <nav className="thin-scroll z-20 flex shrink-0 gap-1 overflow-x-auto border-b border-[var(--border)] bg-[var(--surface)] px-2 py-1.5">
+        {MODES.map((m) => {
+          const on = m.id === mode;
+          return (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => changeMode(m.id)}
+              title={m.hint}
+              aria-pressed={on}
+              className="flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-[12.5px] font-bold transition"
+              style={
+                on
+                  ? { background: "var(--brand)", color: "#fff" }
+                  : { background: "var(--surface-2)", color: "var(--muted)" }
+              }
+            >
+              <span>{m.emoji}</span>
+              {m.label}
+            </button>
+          );
+        })}
+      </nav>
+
+      {sampleCount > 0 && (
+        <div className="shrink-0 bg-amber-500/12 px-3 py-1 text-center text-[10.5px] font-semibold text-amber-700 md:px-4 dark:text-amber-300">
+          일부 정보는 아직 연동 전입니다{" "}
           <a href="/status" className="underline underline-offset-2">
-            연동 상태 확인 →
+            상태 보기 →
           </a>
         </div>
       )}
 
-      {/* ── 본문 3단 ─────────────────────────────────────── */}
+      {/* ── 본문 ───────────────────────────────────────── */}
       <div className="flex min-h-0 flex-1">
-        {/* 좌: 장소 */}
-        <aside
-          className={`shrink-0 border-r border-[var(--border)] bg-[var(--surface)] lg:block lg:w-[300px] ${
-            tab === "places" ? "block w-full" : "hidden"
-          }`}
-        >
-          <PlacesPanel
-            res={places.data}
-            isLoading={places.isLoading}
-            selected={categories}
-            onToggle={toggleCategory}
-            radius={radius}
-            onRadiusChange={setRadius}
-            selectedPlaceId={selectedPlaceId}
-            onSelectPlace={handleSelectPlace}
-          />
-        </aside>
+        {/* 좌: 목록 (둘러보기 모드에는 목록이 없다) */}
+        {def.categories.length > 0 && (
+          <aside
+            className={`shrink-0 border-r border-[var(--border)] bg-[var(--surface)] lg:block lg:w-[290px] ${
+              tab === "list" ? "block w-full" : "hidden"
+            }`}
+          >
+            <PlacesPanel
+              res={places.data}
+              isLoading={places.isLoading}
+              categories={def.categories}
+              radius={radius}
+              onRadiusChange={setRadius}
+              selectedPlaceId={selectedPlaceId}
+              onSelectPlace={handleSelectPlace}
+            />
+          </aside>
+        )}
 
         {/* 중: 지도 */}
         <main
@@ -275,50 +324,47 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             appKey={appKey}
             center={center}
             level={level}
-            radius={radius}
-            places={places.data?.data.places ?? []}
-            incidents={traffic.data?.data.incidents ?? []}
-            busStops={transit.data?.data.stops ?? []}
-            trafficLinks={traffic.data?.data.links ?? []}
-            showIncidents={layers.incidents}
-            showBus={layers.bus}
-            showTraffic={layers.traffic}
-            showBoundary={layers.boundary}
-            dimOutside={layers.boundary && layers.dim}
+            radius={def.layers.places ? radius : 0}
+            places={def.layers.places ? (places.data?.data.places ?? []) : []}
+            incidents={def.layers.incidents ? (traffic.data?.data.incidents ?? []) : []}
+            busStops={def.layers.bus ? (transit.data?.data.stops ?? []) : []}
+            trafficLinks={def.layers.traffic ? (traffic.data?.data.links ?? []) : []}
+            medicalOpen={medicalMarkers}
+            landmarks={mode === "explore" ? LANDMARKS : []}
+            showBoundary={showBoundary}
+            dimOutside={showBoundary && mode === "explore"}
             selectedPlaceId={selectedPlaceId}
             onSelectPlace={handleSelectPlace}
             onMapMoved={setCenter}
           />
 
-          {/* 레이어 토글 */}
-          <div className="absolute left-3 top-3 z-10 flex gap-1.5 rounded-xl border border-[var(--border)] bg-[var(--surface)]/95 p-1.5 shadow-lg backdrop-blur">
-            {(
-              [
-                ["boundary", "🗾 시경계"],
-                ["dim", "🔦 강조"],
-                ["incidents", "🚨 사고"],
-                ["traffic", "🚗 속도"],
-                ["bus", "🚌 정류소"],
-              ] as const
-            ).map(([k, label]) => (
+          <div className="absolute left-3 top-3 z-10 flex gap-1.5">
+            <button
+              type="button"
+              onClick={() => setShowBoundary((v) => !v)}
+              className="rounded-lg border border-[var(--border)] bg-[var(--surface)]/95 px-2 py-1 text-[11px] font-bold shadow-md backdrop-blur transition"
+              style={showBoundary ? { color: "var(--brand)" } : { color: "var(--muted)" }}
+            >
+              🗾 시경계
+            </button>
+          </div>
+
+          {/* 동 바로가기 */}
+          <div className="thin-scroll absolute bottom-3 left-3 right-14 z-10 flex gap-1 overflow-x-auto">
+            {DONGS.map((d) => (
               <button
-                key={k}
+                key={d.name}
                 type="button"
-                onClick={() => setLayers((l) => ({ ...l, [k]: !l[k] }))}
-                className="rounded-lg px-2 py-1 text-[11px] font-bold transition"
-                style={
-                  layers[k]
-                    ? { background: "var(--brand)", color: "#fff" }
-                    : { color: "var(--muted)" }
-                }
+                title={`인구 ${d.population.toLocaleString("ko-KR")}명`}
+                onClick={() => focus(d.lat, d.lng, 5)}
+                className="shrink-0 rounded-full border border-[var(--border)] bg-[var(--surface)]/95 px-2.5 py-1 text-[11px] font-bold shadow-md backdrop-blur transition hover:border-[var(--brand)] hover:text-[var(--brand)]"
               >
-                {label}
+                {d.name}
               </button>
             ))}
           </div>
 
-          {/* 줌 / 중심복귀 */}
-          <div className="absolute bottom-4 right-3 z-10 flex flex-col gap-1.5">
+          <div className="absolute right-3 top-3 z-10 flex flex-col gap-1.5">
             <button
               type="button"
               onClick={() =>
@@ -328,15 +374,15 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
                   8,
                 )
               }
-              className="grid h-9 w-9 place-items-center rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[15px] shadow-lg"
+              className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--border)] bg-[var(--surface)]/95 text-[14px] shadow-md backdrop-blur"
               title="의왕시 전체보기"
             >
               🗾
             </button>
             <button
               type="button"
-              onClick={() => focus(UIWANG.center.lat, UIWANG.center.lng, 6)}
-              className="grid h-9 w-9 place-items-center rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[15px] shadow-lg"
+              onClick={() => focus(UIWANG.center.lat, UIWANG.center.lng, 5)}
+              className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--border)] bg-[var(--surface)]/95 text-[14px] shadow-md backdrop-blur"
               title="의왕시청으로"
             >
               🎯
@@ -344,66 +390,41 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             <button
               type="button"
               onClick={() => setLevel((l) => Math.max(1, l - 1))}
-              className="grid h-9 w-9 place-items-center rounded-lg border border-[var(--border)] bg-[var(--surface)] text-lg font-bold shadow-lg"
+              className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--border)] bg-[var(--surface)]/95 text-base font-bold shadow-md backdrop-blur"
             >
               +
             </button>
             <button
               type="button"
               onClick={() => setLevel((l) => Math.min(12, l + 1))}
-              className="grid h-9 w-9 place-items-center rounded-lg border border-[var(--border)] bg-[var(--surface)] text-lg font-bold shadow-lg"
+              className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--border)] bg-[var(--surface)]/95 text-base font-bold shadow-md backdrop-blur"
             >
               −
             </button>
           </div>
         </main>
 
-        {/* 우: 실시간 */}
+        {/* 우: 모드별 카드 */}
         <aside
-          className={`thin-scroll shrink-0 space-y-2.5 overflow-y-auto border-l border-[var(--border)] bg-[var(--background)] p-2.5 lg:block lg:w-[330px] ${
-            tab === "live" ? "block w-full" : "hidden"
+          className={`thin-scroll shrink-0 space-y-2.5 overflow-y-auto border-l border-[var(--border)] bg-[var(--background)] p-2.5 lg:block lg:w-[320px] ${
+            tab === "info" ? "block w-full" : "hidden"
           }`}
         >
-          <WeatherPanel res={weather.data} isLoading={weather.isLoading} />
-          <AirPanel res={air.data} isLoading={air.isLoading} />
-          <MedicalPanel
-            res={medical.data}
-            isLoading={medical.isLoading}
-            onFocus={(lat, lng) => focus(lat, lng, 4)}
-          />
-          <TrafficPanel
-            res={traffic.data}
-            isLoading={traffic.isLoading}
-            onFocus={(lat, lng) => focus(lat, lng, 4)}
-          />
-          <TransitPanel
-            res={transit.data}
-            isLoading={transit.isLoading}
-            onFocus={(lat, lng) => focus(lat, lng, 3)}
-          />
-          <WastePanel />
-          <PopulationPanel onFocus={(lat, lng) => focus(lat, lng, 5)} />
-          <NewsPanel
-            res={news.data}
-            isLoading={news.isLoading}
-            query={newsQuery}
-            onQueryChange={setNewsQuery}
-          />
-          <p className="px-1 pb-2 text-center text-[10px] leading-relaxed text-[var(--muted)]">
-            장소: 카카오 로컬 · 날씨: 기상청 · 교통: ITS 국가교통정보센터 · 버스: 경기버스정보
-            · 뉴스: 네이버
-          </p>
+          <p className="px-1 text-[11px] font-semibold text-[var(--muted)]">{def.hint}</p>
+          {def.cards.map(card)}
         </aside>
       </div>
 
-      {/* ── 모바일 탭바 ──────────────────────────────────── */}
+      {/* ── 모바일 탭바 ────────────────────────────────── */}
       <nav className="z-30 flex shrink-0 border-t border-[var(--border)] bg-[var(--surface)] lg:hidden">
         {(
           [
-            ["places", "📋 목록"],
-            ["map", "🗺️ 지도"],
-            ["live", "⚡ 실시간"],
-          ] as const
+            ...(def.categories.length > 0
+              ? [["list", "📋 목록"] as [MobileTab, string]]
+              : []),
+            ["map", "🗺️ 지도"] as [MobileTab, string],
+            ["info", `${def.emoji} ${def.label}`] as [MobileTab, string],
+          ] as [MobileTab, string][]
         ).map(([k, label]) => (
           <button
             key={k}

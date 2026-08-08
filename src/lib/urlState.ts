@@ -2,7 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import type { ReadonlyURLSearchParams } from "next/navigation";
-import { CATEGORY_MAP, UIWANG, type CategoryKey } from "./uiwang";
+import { UIWANG } from "./uiwang";
+import { isModeId, type ModeId } from "./modes";
 
 /**
  * 지도·필터 상태를 URL 쿼리로 주고받는다.
@@ -11,19 +12,19 @@ import { CATEGORY_MAP, UIWANG, type CategoryKey } from "./uiwang";
  */
 
 export interface UrlState {
+  mode: ModeId;
   lat: number;
   lng: number;
   level: number;
   radius: number;
-  categories: CategoryKey[];
 }
 
 export const DEFAULT_STATE: UrlState = {
+  mode: "explore",
   lat: UIWANG.center.lat,
   lng: UIWANG.center.lng,
-  level: 6,
+  level: 7,
   radius: UIWANG.defaultRadius,
-  categories: ["SC4", "HP8", "MT1", "CS2"],
 };
 
 function numOr(raw: string | null, fallback: number, min: number, max: number) {
@@ -33,16 +34,13 @@ function numOr(raw: string | null, fallback: number, min: number, max: number) {
 
 /** URL → 상태. 잘못된 값은 조용히 기본값으로 되돌린다 (링크가 깨져도 화면은 떠야 한다) */
 export function parseUrlState(sp: ReadonlyURLSearchParams | URLSearchParams): UrlState {
-  const cats = (sp.get("cat") ?? "")
-    .split(",")
-    .filter((c): c is CategoryKey => c in CATEGORY_MAP);
-
+  const m = sp.get("m");
   return {
+    mode: isModeId(m) ? m : DEFAULT_STATE.mode,
     lat: numOr(sp.get("lat"), DEFAULT_STATE.lat, 33, 39),
     lng: numOr(sp.get("lng"), DEFAULT_STATE.lng, 124, 132),
     level: numOr(sp.get("z"), DEFAULT_STATE.level, 1, 12),
     radius: numOr(sp.get("r"), DEFAULT_STATE.radius, 500, 20000),
-    categories: cats.length ? cats : DEFAULT_STATE.categories,
   };
 }
 
@@ -53,8 +51,7 @@ function toQuery(s: UrlState): string {
   if (s.lng.toFixed(4) !== DEFAULT_STATE.lng.toFixed(4)) p.set("lng", s.lng.toFixed(4));
   if (s.level !== DEFAULT_STATE.level) p.set("z", String(s.level));
   if (s.radius !== DEFAULT_STATE.radius) p.set("r", String(s.radius));
-  const cats = s.categories.slice().sort().join(",");
-  if (cats !== DEFAULT_STATE.categories.slice().sort().join(",")) p.set("cat", cats);
+  if (s.mode !== DEFAULT_STATE.mode) p.set("m", s.mode);
   return p.toString();
 }
 

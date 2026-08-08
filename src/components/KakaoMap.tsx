@@ -55,6 +55,17 @@ function pinEl(
   return el;
 }
 
+/** 넓게 볼 때 쓰는 점 마커 — 이름표 없이 위치와 종류만 알린다 */
+function dotEl(color: string, emoji: string) {
+  const el = document.createElement("div");
+  el.style.cssText = `
+    display:grid;place-items:center;width:20px;height:20px;border-radius:999px;
+    background:rgba(255,255,255,0.97);border:2px solid ${color};
+    box-shadow:0 1px 4px rgba(0,0,0,.2);font-size:10px;cursor:pointer;`;
+  el.textContent = emoji;
+  return el;
+}
+
 function speedEl(link: TrafficLink) {
   const color =
     link.level === "congested" ? "#dc2626" : link.level === "slow" ? "#f59e0b" : "#16a34a";
@@ -75,9 +86,10 @@ export interface KakaoMapProps {
   incidents: Incident[];
   busStops: BusStop[];
   trafficLinks: TrafficLink[];
-  showIncidents: boolean;
-  showBus: boolean;
-  showTraffic: boolean;
+  /** 진료중인 병원·약국 (의료 모드) */
+  medicalOpen: { id: string; name: string; kind: string; lat: number | null; lng: number | null }[];
+  /** 랜드마크 (둘러보기 모드) */
+  landmarks: { name: string; lat: number; lng: number; desc: string }[];
   /** 의왕시 행정경계 표시 */
   showBoundary: boolean;
   /** 경계 바깥을 어둡게 덮어 시 영역을 강조 */
@@ -96,9 +108,8 @@ export default function KakaoMap({
   incidents,
   busStops,
   trafficLinks,
-  showIncidents,
-  showBus,
-  showTraffic,
+  medicalOpen,
+  landmarks,
   showBoundary,
   dimOutside,
   selectedPlaceId,
@@ -254,37 +265,62 @@ export default function KakaoMap({
       overlaysRef.current.push(ov);
     };
 
-    for (const p of places) {
+    /**
+     * 마커 밀도 조절.
+     * 넓게 보면 이름표가 서로 겹쳐 읽을 수 없으므로 점으로만 찍고,
+     * 가까이 들어오면 이름표를 붙인다. 개수도 화면 배율에 맞춰 제한한다.
+     * (이전에는 340여 개를 전부 이름표로 그려 지도가 읽히지 않았다)
+     */
+    const labelled = level <= 4;
+    const cap = level <= 3 ? 80 : level <= 5 ? 50 : 25;
+
+    // 가까운 순으로 정렬돼 오므로 앞에서 자르면 중심 주변이 남는다
+    const shownPlaces = places.slice(0, cap);
+    for (const p of shownPlaces) {
       const def = CATEGORY_MAP[p.category];
       if (!def) continue;
       const active = selectedPlaceId === p.id;
       add(
         p.lat,
         p.lng,
-        pinEl(def.emoji, def.color, p.name, { active }),
+        active || labelled
+          ? pinEl(def.emoji, def.color, p.name, { active })
+          : dotEl(def.color, def.emoji),
         active ? 90 : 10,
         () => onSelectPlace(p),
       );
     }
 
-    if (showBus) {
-      for (const s of busStops) {
-        const next = s.arrivals?.[0]?.predictSec;
-        const label =
-          next != null ? `${s.name} · ${Math.max(1, Math.round(next / 60))}분` : s.name;
-        add(s.lat, s.lng, pinEl("🚌", "#1d4ed8", label), 20);
-      }
+    // 진료중인 곳은 개수가 적고 중요도가 높아 항상 이름표를 붙인다
+    for (const m of medicalOpen.slice(0, 40)) {
+      if (m.lat == null || m.lng == null) continue;
+      add(m.lat, m.lng, pinEl(m.kind === "pharmacy" ? "💊" : "🏥", "#059669", m.name), 60);
     }
 
-    if (showIncidents) {
-      for (const inc of incidents) {
-        if (inc.lat == null || inc.lng == null) continue;
-        const st = INCIDENT_STYLE[inc.kind];
-        add(inc.lat, inc.lng, pinEl(st.emoji, st.color, inc.type, { pulse: inc.kind === "accident" }), 80);
-      }
+    for (const l of landmarks) {
+      add(l.lat, l.lng, pinEl("📍", "#7c3aed", l.name), 50);
     }
 
-    if (showTraffic) {
+    for (const s of busStops.slice(0, 12)) {
+      const next = s.arrivals?.[0]?.predictSec;
+      const label =
+        next != null ? `${s.name} · ${Math.max(1, Math.round(next / 60))}분` : s.name;
+      add(s.lat, s.lng, labelled ? pinEl("🚌", "#1d4ed8", label) : dotEl("#1d4ed8", "🚌"), 20);
+    }
+
+    // 사고·통제는 건수가 적고 가장 중요하므로 항상 이름표 + 강조
+    for (const inc of incidents) {
+      if (inc.lat == null || inc.lng == null) continue;
+      const st = INCIDENT_STYLE[inc.kind];
+      add(
+        inc.lat,
+        inc.lng,
+        pinEl(st.emoji, st.color, inc.type, { pulse: inc.kind === "accident" }),
+        80,
+      );
+    }
+
+    if (labelled) {
       for (const l of trafficLinks) {
         if (l.lat == null || l.lng == null) continue;
         add(l.lat, l.lng, speedEl(l), 30);
@@ -292,13 +328,13 @@ export default function KakaoMap({
     }
   }, [
     ready,
+    level,
     places,
     busStops,
     incidents,
     trafficLinks,
-    showBus,
-    showIncidents,
-    showTraffic,
+    medicalOpen,
+    landmarks,
     selectedPlaceId,
     onSelectPlace,
   ]);
