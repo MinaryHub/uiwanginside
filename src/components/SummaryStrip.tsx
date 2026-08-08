@@ -15,10 +15,10 @@ import type {
  */
 
 const GRADE_COLOR: Record<AirGrade, string> = {
-  좋음: "#0ea5e9",
-  보통: "#16a34a",
-  나쁨: "#f59e0b",
-  매우나쁨: "#dc2626",
+  좋음: "var(--info)",
+  보통: "var(--ok)",
+  나쁨: "var(--warn)",
+  매우나쁨: "var(--danger)",
 };
 
 const SKY_ICON: Record<string, string> = { 맑음: "☀️", 구름많음: "⛅", 흐림: "☁️" };
@@ -39,7 +39,7 @@ function Item({
   children: React.ReactNode;
 }) {
   const cls =
-    "flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[12px] font-bold transition";
+    "flex min-h-[36px] shrink-0 items-center gap-1.5 rounded-[var(--radius)] px-2.5 text-[var(--text-sm)] font-bold transition";
   return onClick ? (
     <button type="button" onClick={onClick} title={title} className={`${cls} hover:bg-[var(--surface-2)]`}>
       {children}
@@ -84,16 +84,16 @@ export default function SummaryStrip({
       {/* 값을 못 가져온 항목은 아예 표시하지 않는다 — 빈칸이 기본값처럼 보이면 안 된다 */}
       {now?.temp != null && (
         <Item onClick={() => onOpen("life")} title="날씨 상세 보기">
-          <span className="text-[14px]">{icon}</span>
+          <span className="text-[1.05rem]">{icon}</span>
           <span className="tabular-nums">{now.temp}°</span>
         </Item>
       )}
 
       {grade && (
         <>
-          <span className="h-3 w-px shrink-0 bg-[var(--border)]" />
+          <span className="h-4 w-px shrink-0 bg-[var(--border)]" />
           <Item onClick={() => onOpen("medical")} title="대기질 상세 보기">
-            <span className="text-[var(--muted)]">미세</span>
+            <span className="text-[var(--text-muted)]">미세</span>
             <span style={{ color: GRADE_COLOR[grade] }}>{grade}</span>
           </Item>
         </>
@@ -101,12 +101,12 @@ export default function SummaryStrip({
 
       {traffic?.ok && (
         <>
-          <span className="h-3 w-px shrink-0 bg-[var(--border)]" />
+          <span className="h-4 w-px shrink-0 bg-[var(--border)]" />
           <Item onClick={() => onOpen("transit")} title="교통 상황 보기">
             {accidents > 0 ? (
-              <span className="text-red-600 dark:text-red-400">🚨 사고 {accidents}</span>
+              <span className="text-[var(--danger)]">🚨 사고 {accidents}</span>
             ) : (
-              <span className="text-[var(--muted)]">🚗 사고없음</span>
+              <span className="text-[var(--text-muted)]">🚗 사고없음</span>
             )}
           </Item>
         </>
@@ -114,9 +114,9 @@ export default function SummaryStrip({
 
       {openClinics != null && (
         <>
-          <span className="h-3 w-px shrink-0 bg-[var(--border)]" />
+          <span className="h-4 w-px shrink-0 bg-[var(--border)]" />
           <Item onClick={() => onOpen("medical")} title="진료 중인 곳 보기">
-            <span className="text-[var(--muted)]">진료중</span>
+            <span className="text-[var(--text-muted)]">진료중</span>
             <span className="text-[var(--brand)] tabular-nums">{openClinics}</span>
           </Item>
         </>

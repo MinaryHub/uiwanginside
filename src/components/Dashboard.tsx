@@ -264,16 +264,16 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
   return (
     <div className="flex h-dvh flex-col overflow-hidden">
       {/* ── 헤더: 이름 + 오늘 요약 ─────────────────────── */}
-      <header className="z-30 flex shrink-0 items-center gap-2 border-b border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 md:px-4">
+      <header className="z-30 flex shrink-0 items-center gap-3 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2.5">
         <button
           type="button"
           onClick={() => changeMode("explore")}
           className="flex shrink-0 items-center gap-1.5"
         >
-          <span className="grid h-6 w-6 place-items-center rounded-md bg-[var(--brand)] text-[13px]">
+          <span className="grid h-8 w-8 place-items-center rounded-[var(--radius)] bg-[var(--brand)] text-[1.05rem]">
             🏙️
           </span>
-          <span className="hidden text-[13px] font-extrabold tracking-tight sm:block">
+          <span className="hidden text-[var(--text-base)] font-extrabold sm:block">
             의왕 인사이드
           </span>
         </button>
@@ -294,7 +294,8 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           type="button"
           onClick={share}
           title="현재 화면 공유"
-          className="shrink-0 rounded-lg border border-[var(--border)] px-2 py-1 text-[11.5px] font-bold transition hover:border-[var(--brand)]"
+          aria-label="현재 화면 공유"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-[var(--radius)] border border-[var(--border)] text-[var(--text-base)] transition hover:border-[var(--brand)] hover:text-[var(--brand)]"
         >
           {copied ? "✓" : "🔗"}
         </button>
@@ -302,14 +303,15 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           type="button"
           onClick={refreshAll}
           title="새로고침"
-          className="shrink-0 rounded-lg border border-[var(--border)] px-2 py-1 text-[11.5px] font-bold transition hover:border-[var(--brand)]"
+          aria-label="새로고침"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-[var(--radius)] border border-[var(--border)] text-[var(--text-base)] transition hover:border-[var(--brand)] hover:text-[var(--brand)]"
         >
           ↻
         </button>
       </header>
 
       {/* ── 모드 탭 ────────────────────────────────────── */}
-      <nav className="thin-scroll z-20 flex shrink-0 gap-1 overflow-x-auto border-b border-[var(--border)] bg-[var(--surface)] px-2 py-1.5">
+      <nav className="thin-scroll z-20 flex shrink-0 gap-1.5 overflow-x-auto border-b border-[var(--border)] bg-[var(--surface)] px-4 pb-2.5">
         {MODES.map((m) => {
           const on = m.id === mode;
           return (
@@ -319,11 +321,11 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
               onClick={() => changeMode(m.id)}
               title={m.hint}
               aria-pressed={on}
-              className="flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-[12.5px] font-bold transition"
+              className="flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-[var(--text-sm)] font-bold transition"
               style={
                 on
                   ? { background: "var(--brand)", color: "#fff" }
-                  : { background: "var(--surface-2)", color: "var(--muted)" }
+                  : { background: "var(--surface-2)", color: "var(--text-muted)" }
               }
             >
               <span>{m.emoji}</span>
@@ -334,7 +336,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
       </nav>
 
       {unavailableCount > 0 && (
-        <div className="shrink-0 bg-amber-500/12 px-3 py-1 text-center text-[10.5px] font-semibold text-amber-700 md:px-4 dark:text-amber-300">
+        <div className="shrink-0 bg-amber-500/12 px-3 py-1 text-center text-[var(--text-2xs)] font-semibold text-amber-700 md:px-4 dark:text-amber-300">
 일부 정보는 아직 연동되지 않아 표시되지 않습니다{" "}
           <a href="/status" className="underline underline-offset-2">
             상태 보기 →
@@ -391,8 +393,8 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             <button
               type="button"
               onClick={() => setShowBoundary((v) => !v)}
-              className="rounded-lg border border-[var(--border)] bg-[var(--surface)]/95 px-2 py-1 text-[11px] font-bold shadow-md backdrop-blur transition"
-              style={showBoundary ? { color: "var(--brand)" } : { color: "var(--muted)" }}
+              className="inline-flex min-h-[40px] items-center rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)]/95 px-3 text-[var(--text-xs)] font-bold shadow-[var(--shadow-md)] backdrop-blur transition"
+              style={showBoundary ? { color: "var(--brand)" } : { color: "var(--text-muted)" }}
             >
               🗾 시경계
             </button>
@@ -409,10 +411,10 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
                   aria-pressed={on}
                   title={`${d.name} 경계 보기 · 인구 ${d.population.toLocaleString("ko-KR")}명`}
                   onClick={() => toggleDong(d)}
-                  className="shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-bold shadow-md backdrop-blur transition"
+                  className="shrink-0 rounded-full border px-2.5 py-1 text-[var(--text-xs)] font-bold shadow-md backdrop-blur transition"
                   style={
                     on
-                      ? { background: "#c026d3", borderColor: "#c026d3", color: "#fff" }
+                      ? { background: "var(--info)", borderColor: "var(--info)", color: "var(--surface)" }
                       : { borderColor: "var(--border)", background: "color-mix(in srgb, var(--surface) 95%, transparent)" }
                   }
                 >
@@ -432,7 +434,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
                   8,
                 )
               }
-              className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--border)] bg-[var(--surface)]/95 text-[14px] shadow-md backdrop-blur"
+              className="grid h-11 w-11 place-items-center rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)]/95 text-[var(--text-base)] shadow-[var(--shadow-md)] backdrop-blur transition hover:border-[var(--brand)]"
               title="의왕시 전체보기"
             >
               🗾
@@ -440,7 +442,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             <button
               type="button"
               onClick={() => focus(UIWANG.center.lat, UIWANG.center.lng, 5)}
-              className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--border)] bg-[var(--surface)]/95 text-[14px] shadow-md backdrop-blur"
+              className="grid h-11 w-11 place-items-center rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)]/95 text-[var(--text-base)] shadow-[var(--shadow-md)] backdrop-blur transition hover:border-[var(--brand)]"
               title="의왕시청으로"
             >
               🎯
@@ -448,14 +450,14 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             <button
               type="button"
               onClick={() => setLevel((l) => Math.max(1, l - 1))}
-              className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--border)] bg-[var(--surface)]/95 text-base font-bold shadow-md backdrop-blur"
+              className="grid h-11 w-11 place-items-center rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)]/95 text-[var(--text-lg)] font-bold shadow-[var(--shadow-md)] backdrop-blur transition hover:border-[var(--brand)]"
             >
               +
             </button>
             <button
               type="button"
               onClick={() => setLevel((l) => Math.min(12, l + 1))}
-              className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--border)] bg-[var(--surface)]/95 text-base font-bold shadow-md backdrop-blur"
+              className="grid h-11 w-11 place-items-center rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)]/95 text-[var(--text-lg)] font-bold shadow-[var(--shadow-md)] backdrop-blur transition hover:border-[var(--brand)]"
             >
               −
             </button>
@@ -464,11 +466,11 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
 
         {/* 우: 모드별 카드 */}
         <aside
-          className={`thin-scroll shrink-0 space-y-2.5 overflow-y-auto border-l border-[var(--border)] bg-[var(--background)] p-2.5 lg:block lg:w-[320px] ${
+          className={`thin-scroll shrink-0 space-y-3 overflow-y-auto border-l border-[var(--border)] bg-[var(--bg)] p-3 lg:block lg:w-[340px] ${
             tab === "info" ? "block w-full" : "hidden"
           }`}
         >
-          <p className="px-1 text-[11px] font-semibold text-[var(--muted)]">{def.hint}</p>
+          <p className="px-1 pb-0.5 text-[var(--text-xs)] font-semibold text-[var(--text-faint)]">{def.hint}</p>
           {def.cards.map(card)}
         </aside>
       </div>
@@ -488,9 +490,9 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             key={k}
             type="button"
             onClick={() => setTab(k)}
-            className="flex-1 py-2.5 text-[12px] font-bold transition"
+            className="min-h-[52px] flex-1 text-[var(--text-sm)] font-bold transition"
             style={{
-              color: tab === k ? "var(--brand)" : "var(--muted)",
+              color: tab === k ? "var(--brand)" : "var(--text-muted)",
               borderTop: `2px solid ${tab === k ? "var(--brand)" : "transparent"}`,
             }}
           >

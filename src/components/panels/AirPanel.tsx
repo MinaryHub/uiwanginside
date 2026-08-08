@@ -4,10 +4,10 @@ import { Card, Skeleton, LiveDot, Unavailable } from "@/components/ui";
 import type { AirPayload, ApiEnvelope, AirGrade } from "@/lib/types";
 
 const GRADE_STYLE: Record<AirGrade, { color: string; emoji: string }> = {
-  좋음: { color: "#0ea5e9", emoji: "😊" },
-  보통: { color: "#16a34a", emoji: "🙂" },
-  나쁨: { color: "#f59e0b", emoji: "😷" },
-  매우나쁨: { color: "#dc2626", emoji: "🤢" },
+  좋음: { color: "var(--info)", emoji: "😊" },
+  보통: { color: "var(--ok)", emoji: "🙂" },
+  나쁨: { color: "var(--warn)", emoji: "😷" },
+  매우나쁨: { color: "var(--danger)", emoji: "🤢" },
 };
 
 function Metric({
@@ -23,18 +23,18 @@ function Metric({
 }) {
   const style = grade ? GRADE_STYLE[grade] : null;
   return (
-    <div className="flex flex-col items-center rounded-lg bg-[var(--surface-2)] px-1.5 py-2">
-      <span className="text-[10px] font-semibold text-[var(--muted)]">{label}</span>
+    <div className="flex flex-col items-center rounded-[var(--radius)] bg-[var(--surface-2)] px-1.5 py-2">
+      <span className="text-[var(--text-2xs)] font-semibold text-[var(--text-muted)]">{label}</span>
       <span
-        className="mt-0.5 text-[15px] font-extrabold leading-none tabular-nums"
+        className="mt-0.5 text-[var(--text-base)] font-extrabold leading-none tabular-nums"
         style={style ? { color: style.color } : undefined}
       >
         {value ?? "-"}
       </span>
-      <span className="mt-0.5 text-[9.5px] text-[var(--muted)]">{unit}</span>
+      <span className="mt-0.5 text-[var(--text-2xs)] text-[var(--text-muted)]">{unit}</span>
       {grade && (
         <span
-          className="mt-0.5 text-[10px] font-bold"
+          className="mt-0.5 text-[var(--text-2xs)] font-bold"
           style={{ color: style!.color }}
         >
           {grade}
@@ -81,7 +81,7 @@ export default function AirPanel({
             <Metric label="통합" value={primary.khai} unit="CAI" grade={primary.khaiGrade} />
           </div>
 
-          <p className="mt-2 text-[10.5px] text-[var(--muted)]">
+          <p className="mt-2 text-[var(--text-2xs)] text-[var(--text-muted)]">
             {primary.name} 측정소 · {primary.measuredAt || "시각 미상"}
           </p>
 
@@ -90,15 +90,15 @@ export default function AirPanel({
               {stations.slice(1).map((s) => (
                 <li
                   key={s.name}
-                  className="flex items-center gap-2 text-[11.5px]"
+                  className="flex items-center gap-2 text-[var(--text-xs)]"
                 >
                   <span className="font-semibold">{s.name}</span>
-                  <span className="text-[var(--muted)]">
+                  <span className="text-[var(--text-muted)]">
                     미세 {s.pm10 ?? "-"} · 초미세 {s.pm25 ?? "-"}
                   </span>
                   {s.pm25Grade && (
                     <span
-                      className="ml-auto text-[10.5px] font-bold"
+                      className="ml-auto text-[var(--text-2xs)] font-bold"
                       style={{ color: GRADE_STYLE[s.pm25Grade].color }}
                     >
                       {s.pm25Grade}

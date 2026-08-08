@@ -51,12 +51,12 @@ export default function WeatherPanel({
                   <span className="text-3xl font-bold tracking-tight">
                     {d.now.temp ?? "-"}
                   </span>
-                  <span className="text-lg text-[var(--muted)]">°C</span>
-                  <span className="ml-1 text-[12px] text-[var(--muted)]">
+                  <span className="text-lg text-[var(--text-muted)]">°C</span>
+                  <span className="ml-1 text-[var(--text-xs)] text-[var(--text-muted)]">
                     {d.now.precipitation !== "없음" ? d.now.precipitation : d.now.sky}
                   </span>
                 </div>
-                <div className="mt-0.5 flex gap-3 text-[11.5px] text-[var(--muted)]">
+                <div className="mt-0.5 flex gap-3 text-[var(--text-xs)] text-[var(--text-muted)]">
                   <span>습도 {d.now.humidity ?? "-"}%</span>
                   <span>바람 {d.now.windSpeed ?? "-"}m/s</span>
                   <span>강수 {d.now.rain1h ?? 0}mm</span>
@@ -70,16 +70,16 @@ export default function WeatherPanel({
               {d.forecast.map((f) => (
                 <div
                   key={f.time}
-                  className="flex min-w-[62px] shrink-0 flex-col items-center gap-1 rounded-lg bg-[var(--surface-2)] px-2 py-2"
+                  className="flex min-w-[62px] shrink-0 flex-col items-center gap-1 rounded-[var(--radius)] bg-[var(--surface-2)] px-2 py-2"
                 >
-                  <span className="text-[10.5px] font-semibold text-[var(--muted)]">
+                  <span className="text-[var(--text-2xs)] font-semibold text-[var(--text-muted)]">
                     {hhmm(f.time)}
                   </span>
                   <span className="text-lg leading-none">
                     {icon(f.sky, f.precipitation)}
                   </span>
-                  <span className="text-[12.5px] font-bold">{f.temp ?? "-"}°</span>
-                  <span className="text-[10px] text-blue-500">
+                  <span className="text-[var(--text-sm)] font-bold">{f.temp ?? "-"}°</span>
+                  <span className="text-[var(--text-2xs)] text-blue-500">
                     {f.pop != null && f.pop > 0 ? `${f.pop}%` : " "}
                   </span>
                 </div>

@@ -28,7 +28,7 @@ function loadSdk(appKey: string): Promise<void> {
 }
 
 const INCIDENT_STYLE: Record<Incident["kind"], { emoji: string; color: string }> = {
-  accident: { emoji: "🚨", color: "#dc2626" },
+  accident: { emoji: "🚨", color: "var(--danger)" },
   construction: { emoji: "🚧", color: "#d97706" },
   closure: { emoji: "⛔", color: "#7c2d12" },
   weather: { emoji: "🌧️", color: "#2563eb" },
@@ -42,15 +42,18 @@ function pinEl(
   opts: { active?: boolean; pulse?: boolean } = {},
 ) {
   const el = document.createElement("div");
+  // 지도 위 라벨은 배경 지도와 대비가 확실해야 읽힌다.
+  // 다크모드에서도 흰 알약을 유지해 지도 타일 위 가독성을 지킨다.
   el.style.cssText = `
-    display:flex;align-items:center;gap:5px;
-    padding:4px 9px 4px 5px;border-radius:999px;
-    background:${opts.active ? color : "rgba(255,255,255,0.97)"};
-    color:${opts.active ? "#fff" : "#111827"};
+    display:flex;align-items:center;gap:6px;
+    padding:5px 11px 5px 7px;border-radius:999px;
+    background:${opts.active ? color : "rgba(255,255,255,0.98)"};
+    color:${opts.active ? "#fff" : "#16202b"};
     border:1.5px solid ${color};
-    box-shadow:0 2px 8px rgba(0,0,0,.18);
-    font-size:11.5px;font-weight:600;white-space:nowrap;cursor:pointer;
-    transform:translateY(-2px);letter-spacing:-.2px;`;
+    box-shadow:0 2px 10px rgba(16,32,43,.2);
+    font-size:12.5px;font-weight:700;white-space:nowrap;cursor:pointer;
+    transform:translateY(-2px);letter-spacing:-.02em;
+    font-family:Pretendard,-apple-system,"Apple SD Gothic Neo",sans-serif;`;
   if (opts.pulse) el.classList.add("pulse");
   el.innerHTML = `<span style="font-size:13px">${emoji}</span><span>${label}</span>`;
   return el;
@@ -60,20 +63,21 @@ function pinEl(
 function dotEl(color: string, emoji: string) {
   const el = document.createElement("div");
   el.style.cssText = `
-    display:grid;place-items:center;width:20px;height:20px;border-radius:999px;
-    background:rgba(255,255,255,0.97);border:2px solid ${color};
-    box-shadow:0 1px 4px rgba(0,0,0,.2);font-size:10px;cursor:pointer;`;
+    display:grid;place-items:center;width:24px;height:24px;border-radius:999px;
+    background:rgba(255,255,255,0.98);border:2px solid ${color};
+    box-shadow:0 1px 5px rgba(16,32,43,.22);font-size:12px;cursor:pointer;`;
   el.textContent = emoji;
   return el;
 }
 
 function speedEl(link: TrafficLink) {
   const color =
-    link.level === "congested" ? "#dc2626" : link.level === "slow" ? "#f59e0b" : "#16a34a";
+    link.level === "congested" ? "var(--danger)" : link.level === "slow" ? "var(--warn)" : "var(--ok)";
   const el = document.createElement("div");
   el.style.cssText = `
-    padding:2px 7px;border-radius:6px;background:${color};color:#fff;
-    font-size:11px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.25);white-space:nowrap;`;
+    padding:3px 8px;border-radius:7px;background:${color};color:#fff;
+    font-size:12px;font-weight:800;box-shadow:0 2px 7px rgba(16,32,43,.28);
+    white-space:nowrap;font-variant-numeric:tabular-nums;`;
   el.textContent = `${link.speed}km/h`;
   return el;
 }
@@ -218,10 +222,10 @@ export default function KakaoMap({
     const outline = new window.kakao.maps.Polygon({
       path: ring,
       strokeWeight: 3,
-      strokeColor: "#0b6b5b",
+      strokeColor: "#0f6b60",
       strokeOpacity: 0.95,
       strokeStyle: "solid",
-      fillColor: "#0b6b5b",
+      fillColor: "#0f6b60",
       fillOpacity: dimOutside ? 0 : 0.06,
       zIndex: 2,
     });
@@ -244,10 +248,10 @@ export default function KakaoMap({
     const poly = new window.kakao.maps.Polygon({
       path,
       strokeWeight: 3,
-      strokeColor: "#c026d3",
+      strokeColor: "#1a5fb4",
       strokeOpacity: 0.95,
       strokeStyle: "solid",
-      fillColor: "#c026d3",
+      fillColor: "#1a5fb4",
       fillOpacity: 0.12,
       // 시 경계(2)보다 위, 마커(10+)보다 아래
       zIndex: 5,
@@ -264,10 +268,10 @@ export default function KakaoMap({
       center: new window.kakao.maps.LatLng(center.lat, center.lng),
       radius,
       strokeWeight: 1.5,
-      strokeColor: "#0b6b5b",
+      strokeColor: "#0f6b60",
       strokeOpacity: 0.7,
       strokeStyle: "dash",
-      fillColor: "#0b6b5b",
+      fillColor: "#0f6b60",
       fillOpacity: 0.05,
     });
     circle.setMap(mapRef.current);
@@ -386,15 +390,15 @@ export default function KakaoMap({
           <div className="max-w-md space-y-3">
             <div className="text-4xl">🗺️</div>
             <p className="font-semibold">지도를 표시할 수 없습니다</p>
-            <p className="text-sm text-[var(--muted)]">{error}</p>
-            <div className="rounded-lg bg-[var(--surface)] p-3 text-left text-xs leading-relaxed text-[var(--muted)]">
+            <p className="text-sm text-[var(--text-muted)]">{error}</p>
+            <div className="rounded-[var(--radius)] bg-[var(--surface)] p-3 text-left text-xs leading-relaxed text-[var(--text-muted)]">
               {appKey ? (
                 <>
                   <p className="mb-2">
                     키는 설정돼 있습니다. 카카오 개발자 콘솔에서 두 가지를 확인하세요.
                   </p>
                   <p className="mb-1.5">
-                    <strong className="text-[var(--foreground)]">① 플랫폼 &gt; Web</strong> 에
+                    <strong className="text-[var(--text)]">① 플랫폼 &gt; Web</strong> 에
                     현재 주소를 등록:
                     <br />
                     <code className="mt-1 inline-block rounded bg-[var(--surface-2)] px-1.5 py-0.5 break-all">
@@ -402,7 +406,7 @@ export default function KakaoMap({
                     </code>
                   </p>
                   <p>
-                    <strong className="text-[var(--foreground)]">② 제품 설정 &gt; 카카오맵</strong>{" "}
+                    <strong className="text-[var(--text)]">② 제품 설정 &gt; 카카오맵</strong>{" "}
                     활성화 ON
                   </p>
                 </>
@@ -422,7 +426,7 @@ export default function KakaoMap({
       )}
       {!ready && !error && (
         <div className="absolute inset-0 grid place-items-center bg-[var(--surface-2)]">
-          <span className="text-sm text-[var(--muted)]">지도를 불러오는 중…</span>
+          <span className="text-sm text-[var(--text-muted)]">지도를 불러오는 중…</span>
         </div>
       )}
     </div>

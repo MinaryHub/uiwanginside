@@ -2,6 +2,11 @@
 
 import type { ReactNode } from "react";
 
+/* ─────────────────────────────────────────────────────────────
+   공통 UI.
+   크기·색은 globals.css 의 토큰만 쓴다. 임의 값을 여기서 만들지 않는다.
+   ───────────────────────────────────────────────────────────── */
+
 export function Card({
   title,
   icon,
@@ -17,38 +22,81 @@ export function Card({
 }) {
   return (
     <section
-      className={`rounded-xl border border-[var(--border)] bg-[var(--surface)] ${className}`}
+      className={`overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-sm)] ${className}`}
     >
       {title && (
-        <header className="flex items-center justify-between gap-2 border-b border-[var(--border)] px-3.5 py-2.5">
-          <h2 className="flex items-center gap-1.5 text-[13px] font-bold tracking-tight">
-            {icon && <span>{icon}</span>}
-            {title}
-          </h2>
-          {right}
+        <header className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-3">
+          {icon && (
+            <span aria-hidden className="text-[1.05rem] leading-none">
+              {icon}
+            </span>
+          )}
+          <h2 className="text-[var(--text-base)] font-bold">{title}</h2>
+          {right && <div className="ml-auto flex items-center">{right}</div>}
         </header>
       )}
-      <div className="p-3.5">{children}</div>
+      <div className="p-4">{children}</div>
     </section>
+  );
+}
+
+/** 화면에서 가장 크게 읽혀야 하는 수치 */
+export function Stat({
+  value,
+  unit,
+  label,
+  tone = "default",
+}: {
+  value: ReactNode;
+  unit?: string;
+  label: string;
+  tone?: "default" | "brand" | "danger" | "warn" | "ok";
+}) {
+  const color =
+    tone === "default"
+      ? "var(--text)"
+      : tone === "brand"
+        ? "var(--brand)"
+        : `var(--${tone})`;
+  return (
+    <div className="flex flex-col items-center rounded-[var(--radius)] bg-[var(--surface-2)] px-2 py-3">
+      <span
+        className="tnum text-[var(--text-xl)] font-extrabold leading-none"
+        style={{ color }}
+      >
+        {value}
+        {unit && (
+          <span className="ml-0.5 text-[var(--text-2xs)] font-semibold text-[var(--text-muted)]">
+            {unit}
+          </span>
+        )}
+      </span>
+      <span className="mt-1.5 text-[var(--text-2xs)] font-semibold text-[var(--text-muted)]">
+        {label}
+      </span>
+    </div>
   );
 }
 
 export function Badge({
   children,
-  color = "var(--muted)",
+  tone = "neutral",
   filled = false,
 }: {
   children: ReactNode;
-  color?: string;
+  tone?: "neutral" | "brand" | "danger" | "warn" | "ok" | "info";
   filled?: boolean;
 }) {
+  const color = tone === "neutral" ? "var(--text-muted)" : `var(--${tone})`;
+  const soft =
+    tone === "neutral" ? "var(--surface-3)" : `color-mix(in srgb, ${color} 14%, transparent)`;
   return (
     <span
-      className="inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 text-[10.5px] font-bold"
+      className="inline-flex shrink-0 items-center gap-1 rounded-[6px] px-1.5 py-0.5 text-[var(--text-2xs)] font-bold"
       style={
         filled
-          ? { background: color, color: "#fff" }
-          : { border: `1px solid ${color}`, color }
+          ? { background: color, color: "var(--surface)" }
+          : { background: soft, color }
       }
     >
       {children}
@@ -56,30 +104,87 @@ export function Badge({
   );
 }
 
-export function Notice({ children }: { children: ReactNode }) {
-  if (!children) return null;
+/** 기본 동작 버튼 — 터치 영역 44px 를 지킨다 */
+export function Button({
+  children,
+  onClick,
+  variant = "secondary",
+  full,
+  disabled,
+  title,
+  type = "button",
+}: {
+  children: ReactNode;
+  onClick?: () => void;
+  variant?: "primary" | "secondary" | "ghost";
+  full?: boolean;
+  disabled?: boolean;
+  title?: string;
+  type?: "button" | "submit";
+}) {
+  const base =
+    "inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-[var(--radius)] px-3.5 text-[var(--text-sm)] font-bold transition disabled:opacity-45";
+  const style =
+    variant === "primary"
+      ? { background: "var(--brand)", color: "var(--on-brand)" }
+      : variant === "secondary"
+        ? {
+            background: "var(--surface)",
+            color: "var(--text)",
+            border: "1px solid var(--border-strong)",
+          }
+        : { color: "var(--text-muted)" };
   return (
-    <p className="mb-2.5 rounded-lg bg-amber-500/10 px-2.5 py-1.5 text-[11px] leading-snug text-amber-700 dark:text-amber-300">
-      ⚠️ {children}
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={`${base} ${full ? "w-full" : ""} ${
+        disabled ? "cursor-not-allowed" : "hover:brightness-[0.97] active:scale-[0.99]"
+      }`}
+      style={style}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function Notice({
+  children,
+  tone = "warn",
+}: {
+  children: ReactNode;
+  tone?: "warn" | "danger" | "info";
+}) {
+  if (!children) return null;
+  const color = `var(--${tone})`;
+  return (
+    <p
+      className="mb-3 rounded-[var(--radius)] px-3 py-2 text-[var(--text-xs)] leading-relaxed"
+      style={{
+        background: `color-mix(in srgb, ${color} 12%, transparent)`,
+        color,
+      }}
+    >
+      {children}
     </p>
   );
 }
 
 export function Empty({ children }: { children: ReactNode }) {
   return (
-    <p className="py-6 text-center text-[12.5px] text-[var(--muted)]">{children}</p>
+    <p className="py-7 text-center text-[var(--text-sm)] leading-relaxed text-[var(--text-muted)]">
+      {children}
+    </p>
   );
 }
 
 export function Skeleton({ rows = 3 }: { rows?: number }) {
   return (
-    <div className="space-y-2">
+    <div className="space-y-2" aria-hidden>
       {Array.from({ length: rows }).map((_, i) => (
-        <div
-          key={i}
-          className="h-9 animate-pulse rounded-lg bg-[var(--surface-2)]"
-          style={{ animationDelay: `${i * 90}ms` }}
-        />
+        <div key={i} className="skeleton h-11 rounded-[var(--radius)]" />
       ))}
     </div>
   );
@@ -108,39 +213,35 @@ export function hhmm(iso: string): string {
 }
 
 export function LiveDot({ live }: { live: boolean }) {
-  // 연동 전에는 아무 뱃지도 달지 않는다.
-  // 가짜 데이터를 표시하지 않으므로 "SAMPLE" 같은 표시가 필요 없다.
+  // 연동 전에는 아무 표시도 하지 않는다.
+  // 가짜 데이터를 쓰지 않으므로 경고할 대상이 없다.
   if (!live) return null;
   return (
     <span
-      className="inline-flex items-center gap-1 text-[10.5px] font-semibold"
-      style={{ color: "var(--brand)" }}
+      className="inline-flex items-center gap-1.5 text-[var(--text-2xs)] font-bold text-[var(--ok)]"
       title="실시간 데이터"
     >
-      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-      LIVE
+      <span className="h-1.5 w-1.5 rounded-full bg-[var(--ok)]" />
+      실시간
     </span>
   );
 }
 
-/**
- * 데이터를 가져오지 못했을 때의 표시.
- * 값을 지어내지 않고 왜 없는지만 알린다.
- */
+/** 데이터를 가져오지 못했을 때 — 값을 지어내지 않고 이유만 알린다 */
 export function Unavailable({ reason }: { reason?: string }) {
   return (
-    <div className="rounded-lg bg-[var(--surface-2)] px-3 py-4 text-center">
-      <p className="text-[12.5px] font-semibold text-[var(--muted)]">
+    <div className="rounded-[var(--radius)] bg-[var(--surface-2)] px-4 py-6 text-center">
+      <p className="text-[var(--text-sm)] font-semibold text-[var(--text-muted)]">
         아직 연동되지 않았습니다
       </p>
       {reason && (
-        <p className="mx-auto mt-1 max-w-[260px] text-[11px] leading-snug text-[var(--muted)]">
+        <p className="mx-auto mt-1.5 max-w-[280px] text-[var(--text-xs)] leading-relaxed text-[var(--text-faint)]">
           {reason}
         </p>
       )}
       <a
         href="/status"
-        className="mt-2 inline-block text-[11px] font-bold text-[var(--brand)] underline underline-offset-2"
+        className="mt-3 inline-flex min-h-[36px] items-center text-[var(--text-xs)] font-bold text-[var(--brand)] underline underline-offset-4"
       >
         연동 상태 보기 →
       </a>

@@ -6,10 +6,10 @@ import { CATEGORY_MAP, type CategoryKey } from "@/lib/uiwang";
 import type { PlacesPayload, ApiEnvelope, Place, PlaceSource } from "@/lib/types";
 
 const SOURCE_META: Record<PlaceSource, { label: string; color: string; title: string }> = {
-  kakao: { label: "카카오", color: "#10b981", title: "카카오 로컬 API 실시간 데이터" },
+  kakao: { label: "카카오", color: "var(--ok)", title: "카카오 로컬 API 실시간 데이터" },
   osm: {
     label: "OSM",
-    color: "#3b82f6",
+    color: "var(--info)",
     title: "OpenStreetMap 실제 데이터 © OpenStreetMap contributors (ODbL)",
   },
 };
@@ -63,11 +63,11 @@ export default function PlacesPanel({
           <button
             type="button"
             onClick={() => setOnly(null)}
-            className="rounded-full px-2 py-1 text-[11.5px] font-bold transition"
+            className="rounded-full px-2 py-1 text-[var(--text-xs)] font-bold transition"
             style={
               only === null
                 ? { background: "var(--brand)", color: "#fff" }
-                : { background: "var(--surface-2)", color: "var(--muted)" }
+                : { background: "var(--surface-2)", color: "var(--text-muted)" }
             }
           >
             전체 {places.length}
@@ -80,11 +80,11 @@ export default function PlacesPanel({
                 key={c}
                 type="button"
                 onClick={() => setOnly(on ? null : c)}
-                className="flex items-center gap-1 rounded-full px-2 py-1 text-[11.5px] font-bold transition"
+                className="flex items-center gap-1 rounded-full px-2 py-1 text-[var(--text-xs)] font-bold transition"
                 style={
                   on
                     ? { background: def.color, color: "#fff" }
-                    : { background: "var(--surface-2)", color: "var(--muted)" }
+                    : { background: "var(--surface-2)", color: "var(--text-muted)" }
                 }
               >
                 <span>{def.emoji}</span>
@@ -99,11 +99,11 @@ export default function PlacesPanel({
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
           placeholder="이름·주소로 찾기"
-          className="mb-2 w-full rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-1.5 text-[12.5px] outline-none focus:border-[var(--brand)]"
+          className="mb-2 w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-1.5 text-[var(--text-sm)] outline-none focus:border-[var(--brand)]"
         />
 
         <div className="flex items-center gap-2">
-          <span className="shrink-0 text-[10.5px] font-semibold text-[var(--muted)]">
+          <span className="shrink-0 text-[var(--text-2xs)] font-semibold text-[var(--text-muted)]">
             반경
           </span>
           <input
@@ -115,7 +115,7 @@ export default function PlacesPanel({
             onChange={(e) => onRadiusChange(Number(e.target.value))}
             className="h-1 flex-1 accent-[var(--brand)]"
           />
-          <span className="w-11 shrink-0 text-right text-[11px] font-bold tabular-nums">
+          <span className="w-11 shrink-0 text-right text-[var(--text-xs)] font-bold tabular-nums">
             {(radius / 1000).toFixed(1)}km
           </span>
         </div>
@@ -129,13 +129,13 @@ export default function PlacesPanel({
             {res?.ok === false && <Notice>{res?.notice}</Notice>}
 
             <div className="mb-1.5 flex items-center">
-              <p className="text-[10.5px] font-semibold text-[var(--muted)]">
+              <p className="text-[var(--text-2xs)] font-semibold text-[var(--text-muted)]">
                 {filtered.length}곳 · 가까운 순
               </p>
               {source && (
                 <span
                   title={SOURCE_META[source].title}
-                  className="ml-auto text-[10px] font-bold"
+                  className="ml-auto text-[var(--text-2xs)] font-bold"
                   style={{ color: SOURCE_META[source].color }}
                 >
                   {SOURCE_META[source].label}
@@ -155,7 +155,7 @@ export default function PlacesPanel({
                       <button
                         type="button"
                         onClick={() => onSelectPlace(p)}
-                        className="w-full rounded-lg px-2 py-1.5 text-left transition hover:bg-[var(--surface-2)]"
+                        className="w-full rounded-[var(--radius)] px-2 py-1.5 text-left transition hover:bg-[var(--surface-2)]"
                         style={
                           active
                             ? {
@@ -166,12 +166,12 @@ export default function PlacesPanel({
                         }
                       >
                         <div className="flex items-center gap-1.5">
-                          <span className="shrink-0 text-[12px]">{def.emoji}</span>
-                          <span className="flex-1 truncate text-[12.5px] font-semibold">
+                          <span className="shrink-0 text-[var(--text-xs)]">{def.emoji}</span>
+                          <span className="flex-1 truncate text-[var(--text-sm)] font-semibold">
                             {p.name}
                           </span>
                           {p.distance != null && (
-                            <span className="shrink-0 text-[10.5px] font-semibold text-[var(--muted)]">
+                            <span className="shrink-0 text-[var(--text-2xs)] font-semibold text-[var(--text-muted)]">
                               {p.distance >= 1000
                                 ? `${(p.distance / 1000).toFixed(1)}km`
                                 : `${p.distance}m`}
@@ -180,7 +180,7 @@ export default function PlacesPanel({
                         </div>
                         {active && (
                           <div className="mt-1 pl-[18px]">
-                            <p className="truncate text-[11px] text-[var(--muted)]">
+                            <p className="truncate text-[var(--text-xs)] text-[var(--text-muted)]">
                               {p.roadAddress || p.address}
                             </p>
                             <div className="mt-1 flex gap-1.5">
@@ -188,7 +188,7 @@ export default function PlacesPanel({
                                 <a
                                   href={`tel:${p.phone}`}
                                   onClick={(e) => e.stopPropagation()}
-                                  className="rounded border border-[var(--border)] px-1.5 py-0.5 text-[10.5px] font-semibold"
+                                  className="rounded border border-[var(--border)] px-1.5 py-0.5 text-[var(--text-2xs)] font-semibold"
                                 >
                                   📞 {p.phone}
                                 </a>
@@ -199,7 +199,7 @@ export default function PlacesPanel({
                                   target="_blank"
                                   rel="noreferrer noopener"
                                   onClick={(e) => e.stopPropagation()}
-                                  className="rounded border border-[var(--border)] px-1.5 py-0.5 text-[10.5px] font-semibold"
+                                  className="rounded border border-[var(--border)] px-1.5 py-0.5 text-[var(--text-2xs)] font-semibold"
                                 >
                                   상세 ↗
                                 </a>

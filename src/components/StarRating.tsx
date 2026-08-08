@@ -53,7 +53,7 @@ export function StarInput({
           className="leading-none transition disabled:cursor-not-allowed"
           style={{
             fontSize: size,
-            color: n <= shown ? "#f59e0b" : "var(--border)",
+            color: n <= shown ? "var(--warn)" : "var(--border)",
             opacity: disabled ? 0.5 : 1,
           }}
         >

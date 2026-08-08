@@ -39,35 +39,35 @@ export default function PopulationPanel({
       title="인구"
       icon="👥"
       right={
-        <span className="text-[10.5px] font-semibold text-[var(--muted)]">
+        <span className="text-[var(--text-2xs)] font-semibold text-[var(--text-muted)]">
           {POPULATION_AS_OF} 기준
         </span>
       }
     >
       {/* 시 전체 요약 */}
       <div className="mb-3 grid grid-cols-3 gap-1.5">
-        <div className="rounded-lg bg-[var(--surface-2)] px-2 py-2 text-center">
-          <div className="text-[15px] font-extrabold leading-tight tabular-nums">
+        <div className="rounded-[var(--radius)] bg-[var(--surface-2)] px-2 py-2 text-center">
+          <div className="text-[var(--text-base)] font-extrabold leading-tight tabular-nums">
             {fmt(TOTAL_POPULATION)}
           </div>
-          <div className="mt-0.5 text-[10px] font-semibold text-[var(--muted)]">총인구</div>
+          <div className="mt-0.5 text-[var(--text-2xs)] font-semibold text-[var(--text-muted)]">총인구</div>
         </div>
-        <div className="rounded-lg bg-[var(--surface-2)] px-2 py-2 text-center">
-          <div className="text-[15px] font-extrabold leading-tight tabular-nums">
+        <div className="rounded-[var(--radius)] bg-[var(--surface-2)] px-2 py-2 text-center">
+          <div className="text-[var(--text-base)] font-extrabold leading-tight tabular-nums">
             {fmt(HOUSEHOLDS.count)}
           </div>
           <div
-            className="mt-0.5 text-[10px] font-semibold text-[var(--muted)]"
+            className="mt-0.5 text-[var(--text-2xs)] font-semibold text-[var(--text-muted)]"
             title={`${HOUSEHOLDS.asOf} · ${HOUSEHOLDS.source}`}
           >
             세대 ({HOUSEHOLDS.asOf.replace("년 ", ".").replace("월", "")})
           </div>
         </div>
-        <div className="rounded-lg bg-[var(--surface-2)] px-2 py-2 text-center">
-          <div className="text-[15px] font-extrabold leading-tight tabular-nums">
+        <div className="rounded-[var(--radius)] bg-[var(--surface-2)] px-2 py-2 text-center">
+          <div className="text-[var(--text-base)] font-extrabold leading-tight tabular-nums">
             {fmt(density(TOTAL_POPULATION, CITY_AREA))}
           </div>
-          <div className="mt-0.5 text-[10px] font-semibold text-[var(--muted)]">
+          <div className="mt-0.5 text-[var(--text-2xs)] font-semibold text-[var(--text-muted)]">
             명/km²
           </div>
         </div>
@@ -75,7 +75,7 @@ export default function PopulationPanel({
 
       {/* 정렬 */}
       <div className="mb-2 flex items-center gap-1">
-        <span className="text-[10.5px] font-semibold text-[var(--muted)]">
+        <span className="text-[var(--text-2xs)] font-semibold text-[var(--text-muted)]">
           {rows.length}개 행정동
         </span>
         <div className="ml-auto flex gap-1">
@@ -90,11 +90,11 @@ export default function PopulationPanel({
               key={k}
               type="button"
               onClick={() => setSort(k)}
-              className="rounded px-1.5 py-0.5 text-[10.5px] font-bold transition"
+              className="rounded px-1.5 py-0.5 text-[var(--text-2xs)] font-bold transition"
               style={
                 sort === k
                   ? { background: "var(--brand)", color: "#fff" }
-                  : { color: "var(--muted)" }
+                  : { color: "var(--text-muted)" }
               }
             >
               {label}
@@ -113,23 +113,23 @@ export default function PopulationPanel({
                 type="button"
                 onClick={() => onSelectDong(d)}
                 aria-pressed={activeDong === d.name}
-                className="w-full rounded-lg px-2 py-1.5 text-left transition hover:bg-[var(--surface-2)]"
+                className="w-full rounded-[var(--radius)] px-2 py-1.5 text-left transition hover:bg-[var(--surface-2)]"
                 style={
                   activeDong === d.name
-                    ? { background: "color-mix(in srgb, #c026d3 12%, transparent)", outline: "1px solid #c026d3" }
+                    ? { background: "color-mix(in srgb, var(--info) 12%, transparent)", outline: "1px solid var(--info)" }
                     : undefined
                 }
                 title={`${d.name} 경계 보기 · 법정동: ${d.legalDongs.join(", ")}`}
               >
                 <div className="flex items-baseline gap-1.5">
-                  <span className="text-[12.5px] font-bold">{d.name}</span>
-                  <span className="text-[10.5px] text-[var(--muted)]">
+                  <span className="text-[var(--text-sm)] font-bold">{d.name}</span>
+                  <span className="text-[var(--text-2xs)] text-[var(--text-muted)]">
                     {d.area}km² · {fmt(density(d.population, d.area))}명/km²
                   </span>
-                  <span className="ml-auto text-[12.5px] font-bold tabular-nums">
+                  <span className="ml-auto text-[var(--text-sm)] font-bold tabular-nums">
                     {fmt(d.population)}
                   </span>
-                  <span className="w-9 text-right text-[10.5px] text-[var(--muted)] tabular-nums">
+                  <span className="w-9 text-right text-[var(--text-2xs)] text-[var(--text-muted)] tabular-nums">
                     {share.toFixed(1)}%
                   </span>
                 </div>
@@ -148,7 +148,7 @@ export default function PopulationPanel({
         })}
       </ul>
 
-      <p className="mt-2.5 border-t border-[var(--border)] pt-2 text-[10px] leading-relaxed text-[var(--muted)]">
+      <p className="mt-2.5 border-t border-[var(--border)] pt-2 text-[var(--text-2xs)] leading-relaxed text-[var(--text-muted)]">
         동별 인구: 행정안전부 주민등록인구통계 {POPULATION_AS_OF} 기준 · 세대수:{" "}
         {HOUSEHOLDS.source} {HOUSEHOLDS.asOf} 기준 · 면적: 위키백과
       </p>

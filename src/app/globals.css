@@ -1,39 +1,116 @@
 @import "tailwindcss";
+/* Pretendard — 동적 서브셋으로 필요한 글자 범위만 내려받는다.
+   패키지로 셀프호스팅해 외부 CDN 에 의존하지 않는다. */
+@import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
+
+/* ─────────────────────────────────────────────────────────────
+   의왕 인사이드 디자인 토큰
+
+   방향: 단정한 공공서비스. 신뢰감이 우선이라 채도를 낮추고 위계는
+   색이 아니라 크기·굵기·여백으로 만든다. 강조색은 아껴 쓴다.
+
+   글자 크기는 본문 14px 기준. 시민 포털은 버스를 기다리며 한 손으로
+   보는 상황이 많고 고령 이용자도 적지 않아, 정보 밀도보다 가독성을
+   앞에 둔다. 터치 영역은 최소 44px.
+   ───────────────────────────────────────────────────────────── */
 
 :root {
-  --background: #f6f7f9;
+  /* 표면 — 배경에서 카드로 갈수록 밝아진다 */
+  --bg: #f2f4f6;
   --surface: #ffffff;
-  --surface-2: #f1f3f6;
-  --foreground: #10151c;
-  --muted: #5b6672;
-  --border: #e2e6ec;
-  --brand: #0b6b5b;
-  --brand-soft: #e6f4f1;
+  --surface-2: #f4f6f8;
+  --surface-3: #e9edf1;
+
+  /* 글자 — 3단계면 위계에 충분하다 */
+  --text: #16202b;
+  --text-muted: #5a6875;
+  --text-faint: #8a97a3;
+
+  --border: #dde3e9;
+  --border-strong: #c6d0d9;
+
+  /* 강조 — 공공기관 느낌의 짙은 청록. 링크·선택·핵심 수치에만 쓴다 */
+  --brand: #0f6b60;
+  --brand-hover: #0b564d;
+  --brand-soft: #e6f2f0;
+  --on-brand: #ffffff;
+
+  /* 상태 */
+  --danger: #c62828;
+  --danger-soft: #fdeaea;
+  --warn: #a55a00;
+  --warn-soft: #fdf1e3;
+  --ok: #17734f;
+  --ok-soft: #e6f4ee;
+  --info: #1a5fb4;
+
+  /* 높이감 — 그림자는 얕게. 공공서비스에 과한 입체감은 어울리지 않는다 */
+  --shadow-sm: 0 1px 2px rgba(16, 32, 43, 0.06);
+  --shadow-md: 0 2px 8px rgba(16, 32, 43, 0.08);
+  --shadow-lg: 0 6px 20px rgba(16, 32, 43, 0.12);
+
+  --radius: 10px;
+  --radius-lg: 14px;
+  --radius-full: 999px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0b0f14;
-    --surface: #131a22;
-    --surface-2: #1a232d;
-    --foreground: #e8edf3;
-    --muted: #93a1b0;
-    --border: #24303c;
-    --brand: #34d3b5;
+    --bg: #0e1319;
+    --surface: #161d25;
+    --surface-2: #1d262f;
+    --surface-3: #26313c;
+
+    --text: #e8edf2;
+    --text-muted: #9dabb8;
+    --text-faint: #74838f;
+
+    --border: #2a353f;
+    --border-strong: #3a4753;
+
+    --brand: #4fd1bd;
+    --brand-hover: #6ee0ce;
     --brand-soft: #10312c;
+    --on-brand: #06231f;
+
+    --danger: #ff8a80;
+    --danger-soft: #3a1a1a;
+    --warn: #f0b357;
+    --warn-soft: #3a2c15;
+    --ok: #6ddba6;
+    --ok-soft: #122e23;
+    --info: #7fb2f0;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 6px 20px rgba(0, 0, 0, 0.55);
   }
 }
 
 @theme inline {
-  --color-background: var(--background);
+  --color-bg: var(--bg);
   --color-surface: var(--surface);
   --color-surface2: var(--surface-2);
-  --color-foreground: var(--foreground);
-  --color-muted: var(--muted);
-  --color-border2: var(--border);
+  --color-surface3: var(--surface-3);
+  --color-text: var(--text);
+  --color-muted: var(--text-muted);
+  --color-faint: var(--text-faint);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
   --color-brand: var(--brand);
   --color-brandsoft: var(--brand-soft);
-  --font-sans: var(--font-pretendard), system-ui, sans-serif;
+  --color-danger: var(--danger);
+  --color-warn: var(--warn);
+  --color-ok: var(--ok);
+
+  /* 타이포 스케일 — 이 여섯 단계 밖의 크기는 쓰지 않는다 */
+  --text-2xs: 0.75rem; /* 12px 라벨·보조 */
+  --text-xs: 0.8125rem; /* 13px 메타 */
+  --text-sm: 0.875rem; /* 14px 본문 기준 */
+  --text-base: 0.9375rem; /* 15px 강조 본문 */
+  --text-lg: 1.125rem; /* 18px 소제목 */
+  --text-xl: 1.5rem; /* 24px 수치 강조 */
+  --text-2xl: 2rem; /* 32px 대표 수치 */
 }
 
 html,
@@ -42,44 +119,142 @@ body {
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--bg);
+  color: var(--text);
+  /* Pretendard 가 있으면 쓰고, 없으면 OS 한글 폰트로 자연스럽게 떨어진다 */
   font-family:
-    var(--font-pretendard), -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
-    "Malgun Gothic", system-ui, sans-serif;
+    Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+    "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+  font-size: var(--text-sm);
+  /* 한글은 라틴보다 자간이 빽빽해 보여 줄간을 넉넉히 준다 */
+  line-height: 1.55;
+  letter-spacing: -0.01em;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-/* 얇은 스크롤바 */
+/* 숫자는 폭을 고정해 갱신될 때 흔들리지 않게 한다 */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 제목류는 자간을 더 조인다 */
+h1,
+h2,
+h3 {
+  letter-spacing: -0.02em;
+  line-height: 1.35;
+}
+
+/* 키보드 사용자에게만 초점 링을 보여준다 */
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 스크롤바 — 존재감을 줄인다 */
+.thin-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
 .thin-scroll::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
 }
 .thin-scroll::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 999px;
+  background: var(--border-strong);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: var(--radius-full);
 }
 .thin-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
 
-/* 카카오맵 기본 인포윈도우 테두리 제거 */
+/* 카카오맵 인포윈도우 */
 .kakao-iw {
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: var(--text-xs);
+  line-height: 1.5;
 }
 
+/* 사고처럼 즉시 눈에 띄어야 하는 표시 */
 @keyframes pulse-ring {
   0% {
-    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.55);
+    box-shadow: 0 0 0 0 rgba(198, 40, 40, 0.5);
   }
   70% {
-    box-shadow: 0 0 0 12px rgba(220, 38, 38, 0);
+    box-shadow: 0 0 0 12px rgba(198, 40, 40, 0);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0);
+    box-shadow: 0 0 0 0 rgba(198, 40, 40, 0);
   }
 }
 .pulse {
-  animation: pulse-ring 1.8s infinite;
+  animation: pulse-ring 2s ease-out infinite;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.fade-up {
+  animation: fade-up 0.22s ease-out both;
+}
+
+/* 로딩 자리표시 */
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.35),
+    transparent
+  );
+  animation: shimmer 1.4s infinite;
+}
+@media (prefers-color-scheme: dark) {
+  .skeleton::after {
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.06),
+      transparent
+    );
+  }
+}
+
+/* 움직임을 줄여달라는 설정을 존중한다 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

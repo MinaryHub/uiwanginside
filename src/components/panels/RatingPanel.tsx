@@ -83,11 +83,11 @@ export default function RatingPanel({
       {!selected ? (
         <Empty>지도나 목록에서 가게를 선택하면 별점을 매길 수 있습니다.</Empty>
       ) : (
-        <div className="rounded-lg bg-[var(--surface-2)] p-2.5">
+        <div className="rounded-[var(--radius)] bg-[var(--surface-2)] p-2.5">
           <div className="mb-1 flex items-baseline gap-1.5">
-            <span className="truncate text-[13px] font-bold">{selected.name}</span>
+            <span className="truncate text-[var(--text-sm)] font-bold">{selected.name}</span>
             {ratings[selected.id] && (
-              <span className="ml-auto shrink-0 text-[11px] text-[var(--muted)]">
+              <span className="ml-auto shrink-0 text-[var(--text-xs)] text-[var(--text-muted)]">
                 {ratings[selected.id].avg.toFixed(1)} ({ratings[selected.id].count})
               </span>
             )}
@@ -96,19 +96,19 @@ export default function RatingPanel({
           {ratings[selected.id] ? (
             <Stars value={ratings[selected.id].avg} />
           ) : (
-            <p className="text-[11px] text-[var(--muted)]">아직 평가가 없습니다</p>
+            <p className="text-[var(--text-xs)] text-[var(--text-muted)]">아직 평가가 없습니다</p>
           )}
 
           <div className="mt-2 border-t border-[var(--border)] pt-2">
             {state.status === "idle" && (
               <>
-                <p className="mb-1.5 text-[11.5px] leading-snug text-[var(--muted)]">
+                <p className="mb-1.5 text-[var(--text-xs)] leading-snug text-[var(--text-muted)]">
                   의왕시 안에 계신 분만 평가할 수 있습니다. 위치를 확인해 주세요.
                 </p>
                 <button
                   type="button"
                   onClick={request}
-                  className="rounded-lg bg-[var(--brand)] px-2.5 py-1.5 text-[11.5px] font-bold text-white"
+                  className="rounded-[var(--radius)] bg-[var(--brand)] px-2.5 py-1.5 text-[var(--text-xs)] font-bold text-[var(--on-brand)]"
                 >
                   📍 내 위치 확인
                 </button>
@@ -116,18 +116,18 @@ export default function RatingPanel({
             )}
 
             {state.status === "asking" && (
-              <p className="text-[11.5px] text-[var(--muted)]">위치를 확인하는 중…</p>
+              <p className="text-[var(--text-xs)] text-[var(--text-muted)]">위치를 확인하는 중…</p>
             )}
 
             {(state.status === "denied" || state.status === "error") && (
               <>
-                <p className="mb-1.5 text-[11.5px] leading-snug text-red-600 dark:text-red-400">
+                <p className="mb-1.5 text-[var(--text-xs)] leading-snug text-[var(--danger)]">
                   {state.message}
                 </p>
                 <button
                   type="button"
                   onClick={request}
-                  className="rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-[11.5px] font-bold"
+                  className="rounded-[var(--radius)] border border-[var(--border)] px-2.5 py-1.5 text-[var(--text-xs)] font-bold"
                 >
                   다시 시도
                 </button>
@@ -135,7 +135,7 @@ export default function RatingPanel({
             )}
 
             {state.status === "ok" && !state.inUiwang && (
-              <p className="text-[11.5px] leading-snug text-amber-700 dark:text-amber-300">
+              <p className="text-[var(--text-xs)] leading-snug text-[var(--warn)]">
                 현재 위치가 의왕시 밖으로 확인됩니다. 의왕시 안에서만 평가할 수 있습니다.
                 {state.accuracy > 1000 &&
                   ` (위치 오차 약 ${Math.round(state.accuracy)}m — 실외에서 다시 시도해 보세요)`}
@@ -144,7 +144,7 @@ export default function RatingPanel({
 
             {canRate && (
               <>
-                <p className="mb-1 text-[11px] font-bold text-[var(--brand)]">
+                <p className="mb-1 text-[var(--text-xs)] font-bold text-[var(--brand)]">
                   ✓ 의왕시 확인됨 — {mine ? "별점을 수정할 수 있습니다" : "별점을 매겨주세요"}
                 </p>
                 <StarInput value={mine} onChange={submit} disabled={busy} />
@@ -154,13 +154,13 @@ export default function RatingPanel({
                   maxLength={300}
                   rows={2}
                   placeholder="한 줄 평 (선택)"
-                  className="mt-1.5 w-full resize-none rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-[12px] outline-none focus:border-[var(--brand)]"
+                  className="mt-1.5 w-full resize-none rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-[var(--text-xs)] outline-none focus:border-[var(--brand)]"
                 />
               </>
             )}
 
             {message && (
-              <p className="mt-1.5 text-[11.5px] font-semibold text-[var(--brand)]">
+              <p className="mt-1.5 text-[var(--text-xs)] font-semibold text-[var(--brand)]">
                 {message}
               </p>
             )}
@@ -171,7 +171,7 @@ export default function RatingPanel({
       {/* 별점 순위 */}
       {ranked.length > 0 && (
         <>
-          <h3 className="mb-1.5 mt-3 text-[11px] font-bold text-[var(--muted)]">
+          <h3 className="mb-1.5 mt-3 text-[var(--text-xs)] font-bold text-[var(--text-muted)]">
             별점 높은 곳
           </h3>
           <ul className="space-y-0.5">
@@ -180,19 +180,19 @@ export default function RatingPanel({
                 <button
                   type="button"
                   onClick={() => onSelectPlace(p)}
-                  className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left transition hover:bg-[var(--surface-2)]"
+                  className="flex w-full items-center gap-1.5 rounded-[var(--radius)] px-2 py-1.5 text-left transition hover:bg-[var(--surface-2)]"
                 >
-                  <span className="w-3 shrink-0 text-[10.5px] font-bold text-[var(--muted)]">
+                  <span className="w-3 shrink-0 text-[var(--text-2xs)] font-bold text-[var(--text-muted)]">
                     {i + 1}
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold">
+                  <span className="min-w-0 flex-1 truncate text-[var(--text-sm)] font-semibold">
                     {p.name}
                   </span>
                   <Stars value={r.avg} size={11} />
-                  <span className="shrink-0 text-[10.5px] font-bold tabular-nums">
+                  <span className="shrink-0 text-[var(--text-2xs)] font-bold tabular-nums">
                     {r.avg.toFixed(1)}
                   </span>
-                  <span className="shrink-0 text-[10px] text-[var(--muted)]">
+                  <span className="shrink-0 text-[var(--text-2xs)] text-[var(--text-muted)]">
                     ({r.count})
                   </span>
                 </button>
@@ -202,7 +202,7 @@ export default function RatingPanel({
         </>
       )}
 
-      <p className="mt-2.5 border-t border-[var(--border)] pt-2 text-[10px] leading-relaxed text-[var(--muted)]">
+      <p className="mt-2.5 border-t border-[var(--border)] pt-2 text-[var(--text-2xs)] leading-relaxed text-[var(--text-muted)]">
         평가는 의왕시 안에서 위치가 확인된 경우에만 가능하고, 한 기기당 가게별 1회입니다.
         가게 정보는 카카오 로컬 기준입니다.
       </p>

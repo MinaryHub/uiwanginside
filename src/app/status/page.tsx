@@ -5,10 +5,10 @@ import { headers } from "next/headers";
 export const dynamic = "force-dynamic";
 
 const STATUS_META = {
-  live: { label: "정상", color: "#10b981", emoji: "✅" },
-  fallback: { label: "대체 동작", color: "#3b82f6", emoji: "🔵" },
-  error: { label: "오류", color: "#dc2626", emoji: "❌" },
-  missing: { label: "키 없음", color: "#9ca3af", emoji: "⚪" },
+  live: { label: "정상", color: "var(--ok)", emoji: "✅" },
+  fallback: { label: "대체 동작", color: "var(--info)", emoji: "🔵" },
+  error: { label: "오류", color: "var(--danger)", emoji: "❌" },
+  missing: { label: "키 없음", color: "var(--text-faint)", emoji: "⚪" },
 } as const;
 
 export default async function StatusPage() {
@@ -28,22 +28,22 @@ export default async function StatusPage() {
   }
 
   return (
-    <main className="mx-auto max-w-3xl px-5 py-8">
+    <main className="mx-auto max-w-3xl px-5 py-10">
       <div className="mb-6 flex items-baseline gap-3">
-        <h1 className="text-xl font-extrabold tracking-tight">API 연동 상태</h1>
-        <Link href="/" className="text-[12px] font-semibold text-[var(--brand)]">
+        <h1 className="text-[var(--text-lg)] font-extrabold tracking-tight">API 연동 상태</h1>
+        <Link href="/" className="text-[var(--text-xs)] font-semibold text-[var(--brand)]">
           ← 포털로
         </Link>
       </div>
 
       {error && (
-        <p className="rounded-lg bg-red-500/10 p-3 text-[13px] text-red-600">{error}</p>
+        <p className="rounded-[var(--radius)] bg-[var(--danger-soft)] p-3 text-[var(--text-sm)] text-[var(--danger)]">{error}</p>
       )}
 
       {data && (
         <>
-          <p className="mb-5 text-[13px] text-[var(--muted)]">
-            <strong className="text-[var(--foreground)]">
+          <p className="mb-5 text-[var(--text-sm)] text-[var(--text-muted)]">
+            <strong className="text-[var(--text)]">
               {data.summary.live} / {data.summary.total}
             </strong>{" "}
             연동 정상 · 이 페이지를 새로고침하면 각 API 를 실제로 1회 호출해 다시 진단합니다.
@@ -55,37 +55,37 @@ export default async function StatusPage() {
               return (
                 <li
                   key={c.id}
-                  className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5"
+                  className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-3.5"
                   style={{ borderLeft: `3px solid ${m.color}` }}
                 >
                   <div className="mb-1 flex flex-wrap items-center gap-2">
-                    <span className="text-[13.5px] font-bold">{c.label}</span>
+                    <span className="text-[var(--text-base)] font-bold">{c.label}</span>
                     <span
-                      className="rounded px-1.5 py-0.5 text-[10.5px] font-bold text-white"
+                      className="rounded px-1.5 py-0.5 text-[var(--text-2xs)] font-bold text-[var(--surface)]"
                       style={{ background: m.color }}
                     >
                       {m.emoji} {m.label}
                     </span>
                     {c.latencyMs != null && (
-                      <span className="text-[10.5px] text-[var(--muted)]">
+                      <span className="text-[var(--text-2xs)] text-[var(--text-muted)]">
                         {c.latencyMs}ms
                       </span>
                     )}
-                    <code className="ml-auto text-[10.5px] text-[var(--muted)]">
+                    <code className="ml-auto text-[var(--text-2xs)] text-[var(--text-muted)]">
                       {c.envVars.join(", ")}
                     </code>
                   </div>
 
-                  <p className="text-[12.5px] leading-snug">{c.detail}</p>
+                  <p className="text-[var(--text-sm)] leading-snug">{c.detail}</p>
 
                   {c.fallback && (
-                    <p className="mt-1 text-[11.5px] font-semibold text-blue-500">
+                    <p className="mt-1 text-[var(--text-xs)] font-semibold text-[var(--info)]">
                       대체 소스: {c.fallback}
                     </p>
                   )}
 
                   {c.status !== "live" && (
-                    <p className="mt-1.5 rounded-md bg-[var(--surface-2)] px-2 py-1 text-[11px] text-[var(--muted)]">
+                    <p className="mt-1.5 rounded-md bg-[var(--surface-2)] px-2 py-1 text-[var(--text-xs)] text-[var(--text-muted)]">
                       발급: {c.howTo}
                     </p>
                   )}
@@ -94,7 +94,7 @@ export default async function StatusPage() {
             })}
           </ul>
 
-          <p className="mt-5 text-[11px] text-[var(--muted)]">
+          <p className="mt-5 text-[var(--text-xs)] text-[var(--text-muted)]">
             진단 시각 {new Date(data.checkedAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}{" "}
             · 키 변경 후에는 개발 서버를 재시작해야 반영됩니다.
           </p>

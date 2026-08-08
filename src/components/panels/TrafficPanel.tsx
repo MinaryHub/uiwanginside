@@ -3,18 +3,20 @@
 import { Card, Skeleton, Badge, Empty, LiveDot, Unavailable, timeAgo } from "@/components/ui";
 import type { TrafficPayload, ApiEnvelope, Incident } from "@/lib/types";
 
-const KIND_META: Record<Incident["kind"], { label: string; color: string; emoji: string }> = {
-  accident: { label: "사고", color: "#dc2626", emoji: "🚨" },
-  construction: { label: "공사", color: "#d97706", emoji: "🚧" },
-  closure: { label: "통제", color: "#7c2d12", emoji: "⛔" },
-  weather: { label: "기상", color: "#2563eb", emoji: "🌧️" },
-  etc: { label: "기타", color: "#6b7280", emoji: "❗" },
+type Tone = "danger" | "warn" | "info" | "neutral";
+
+const KIND_META: Record<Incident["kind"], { label: string; tone: Tone; emoji: string }> = {
+  accident: { label: "사고", tone: "danger", emoji: "🚨" },
+  construction: { label: "공사", tone: "warn", emoji: "🚧" },
+  closure: { label: "통제", tone: "danger", emoji: "⛔" },
+  weather: { label: "기상", tone: "info", emoji: "🌧️" },
+  etc: { label: "기타", tone: "neutral", emoji: "❗" },
 };
 
 const LEVEL_META = {
-  congested: { label: "정체", color: "#dc2626" },
-  slow: { label: "서행", color: "#f59e0b" },
-  smooth: { label: "원활", color: "#16a34a" },
+  congested: { label: "정체", color: "var(--danger)" },
+  slow: { label: "서행", color: "var(--warn)" },
+  smooth: { label: "원활", color: "var(--ok)" },
 } as const;
 
 export default function TrafficPanel({
@@ -48,7 +50,7 @@ export default function TrafficPanel({
               {(["congested", "slow", "smooth"] as const).map((lv) => (
                 <div
                   key={lv}
-                  className="flex flex-1 flex-col items-center rounded-lg py-1.5"
+                  className="flex flex-1 flex-col items-center rounded-[var(--radius)] py-1.5"
                   style={{ background: `${LEVEL_META[lv].color}18` }}
                 >
                   <span
@@ -57,7 +59,7 @@ export default function TrafficPanel({
                   >
                     {counts[lv] ?? 0}
                   </span>
-                  <span className="mt-0.5 text-[10.5px] font-semibold text-[var(--muted)]">
+                  <span className="mt-0.5 text-[var(--text-2xs)] font-semibold text-[var(--text-muted)]">
                     {LEVEL_META[lv].label}
                   </span>
                 </div>
@@ -65,7 +67,7 @@ export default function TrafficPanel({
             </div>
           )}
 
-          <h3 className="mb-1.5 text-[11px] font-bold text-[var(--muted)]">돌발상황</h3>
+          <h3 className="mb-1.5 text-[var(--text-xs)] font-bold text-[var(--text-muted)]">돌발상황</h3>
           {incidents.length === 0 ? (
             <Empty>현재 보고된 사고·통제가 없습니다 👍</Empty>
           ) : (
@@ -79,20 +81,20 @@ export default function TrafficPanel({
                       type="button"
                       disabled={!clickable}
                       onClick={() => clickable && onFocus(inc.lat!, inc.lng!)}
-                      className="w-full rounded-lg bg-[var(--surface-2)] px-2.5 py-2 text-left transition hover:brightness-95 disabled:cursor-default"
+                      className="w-full rounded-[var(--radius)] bg-[var(--surface-2)] px-2.5 py-2 text-left transition hover:brightness-95 disabled:cursor-default"
                     >
                       <div className="mb-0.5 flex items-center gap-1.5">
-                        <Badge color={m.color} filled>
+                        <Badge tone={m.tone} filled>
                           {m.emoji} {m.label}
                         </Badge>
-                        <span className="truncate text-[11px] font-semibold text-[var(--muted)]">
+                        <span className="truncate text-[var(--text-xs)] font-semibold text-[var(--text-muted)]">
                           {inc.road}
                         </span>
-                        <span className="ml-auto shrink-0 text-[10.5px] text-[var(--muted)]">
+                        <span className="ml-auto shrink-0 text-[var(--text-2xs)] text-[var(--text-muted)]">
                           {timeAgo(inc.startedAt)}
                         </span>
                       </div>
-                      <p className="line-clamp-2 text-[12px] leading-snug">{inc.message}</p>
+                      <p className="line-clamp-2 text-[var(--text-xs)] leading-snug">{inc.message}</p>
                     </button>
                   </li>
                 );
@@ -102,26 +104,26 @@ export default function TrafficPanel({
 
           {links.length > 0 && (
             <>
-              <h3 className="mb-1.5 mt-3 text-[11px] font-bold text-[var(--muted)]">
+              <h3 className="mb-1.5 mt-3 text-[var(--text-xs)] font-bold text-[var(--text-muted)]">
                 정체 구간 TOP {Math.min(5, links.length)}
               </h3>
               <ul className="space-y-1">
                 {links.slice(0, 5).map((l) => (
                   <li
                     key={l.id}
-                    className="flex items-center gap-2 rounded-lg bg-[var(--surface-2)] px-2.5 py-1.5"
+                    className="flex items-center gap-2 rounded-[var(--radius)] bg-[var(--surface-2)] px-2.5 py-1.5"
                   >
                     <span
                       className="h-1.5 w-1.5 shrink-0 rounded-full"
                       style={{ background: LEVEL_META[l.level].color }}
                     />
-                    <span className="flex-1 truncate text-[12px]">{l.name}</span>
+                    <span className="flex-1 truncate text-[var(--text-xs)]">{l.name}</span>
                     <span
-                      className="shrink-0 text-[12px] font-bold"
+                      className="shrink-0 text-[var(--text-xs)] font-bold"
                       style={{ color: LEVEL_META[l.level].color }}
                     >
                       {l.speed}
-                      <span className="text-[9.5px] font-medium">km/h</span>
+                      <span className="text-[var(--text-2xs)] font-medium">km/h</span>
                     </span>
                   </li>
                 ))}

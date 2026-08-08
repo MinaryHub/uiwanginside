@@ -8,19 +8,19 @@ import type { TransitPayload, ApiEnvelope, BusArrival } from "@/lib/types";
  * null 은 운행 정보가 없다는 뜻이므로 절대 "곧 도착" 으로 보여선 안 된다.
  */
 function eta(sec: number | null) {
-  if (sec == null) return { text: "운행없음", color: "var(--muted)" };
+  if (sec == null) return { text: "운행없음", color: "var(--text-muted)" };
   const min = Math.floor(sec / 60);
-  if (min < 1) return { text: "곧 도착", color: "#dc2626" };
-  if (min <= 3) return { text: `${min}분`, color: "#dc2626" };
-  if (min <= 7) return { text: `${min}분`, color: "#ea580c" };
-  return { text: `${min}분`, color: "var(--foreground)" };
+  if (min < 1) return { text: "곧 도착", color: "var(--danger)" };
+  if (min <= 3) return { text: `${min}분`, color: "var(--danger)" };
+  if (min <= 7) return { text: `${min}분`, color: "var(--warn)" };
+  return { text: `${min}분`, color: "var(--text)" };
 }
 
 const CROWD: Record<number, { label: string; color: string }> = {
-  1: { label: "여유", color: "#16a34a" },
-  2: { label: "보통", color: "#f59e0b" },
-  3: { label: "혼잡", color: "#dc2626" },
-  4: { label: "매우혼잡", color: "#991b1b" },
+  1: { label: "여유", color: "var(--ok)" },
+  2: { label: "보통", color: "var(--warn)" },
+  3: { label: "혼잡", color: "var(--danger)" },
+  4: { label: "매우혼잡", color: "var(--danger)" },
 };
 
 function ArrivalRow({ a }: { a: BusArrival }) {
@@ -31,21 +31,21 @@ function ArrivalRow({ a }: { a: BusArrival }) {
   return (
     <li className="py-1">
       <div className="flex items-center gap-1.5">
-        <span className="w-12 shrink-0 truncate text-[12.5px] font-extrabold text-blue-600 dark:text-blue-400">
+        <span className="w-12 shrink-0 truncate text-[var(--text-sm)] font-extrabold text-[var(--info)]">
           {a.routeName}
         </span>
         {a.destName && (
-          <span className="min-w-0 flex-1 truncate text-[10.5px] text-[var(--muted)]">
+          <span className="min-w-0 flex-1 truncate text-[var(--text-2xs)] text-[var(--text-muted)]">
             {a.destName} 방면
           </span>
         )}
         <span
-          className="ml-auto shrink-0 text-[13px] font-extrabold tabular-nums"
+          className="ml-auto shrink-0 text-[var(--text-sm)] font-extrabold tabular-nums"
           style={{ color: first.color }}
         >
           {first.text}
         </span>
-        <span className="w-8 shrink-0 text-right text-[10.5px] text-[var(--muted)] tabular-nums">
+        <span className="w-8 shrink-0 text-right text-[var(--text-2xs)] text-[var(--text-muted)] tabular-nums">
           {a.predictSec2 != null ? second.text : ""}
         </span>
       </div>
@@ -54,20 +54,20 @@ function ArrivalRow({ a }: { a: BusArrival }) {
       {(a.stationsLeft != null || crowd || a.remainSeats != null || a.lowPlate) && (
         <div className="mt-0.5 flex items-center gap-1.5 pl-[54px]">
           {a.stationsLeft != null && a.stationsLeft > 0 && (
-            <span className="text-[10px] text-[var(--muted)]">
+            <span className="text-[var(--text-2xs)] text-[var(--text-muted)]">
               {a.stationsLeft}번째 전
             </span>
           )}
           {crowd && (
-            <span className="text-[10px] font-bold" style={{ color: crowd.color }}>
+            <span className="text-[var(--text-2xs)] font-bold" style={{ color: crowd.color }}>
               {crowd.label}
             </span>
           )}
           {a.remainSeats != null && (
-            <span className="text-[10px] text-[var(--muted)]">좌석 {a.remainSeats}</span>
+            <span className="text-[var(--text-2xs)] text-[var(--text-muted)]">좌석 {a.remainSeats}</span>
           )}
           {a.lowPlate && (
-            <span className="rounded bg-green-600/15 px-1 text-[9.5px] font-bold text-green-700 dark:text-green-400">
+            <span className="rounded bg-[var(--ok-soft)] px-1 text-[var(--text-2xs)] font-bold text-[var(--ok)]">
               저상
             </span>
           )}
@@ -98,7 +98,7 @@ export default function TransitPanel({
         positionOnly ? (
           <span
             title="정류소 위치만 실제 데이터 · 도착 시간은 표시할 수 없음"
-            className="text-[10.5px] font-bold text-blue-500"
+            className="text-[var(--text-2xs)] font-bold text-[var(--info)]"
           >
             위치만
           </span>
@@ -116,23 +116,23 @@ export default function TransitPanel({
       ) : (
         <div className="space-y-2">
           {stops.map((s) => (
-            <div key={s.stationId} className="rounded-lg bg-[var(--surface-2)] p-2.5">
+            <div key={s.stationId} className="rounded-[var(--radius)] bg-[var(--surface-2)] p-2.5">
               <button
                 type="button"
                 onClick={() => onFocus(s.lat, s.lng)}
                 className="mb-1 flex w-full items-center gap-1.5 text-left"
               >
-                <span className="truncate text-[12.5px] font-bold">{s.name}</span>
+                <span className="truncate text-[var(--text-sm)] font-bold">{s.name}</span>
                 {s.mobileNo && (
                   <span
                     title="정류소 번호 (표지판에 적힌 숫자)"
-                    className="shrink-0 rounded bg-[var(--surface)] px-1 text-[10px] font-semibold text-[var(--muted)]"
+                    className="shrink-0 rounded bg-[var(--surface)] px-1 text-[var(--text-2xs)] font-semibold text-[var(--text-muted)]"
                   >
                     {s.mobileNo}
                   </span>
                 )}
                 {s.distance != null && (
-                  <span className="ml-auto shrink-0 text-[10.5px] text-[var(--muted)]">
+                  <span className="ml-auto shrink-0 text-[var(--text-2xs)] text-[var(--text-muted)]">
                     {s.distance >= 1000
                       ? `${(s.distance / 1000).toFixed(1)}km`
                       : `${s.distance}m`}
@@ -147,7 +147,7 @@ export default function TransitPanel({
                   ))}
                 </ul>
               ) : (
-                <p className="py-1 text-[11.5px] text-[var(--muted)]">
+                <p className="py-1 text-[var(--text-xs)] text-[var(--text-muted)]">
                   {positionOnly ? "도착정보 미연동" : "지금 운행 중인 버스가 없습니다"}
                 </p>
               )}
