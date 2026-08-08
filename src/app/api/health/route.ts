@@ -50,6 +50,17 @@ async function checkKakaoRest(): Promise<Partial<HealthCheck>> {
   if (err) return { status: "error", detail: msg(err), latencyMs };
   if (!res!.ok) {
     const body = await res!.text();
+    // 키는 유효한데 앱에서 카카오맵 제품이 꺼져 있는 경우가 흔하다.
+    // 이 설정은 JS SDK 지도 렌더링에도 함께 영향을 준다.
+    if (body.includes("OPEN_MAP_AND_LOCAL")) {
+      return {
+        status: "error",
+        detail:
+          "카카오맵 서비스가 앱에서 비활성 상태입니다 — developers.kakao.com → 내 애플리케이션 → 제품 설정 → 카카오맵 → 활성화 ON (지도 렌더링에도 동일하게 필요)",
+        fallback: "OpenStreetMap (Overpass)",
+        latencyMs,
+      };
+    }
     return {
       status: "error",
       detail: `HTTP ${res!.status} — ${body.slice(0, 140)}`,

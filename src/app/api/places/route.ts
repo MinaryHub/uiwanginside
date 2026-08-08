@@ -36,7 +36,10 @@ async function searchCategory(
     const res = await timedFetch(url, {
       headers: { Authorization: `KakaoAK ${key}` },
     });
-    if (!res.ok) break;
+    // 오류를 삼키면 "결과 0건" 으로 둔갑해 OSM 폴백이 동작하지 않는다.
+    if (!res.ok) {
+      throw new Error(`kakao ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    }
     const json = (await res.json()) as {
       documents: KakaoDoc[];
       meta: { is_end: boolean };
