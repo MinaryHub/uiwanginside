@@ -33,6 +33,40 @@ function msg(e: unknown) {
   return e instanceof Error ? e.message : String(e);
 }
 
+/**
+ * 지도 SDK 는 Referer 로 등록 도메인을 검사한다.
+ * 실제 배포 origin 을 Referer 로 보내 도메인 등록 여부까지 확인한다.
+ */
+async function checkKakaoJs(origin: string): Promise<Partial<HealthCheck>> {
+  const key = process.env.NEXT_PUBLIC_KAKAO_JS_KEY;
+  if (!key) return { status: "missing", detail: "키 없음 — 지도가 표시되지 않습니다" };
+
+  const [res, latencyMs, err] = await timed(() =>
+    timedFetch(`https://dapi.kakao.com/v2/maps/sdk.js?appkey=${key}&autoload=false`, {
+      headers: { Referer: `${origin}/` },
+    }),
+  );
+  if (err) return { status: "error", detail: msg(err), latencyMs };
+
+  const text = await res!.text();
+  if (res!.ok && !text.trimStart().startsWith("{"))
+    return { status: "live", detail: `정상 · ${origin} 도메인 허용됨`, latencyMs };
+
+  if (text.includes("domain mismatched"))
+    return {
+      status: "error",
+      detail: `도메인 미등록 — 카카오 개발자 콘솔 → 앱 설정 → 플랫폼 → Web 에 ${origin} 등록 필요`,
+      latencyMs,
+    };
+  if (text.includes("OPEN_MAP_AND_LOCAL"))
+    return {
+      status: "error",
+      detail: "카카오맵 제품이 비활성 상태 — 제품 설정 → 카카오맵 → 활성화 ON",
+      latencyMs,
+    };
+  return { status: "error", detail: `HTTP ${res!.status} — ${text.slice(0, 140)}`, latencyMs };
+}
+
 async function checkKakaoRest(): Promise<Partial<HealthCheck>> {
   const key = process.env.KAKAO_REST_KEY;
   if (!key)
@@ -247,7 +281,9 @@ const SPECS: Omit<HealthCheck, "status" | "detail" | "configured">[] = [
   },
 ];
 
-export async function GET() {
+export async function GET(req: Request) {
+  const origin = new URL(req.url).origin;
+
   const [kakaoRest, kma, naver, its, gbisStation, gbisArrival] = await Promise.all([
     checkKakaoRest(),
     checkKma(),
@@ -257,14 +293,8 @@ export async function GET() {
     checkGbisArrival(),
   ]);
 
-  const jsKey = process.env.NEXT_PUBLIC_KAKAO_JS_KEY;
   const results: Record<string, Partial<HealthCheck>> = {
-    "kakao-js": jsKey
-      ? {
-          status: "live",
-          detail: "키 설정됨 — 실제 렌더링 여부는 브라우저에서 확인 (도메인 등록 필요)",
-        }
-      : { status: "missing", detail: "키 없음 — 지도가 표시되지 않습니다" },
+    "kakao-js": await checkKakaoJs(origin),
     "kakao-rest": kakaoRest,
     kma,
     naver,

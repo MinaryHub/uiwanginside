@@ -16,7 +16,10 @@ function loadSdk(appKey: string): Promise<void> {
     script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${appKey}&autoload=false`;
     script.async = true;
     script.onload = () => window.kakao.maps.load(() => resolve());
-    script.onerror = () => reject(new Error("카카오맵 SDK 로드 실패"));
+    // script 태그의 onerror 로는 HTTP 상태/본문을 읽을 수 없다.
+    // 실제 원인은 대부분 도메인 미등록 또는 카카오맵 제품 비활성 둘 중 하나다.
+    script.onerror = () =>
+      reject(new Error("카카오맵 SDK 를 불러오지 못했습니다 (도메인 미등록 또는 제품 비활성)"));
     document.head.appendChild(script);
   });
   return sdkPromise;
@@ -106,6 +109,9 @@ export default function KakaoMap({
   const error = appKey
     ? sdkError
     : "NEXT_PUBLIC_KAKAO_JS_KEY 가 설정되지 않았습니다.";
+
+  // ssr:false 로 동적 로드되는 컴포넌트라 렌더 중 window 접근이 안전하다
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
 
   // 최신 콜백을 ref 로 유지 — 지도 재생성 없이 dragend 핸들러가 최신 함수를 참조
   useEffect(() => {
@@ -246,17 +252,41 @@ export default function KakaoMap({
     <div className="relative h-full w-full">
       <div ref={containerRef} className="h-full w-full" />
       {error && (
-        <div className="absolute inset-0 grid place-items-center bg-[var(--surface-2)] p-6 text-center">
+        <div className="absolute inset-0 grid place-items-center overflow-y-auto bg-[var(--surface-2)] p-6 text-center">
           <div className="max-w-md space-y-3">
             <div className="text-4xl">🗺️</div>
             <p className="font-semibold">지도를 표시할 수 없습니다</p>
             <p className="text-sm text-[var(--muted)]">{error}</p>
-            <p className="rounded-lg bg-[var(--surface)] p-3 text-left text-xs leading-relaxed text-[var(--muted)]">
-              <code>.env.local</code> 에 <code>NEXT_PUBLIC_KAKAO_JS_KEY</code> 를 추가하고
-              카카오 개발자 콘솔 &gt; 앱 설정 &gt; 플랫폼 &gt; Web 에{" "}
-              <code>http://localhost:3000</code> 을 등록하세요. 사이드 패널의 목록/실시간
-              정보는 지도 없이도 동작합니다.
-            </p>
+            <div className="rounded-lg bg-[var(--surface)] p-3 text-left text-xs leading-relaxed text-[var(--muted)]">
+              {appKey ? (
+                <>
+                  <p className="mb-2">
+                    키는 설정돼 있습니다. 카카오 개발자 콘솔에서 두 가지를 확인하세요.
+                  </p>
+                  <p className="mb-1.5">
+                    <strong className="text-[var(--foreground)]">① 플랫폼 &gt; Web</strong> 에
+                    현재 주소를 등록:
+                    <br />
+                    <code className="mt-1 inline-block rounded bg-[var(--surface-2)] px-1.5 py-0.5 break-all">
+                      {origin || "현재 도메인"}
+                    </code>
+                  </p>
+                  <p>
+                    <strong className="text-[var(--foreground)]">② 제품 설정 &gt; 카카오맵</strong>{" "}
+                    활성화 ON
+                  </p>
+                </>
+              ) : (
+                <p>
+                  <code>NEXT_PUBLIC_KAKAO_JS_KEY</code> 가 설정되지 않았습니다. 로컬은{" "}
+                  <code>.env.local</code>, 배포 환경은 호스팅 환경변수에 추가한 뒤 재시작(재배포)
+                  하세요.
+                </p>
+              )}
+              <p className="mt-2 border-t border-[var(--border)] pt-2">
+                사이드 패널의 목록·실시간 정보는 지도 없이도 정상 동작합니다.
+              </p>
+            </div>
           </div>
         </div>
       )}
