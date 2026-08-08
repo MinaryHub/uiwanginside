@@ -16,15 +16,12 @@ export const UIWANG = {
   defaultRadius: 4000,
 } as const;
 
-/** 의왕시 행정동 — 지도 빠른 이동용 */
-export const DONGS: { name: string; lat: number; lng: number }[] = [
-  { name: "고천동", lat: 37.3435, lng: 126.9702 },
-  { name: "부곡동", lat: 37.3186, lng: 126.9575 },
-  { name: "오전동", lat: 37.3517, lng: 126.9642 },
-  { name: "내손1동", lat: 37.3742, lng: 126.9686 },
-  { name: "내손2동", lat: 37.3801, lng: 126.9744 },
-  { name: "청계동", lat: 37.3946, lng: 126.9986 },
-];
+/**
+ * 의왕시 행정동.
+ * 좌표·인구·면적의 단일 출처는 population.ts 의 DONG_POPULATION 이다.
+ * 두 곳에 좌표를 두면 반드시 어긋나므로 여기서는 다시 내보내기만 한다.
+ */
+export { DONG_POPULATION as DONGS } from "./population";
 
 /**
  * 주요 랜드마크.

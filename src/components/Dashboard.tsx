@@ -20,6 +20,7 @@ import WeatherPanel from "@/components/panels/WeatherPanel";
 import TrafficPanel from "@/components/panels/TrafficPanel";
 import TransitPanel from "@/components/panels/TransitPanel";
 import NewsPanel from "@/components/panels/NewsPanel";
+import PopulationPanel from "@/components/panels/PopulationPanel";
 import { hhmm } from "@/components/ui";
 
 const KakaoMap = dynamic(() => import("@/components/KakaoMap"), { ssr: false });
@@ -140,6 +141,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             <button
               key={d.name}
               type="button"
+              title={`인구 ${d.population.toLocaleString("ko-KR")}명 · ${d.area}km²`}
               onClick={() => focus(d.lat, d.lng, 5)}
               className="shrink-0 rounded-full border border-[var(--border)] px-2.5 py-1 text-[11.5px] font-semibold text-[var(--muted)] transition hover:border-[var(--brand)] hover:text-[var(--brand)]"
             >
@@ -308,6 +310,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           }`}
         >
           <WeatherPanel res={weather.data} isLoading={weather.isLoading} />
+          <PopulationPanel onFocus={(lat, lng) => focus(lat, lng, 5)} />
           <TrafficPanel
             res={traffic.data}
             isLoading={traffic.isLoading}
