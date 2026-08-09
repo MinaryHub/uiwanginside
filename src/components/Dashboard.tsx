@@ -9,6 +9,7 @@ import { useDebounced } from "@/lib/useDebounced";
 import { parseUrlState, useSyncUrl, shareUrl } from "@/lib/urlState";
 import { UIWANG, DONGS, LANDMARKS } from "@/lib/uiwang";
 import { UIWANG_BBOX } from "@/lib/uiwang-boundary";
+import { DONG_BBOX, type LatLngBox } from "@/lib/dong-boundaries";
 import { MODES, MODE_MAP, type ModeId, type CardId } from "@/lib/modes";
 import type {
   ApiEnvelope,
@@ -61,6 +62,8 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
   const [tab, setTab] = useState<MobileTab>("map");
   const [showBoundary, setShowBoundary] = useState(true);
   const [activeDong, setActiveDong] = useState<string | null>(null);
+  /** 이 범위가 화면에 다 들어오도록 맞춘다 (동 전체보기 등) */
+  const [fitBounds, setFitBounds] = useState<LatLngBox | null>(null);
 
   const def = MODE_MAP[mode];
 
@@ -144,6 +147,8 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
 
   // ── 동작 ──────────────────────────────────────────────
   const focus = useCallback((lat: number, lng: number, lv = 4) => {
+    // 특정 지점으로 가는 동작이므로 진행 중인 범위 맞춤은 취소한다
+    setFitBounds(null);
     setCenter({ lat, lng });
     setLevel(lv);
     setTab("map");
@@ -153,21 +158,30 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     setMode(next);
     setSelectedPlaceId(null);
     setActiveDong(null);
+    setFitBounds(null);
     setLevel(MODE_MAP[next].level);
     setTab("map");
   }, []);
 
-  /** 동을 누르면 경계를 강조하고 그리로 이동. 같은 동을 다시 누르면 해제한다. */
-  const toggleDong = useCallback(
-    (d: { name: string; lat: number; lng: number }) => {
-      setActiveDong((cur) => {
-        if (cur === d.name) return null;
-        focus(d.lat, d.lng, 5);
-        return d.name;
-      });
-    },
-    [focus],
-  );
+  /**
+   * 동을 누르면 경계를 강조하고 동 전체가 화면에 들어오도록 맞춘다.
+   * 동마다 면적이 4배 넘게 차이나(청계동 22km² vs 내손2동 2.5km²) 고정 확대
+   * 수준으로는 어떤 동은 잘리고 어떤 동은 너무 작게 보인다.
+   * 같은 동을 다시 누르면 해제한다.
+   */
+  const toggleDong = useCallback((d: { name: string }) => {
+    setActiveDong((cur) => {
+      if (cur === d.name) {
+        setFitBounds(null);
+        return null;
+      }
+      const box = DONG_BBOX[d.name];
+      // 새 객체로 넘겨야 같은 동을 다시 골랐을 때도 다시 맞춰진다
+      if (box) setFitBounds({ ...box });
+      setTab("map");
+      return d.name;
+    });
+  }, []);
 
   const handleSelectPlace = useCallback(
     (p: Place) => {
@@ -383,6 +397,12 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             landmarks={mode === "explore" ? LANDMARKS : []}
             showBoundary={showBoundary}
             activeDong={activeDong}
+            fitBounds={fitBounds}
+            onViewFitted={(c, lv) => {
+              // 맞춘 결과를 상태에 반영해 주변 장소·정류소 조회가 새 위치를 따르게 한다
+              setCenter(c);
+              setLevel(lv);
+            }}
             dimOutside={showBoundary && mode === "explore"}
             selectedPlaceId={selectedPlaceId}
             onSelectPlace={handleSelectPlace}
@@ -427,13 +447,11 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           <div className="absolute right-3 top-3 z-10 flex flex-col gap-1.5">
             <button
               type="button"
-              onClick={() =>
-                focus(
-                  (UIWANG_BBOX.minLat + UIWANG_BBOX.maxLat) / 2,
-                  (UIWANG_BBOX.minLng + UIWANG_BBOX.maxLng) / 2,
-                  8,
-                )
-              }
+              onClick={() => {
+                setActiveDong(null);
+                setFitBounds({ ...UIWANG_BBOX });
+                setTab("map");
+              }}
               className="grid h-11 w-11 place-items-center rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)]/95 text-[var(--text-base)] shadow-[var(--shadow-md)] backdrop-blur transition hover:border-[var(--brand)]"
               title="의왕시 전체보기"
             >

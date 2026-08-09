@@ -18,7 +18,14 @@ declare namespace kakao.maps {
     setLevel(level: number, options?: { animate?: boolean }): void;
     getLevel(): number;
     panTo(latlng: LatLng): void;
-    setBounds(bounds: LatLngBounds): void;
+    /** padding 은 상·우·하·좌 순서 (px) */
+    setBounds(
+      bounds: LatLngBounds,
+      paddingTop?: number,
+      paddingRight?: number,
+      paddingBottom?: number,
+      paddingLeft?: number,
+    ): void;
     relayout(): void;
   }
   class CustomOverlay {

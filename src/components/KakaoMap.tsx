@@ -101,6 +101,13 @@ export interface KakaoMapProps {
   showBoundary: boolean;
   /** 강조할 행정동 이름 (null 이면 없음) */
   activeDong: string | null;
+  /**
+   * 이 범위가 화면에 다 들어오도록 맞춘다.
+   * 새 객체가 오면 다시 맞추므로, 같은 동을 다시 눌러도 동작한다.
+   */
+  fitBounds: { minLat: number; maxLat: number; minLng: number; maxLng: number } | null;
+  /** setBounds 로 뷰가 바뀐 뒤 실제 중심·확대 수준을 알려준다 */
+  onViewFitted: (center: { lat: number; lng: number }, level: number) => void;
   /** 경계 바깥을 어둡게 덮어 시 영역을 강조 */
   dimOutside: boolean;
   selectedPlaceId: string | null;
@@ -122,6 +129,8 @@ export default function KakaoMap({
   landmarks,
   showBoundary,
   activeDong,
+  fitBounds,
+  onViewFitted,
   dimOutside,
   selectedPlaceId,
   onSelectPlace,
@@ -134,6 +143,7 @@ export default function KakaoMap({
   const boundaryRef = useRef<kakao.maps.Polygon[]>([]);
   const dongRef = useRef<kakao.maps.Polygon[]>([]);
   const movedRef = useRef(onMapMoved);
+  const fittedRef = useRef(onViewFitted);
   const [ready, setReady] = useState(false);
   const [sdkError, setSdkError] = useState<string | null>(null);
 
@@ -147,7 +157,8 @@ export default function KakaoMap({
   // 최신 콜백을 ref 로 유지 — 지도 재생성 없이 dragend 핸들러가 최신 함수를 참조
   useEffect(() => {
     movedRef.current = onMapMoved;
-  }, [onMapMoved]);
+    fittedRef.current = onViewFitted;
+  }, [onMapMoved, onViewFitted]);
 
   // SDK 로드 + 지도 생성
   useEffect(() => {
@@ -174,6 +185,22 @@ export default function KakaoMap({
     // 최초 1회만 — center/level 변경은 아래 effect 가 처리
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appKey]);
+
+  /**
+   * 범위 맞춤. 동 경계처럼 크기가 제각각인 영역을 화면에 담을 때 쓴다.
+   * 맞춘 뒤 실제 중심·확대 수준을 위로 알려, 주변 장소 조회가 새 위치를 따르게 한다.
+   */
+  useEffect(() => {
+    if (!ready || !mapRef.current || !fitBounds) return;
+    const map = mapRef.current;
+    const b = new window.kakao.maps.LatLngBounds();
+    b.extend(new window.kakao.maps.LatLng(fitBounds.minLat, fitBounds.minLng));
+    b.extend(new window.kakao.maps.LatLng(fitBounds.maxLat, fitBounds.maxLng));
+    // 경계선이 화면 끝에 붙지 않도록 여백을 준다
+    map.setBounds(b, 48, 48, 48, 48);
+    const c = map.getCenter();
+    fittedRef.current({ lat: c.getLat(), lng: c.getLng() }, map.getLevel());
+  }, [ready, fitBounds]);
 
   // 외부에서 center 변경 시 이동
   useEffect(() => {
