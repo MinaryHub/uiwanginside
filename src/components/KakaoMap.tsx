@@ -9,7 +9,6 @@ import type {
   Incident,
   BusStop,
   TrafficLink,
-  PlaceRating,
   BusPositionsPayload,
 } from "@/lib/types";
 
@@ -127,8 +126,6 @@ export interface KakaoMapProps {
   trafficLinks: TrafficLink[];
   /** 진료중인 병원·약국 (의료 모드) */
   medicalOpen: { id: string; name: string; kind: string; lat: number | null; lng: number | null }[];
-  /** placeId → 별점 집계. 있으면 마커에 함께 표시한다 */
-  ratings: Record<string, PlaceRating>;
   /** 추적 중인 노선의 실시간 버스 위치 */
   busPositions: BusPositionsPayload | null;
   /** 랜드마크 (둘러보기 모드) */
@@ -167,7 +164,6 @@ export default function KakaoMap({
   trafficLinks,
   medicalOpen,
   busPositions,
-  ratings,
   landmarks,
   showBoundary,
   activeDong,
@@ -394,13 +390,13 @@ export default function KakaoMap({
       const def = CATEGORY_MAP[p.category];
       if (!def) continue;
       const active = selectedPlaceId === p.id;
-      const r = ratings[p.id];
-      const label = r ? `${p.name} ★${r.avg.toFixed(1)}` : p.name;
+      // 별점은 이름표에 붙이지 않는다. 뒤늦게 도착하면 라벨이 바뀌며
+      // 마커가 다시 그려져 배지가 튀어나오는 것처럼 보인다. 상세 카드에서 보여준다.
       add(
         p.lat,
         p.lng,
         active || labelled
-          ? pinEl(def.emoji, def.color, label, { active })
+          ? pinEl(def.emoji, def.color, p.name, { active })
           : dotEl(def.color, def.emoji),
         active ? 90 : 10,
         () => onSelectPlace(p),
@@ -422,7 +418,6 @@ export default function KakaoMap({
     places,
     medicalOpen,
     landmarks,
-    ratings,
     selectedPlaceId,
     onSelectPlace,
   ]);

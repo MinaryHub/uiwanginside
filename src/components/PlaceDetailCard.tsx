@@ -67,16 +67,6 @@ export default function PlaceDetailCard({
                 {def.label}
               </span>
               {distance && <span>· {distance}</span>}
-              {rating && (
-                <>
-                  <span>·</span>
-                  <Stars value={rating.avg} size={11} />
-                  <span className="tnum font-bold text-[var(--text)]">
-                    {rating.avg.toFixed(1)}
-                  </span>
-                  <span>({rating.count})</span>
-                </>
-              )}
             </p>
           </div>
 
@@ -89,6 +79,28 @@ export default function PlaceDetailCard({
             ✕
           </button>
         </div>
+
+        {/* 별점 — 지도 마커가 아니라 여기서 보여준다 */}
+        {rating ? (
+          <div className="mt-3 flex items-center gap-2 rounded-[var(--radius)] bg-[var(--surface-2)] px-3 py-2.5">
+            <span className="tnum text-[var(--text-xl)] font-extrabold leading-none">
+              {rating.avg.toFixed(1)}
+            </span>
+            <div className="min-w-0">
+              <Stars value={rating.avg} size={14} />
+              <div className="mt-0.5 text-[var(--text-2xs)] text-[var(--text-muted)]">
+                시민 평가 {rating.count}건
+                {rating.mine ? ` · 내 별점 ${rating.mine}점` : ""}
+              </div>
+            </div>
+          </div>
+        ) : (
+          showRating && (
+            <p className="mt-3 text-[var(--text-xs)] text-[var(--text-faint)]">
+              아직 평가가 없습니다. 첫 번째로 별점을 남겨보세요.
+            </p>
+          )
+        )}
 
         {(place.roadAddress || place.address) && (
           <p className="mt-2 text-[var(--text-xs)] leading-relaxed text-[var(--text-muted)]">
@@ -135,19 +147,12 @@ export default function PlaceDetailCard({
                   ✓ 의왕시 확인됨 —{" "}
                   {rating?.mine ? "별점을 수정할 수 있습니다" : "별점을 매겨주세요"}
                 </p>
-                <div className="flex items-center gap-2">
-                  <StarInput
-                    value={rating?.mine ?? null}
-                    onChange={(n) => submit(place, n, comment)}
-                    disabled={busy}
-                    size={26}
-                  />
-                  {rating?.mine && (
-                    <span className="text-[var(--text-xs)] text-[var(--text-muted)]">
-                      내 별점 {rating.mine}점
-                    </span>
-                  )}
-                </div>
+                <StarInput
+                  value={rating?.mine ?? null}
+                  onChange={(n) => submit(place, n, comment)}
+                  disabled={busy}
+                  size={28}
+                />
                 <input
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}

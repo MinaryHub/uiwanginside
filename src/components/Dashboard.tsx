@@ -58,7 +58,6 @@ const NO_STOPS: BusStop[] = [];
 const NO_LINKS: TrafficLink[] = [];
 const NO_MEDICAL: MedicalPayload["places"] = [];
 const NO_LANDMARKS: typeof LANDMARKS = [];
-const NO_RATINGS: RatingsPayload["ratings"] = {};
 
 const POLL = {
   weather: 10 * 60_000,
@@ -269,8 +268,6 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
   const mapLinks = def?.layers.traffic
     ? (traffic.data?.data.links ?? NO_LINKS)
     : NO_LINKS;
-  const mapRatings =
-    mode === "food" ? (ratings.data?.data.ratings ?? NO_RATINGS) : NO_RATINGS;
   const mapLandmarks = mode === null ? LANDMARKS : NO_LANDMARKS;
   const mapBusPositions = busPositions.data?.ok ? busPositions.data.data : null;
 
@@ -371,7 +368,6 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           trafficLinks={mapLinks}
           medicalOpen={medicalMarkers}
           busPositions={mapBusPositions}
-          ratings={mapRatings}
           landmarks={mapLandmarks}
           showBoundary
           activeDong={activeDong}
