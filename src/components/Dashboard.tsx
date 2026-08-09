@@ -12,9 +12,12 @@ import { UIWANG_BBOX } from "@/lib/uiwang-boundary";
 import { DONG_BBOX, type LatLngBox } from "@/lib/dong-boundaries";
 import { MODES, MODE_MAP, type ModeId, type CardId } from "@/lib/modes";
 import { getDeviceId } from "@/lib/deviceId";
+import { timeAgo } from "@/components/ui";
 import type {
   ApiEnvelope,
   Place,
+  BusStop,
+  Incident,
   PlacesPayload,
   WeatherPayload,
   AirPayload,
@@ -27,6 +30,8 @@ import type {
 } from "@/lib/types";
 import SummaryStrip from "@/components/SummaryStrip";
 import PlaceDetailCard from "@/components/PlaceDetailCard";
+import StopCard from "@/components/StopCard";
+import MapCard from "@/components/MapCard";
 import PlacesPanel from "@/components/panels/PlacesPanel";
 import WeatherPanel from "@/components/panels/WeatherPanel";
 import AirPanel from "@/components/panels/AirPanel";
@@ -67,6 +72,13 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
   const [radius, setRadius] = useState<number>(initial.radius);
   const [fitBounds, setFitBounds] = useState<LatLngBox | null>(null);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
+  /**
+   * 지도에서 고른 정류소·사고. 장소 선택과 상호 배타다 —
+   * 카드가 두 개 겹쳐 뜨면 어느 것을 보고 있는지 알 수 없다.
+   */
+  const [marker, setMarker] = useState<
+    { kind: "stop"; stop: BusStop } | { kind: "incident"; incident: Incident } | null
+  >(null);
   const [activeDong, setActiveDong] = useState<string | null>(null);
   const [tracked, setTracked] = useState<{ id: string; name: string } | null>(null);
   const [newsQuery, setNewsQuery] = useState("의왕시");
@@ -194,6 +206,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
   }, []);
 
   const handleSelectPlace = useCallback((p: Place) => {
+    setMarker(null);
     setSelectedPlaceId((id) => {
       if (id === p.id) return null;
       setFitBounds(null);
@@ -202,6 +215,31 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
       return p.id;
     });
   }, []);
+
+  const selectStop = useCallback((stop: BusStop) => {
+    setSelectedPlaceId(null);
+    setMarker((cur) =>
+      cur?.kind === "stop" && cur.stop.stationId === stop.stationId
+        ? null
+        : { kind: "stop", stop },
+    );
+  }, []);
+
+  const selectIncident = useCallback((incident: Incident) => {
+    setSelectedPlaceId(null);
+    setMarker((cur) =>
+      cur?.kind === "incident" && cur.incident.id === incident.id
+        ? null
+        : { kind: "incident", incident },
+    );
+  }, []);
+
+  const markerId =
+    marker?.kind === "stop"
+      ? `stop:${marker.stop.stationId}`
+      : marker?.kind === "incident"
+        ? `incident:${marker.incident.id}`
+        : null;
 
   const selectedPlace = useMemo(
     () => placeList.find((p) => p.id === selectedPlaceId) ?? null,
@@ -313,7 +351,10 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           fitBounds={fitBounds}
           dimOutside={mode === null}
           selectedPlaceId={selectedPlaceId}
+          selectedMarkerId={markerId}
           onSelectPlace={handleSelectPlace}
+          onSelectStop={selectStop}
+          onSelectIncident={selectIncident}
           onMapMoved={setCenter}
           onViewFitted={(c, lv) => {
             setCenter(c);
@@ -467,6 +508,35 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           −
         </button>
       </div>
+
+      {marker?.kind === "stop" && (
+        <StopCard
+          key={marker.stop.stationId}
+          stop={marker.stop}
+          trackedRouteId={tracked?.id ?? null}
+          onTrackRoute={(rid, name) =>
+            setTracked((cur) => (cur?.id === rid ? null : { id: rid, name }))
+          }
+          onClose={() => setMarker(null)}
+        />
+      )}
+
+      {marker?.kind === "incident" && (
+        <MapCard
+          key={marker.incident.id}
+          title={marker.incident.type}
+          accent="var(--danger)"
+          subtitle={marker.incident.road || "돌발상황"}
+          onClose={() => setMarker(null)}
+        >
+          <p className="mt-3 text-[var(--text-sm)] leading-relaxed">
+            {marker.incident.message}
+          </p>
+          <p className="mt-2 text-[var(--text-2xs)] text-[var(--text-faint)]">
+            {timeAgo(marker.incident.startedAt)} 접수
+          </p>
+        </MapCard>
+      )}
 
       {selectedPlace && (
         <PlaceDetailCard

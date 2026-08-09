@@ -148,7 +148,11 @@ export interface KakaoMapProps {
   /** 경계 바깥을 어둡게 덮어 시 영역을 강조 */
   dimOutside: boolean;
   selectedPlaceId: string | null;
+  /** 정류소·사고 등 지도에서 고른 대상 */
+  selectedMarkerId: string | null;
   onSelectPlace: (p: Place) => void;
+  onSelectStop: (s: BusStop) => void;
+  onSelectIncident: (i: Incident) => void;
   onMapMoved: (c: { lat: number; lng: number }) => void;
 }
 
@@ -171,7 +175,10 @@ export default function KakaoMap({
   onViewFitted,
   dimOutside,
   selectedPlaceId,
+  selectedMarkerId,
   onSelectPlace,
+  onSelectStop,
+  onSelectIncident,
   onMapMoved,
 }: KakaoMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -403,18 +410,32 @@ export default function KakaoMap({
     // 진료중인 곳은 개수가 적고 중요도가 높아 항상 이름표를 붙인다
     for (const m of medicalOpen.slice(0, 40)) {
       if (m.lat == null || m.lng == null) continue;
-      add(m.lat, m.lng, pinEl(m.kind === "pharmacy" ? "💊" : "🏥", "#059669", m.name), 60);
+      add(
+        m.lat!,
+        m.lng!,
+        pinEl(m.kind === "pharmacy" ? "💊" : "🏥", "#17734f", m.name),
+        60,
+      );
     }
 
     for (const l of landmarks) {
       add(l.lat, l.lng, pinEl("📍", "#7c3aed", l.name), 50);
     }
 
-    for (const s of busStops.slice(0, 12)) {
-      const next = s.arrivals?.[0]?.predictSec;
+    for (const st of busStops.slice(0, 12)) {
+      const next = st.arrivals?.[0]?.predictSec;
       const label =
-        next != null ? `${s.name} · ${Math.max(1, Math.round(next / 60))}분` : s.name;
-      add(s.lat, s.lng, labelled ? pinEl("🚌", "#1d4ed8", label) : dotEl("#1d4ed8", "🚌"), 20);
+        next != null ? `${st.name} · ${Math.max(1, Math.round(next / 60))}분` : st.name;
+      const on = selectedMarkerId === `stop:${st.stationId}`;
+      add(
+        st.lat,
+        st.lng,
+        on || labelled
+          ? pinEl("🚌", "#1a5fb4", label, { active: on })
+          : dotEl("#1a5fb4", "🚌"),
+        on ? 92 : 20,
+        () => onSelectStop(st),
+      );
     }
 
     // 사고·통제는 건수가 적고 가장 중요하므로 항상 이름표 + 강조
@@ -424,8 +445,12 @@ export default function KakaoMap({
       add(
         inc.lat,
         inc.lng,
-        pinEl(st.emoji, st.color, inc.type, { pulse: inc.kind === "accident" }),
+        pinEl(st.emoji, st.color, inc.type, {
+          pulse: inc.kind === "accident",
+          active: selectedMarkerId === `incident:${inc.id}`,
+        }),
         80,
+        () => onSelectIncident(inc),
       );
     }
 
@@ -452,7 +477,10 @@ export default function KakaoMap({
     landmarks,
     ratings,
     selectedPlaceId,
+    selectedMarkerId,
     onSelectPlace,
+    onSelectStop,
+    onSelectIncident,
   ]);
 
   return (
