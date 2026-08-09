@@ -80,20 +80,28 @@ function dotEl(color: string, emoji: string) {
 }
 
 /** 운행 중인 버스 — 움직이는 대상이라 다른 마커와 확실히 구분되게 진하게 */
-function busEl(routeName: string, nodeName: string) {
+function busEl(routeName: string, b: BusPositionsPayload["positions"][number]) {
+  // 혼잡할수록 붉게. 색만으로 판단하지 않도록 라벨도 함께 붙인다.
+  const CROWD = ["", "여유", "보통", "혼잡", "매우혼잡"];
+  const bg =
+    b.crowded === 4 || b.crowded === 3 ? "#c62828" : b.crowded === 2 ? "#a55a00" : "#1a5fb4";
   const el = document.createElement("div");
   el.style.cssText = `
     display:flex;align-items:center;gap:5px;
     padding:4px 10px 4px 7px;border-radius:999px;
-    background:#1a5fb4;color:#fff;border:2px solid #fff;
+    background:${bg};color:#fff;border:2px solid #fff;
     box-shadow:0 2px 10px rgba(16,32,43,.38);
     font-size:12px;font-weight:800;white-space:nowrap;letter-spacing:-.02em;
     font-family:Pretendard,-apple-system,"Apple SD Gothic Neo",sans-serif;`;
   el.innerHTML =
     `<span style="font-size:12px">🚍</span><span>${routeName}</span>` +
-    (nodeName
-      ? `<span style="font-weight:600;opacity:.85">${nodeName.slice(0, 10)}</span>`
-      : "");
+    (b.nodeName
+      ? `<span style="font-weight:600;opacity:.88">${b.nodeName.slice(0, 10)}</span>`
+      : "") +
+    (b.crowded
+      ? `<span style="font-weight:700;opacity:.95">${CROWD[b.crowded] ?? ""}</span>`
+      : "") +
+    (b.lowPlate ? `<span title="저상버스" style="opacity:.9">♿</span>` : "");
   return el;
 }
 
@@ -423,7 +431,7 @@ export default function KakaoMap({
 
     // 운행 중인 버스는 지금 이 순간의 정보라 다른 마커에 가리지 않게 맨 위에 둔다
     for (const b of busPositions?.positions ?? []) {
-      add(b.lat, b.lng, busEl(busPositions!.routeName || "버스", b.nodeName), 95);
+      add(b.lat, b.lng, busEl(busPositions!.routeName || "버스", b), 95);
     }
 
     if (labelled) {

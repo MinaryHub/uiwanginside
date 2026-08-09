@@ -134,14 +134,22 @@ export interface BusPosition {
   nodeOrder: number | null;
   lat: number;
   lng: number;
+  /** 혼잡도 1=여유 2=보통 3=혼잡 4=매우혼잡. GBIS 만 제공 */
+  crowded?: number | null;
+  remainSeats?: number | null;
+  lowPlate?: boolean;
 }
 
 export interface BusPositionsPayload {
   routeId: string;
   routeName: string;
   positions: BusPosition[];
-  /** 조회에 쓴 도시 (노선 소속) */
+  /** 조회에 쓴 도시 (노선 소속). GBIS 경로에서는 비어 있다 */
   cityName: string;
+  /** 위치를 어디서 얻었는지 */
+  source: "gbis" | "tago";
+  /** 운행 중이지만 좌표를 못 구한 대수 (수도권 밖 구간) */
+  unresolved: number;
   updatedAt: string;
 }
 

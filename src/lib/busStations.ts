@@ -48,14 +48,17 @@ export function haversine(aLat: number, aLng: number, bLat: number, bLng: number
   return Math.round(2 * R * Math.asin(Math.sqrt(s)));
 }
 
-/** 의왕시 전체 정류소를 받아온다 (약 389곳) */
-export async function fetchUiwangStations(key: string): Promise<BusStation[]> {
-  const hit = cache.get("uiwang");
-  if (hit) return hit;
+const PAGE_SIZE = 1000;
 
+/** 시군 단위 정류소 조회 */
+async function fetchStations(
+  key: string,
+  sigun: string,
+  page = 1,
+): Promise<BusStation[]> {
   const url =
-    `${GG_BUS_STATION}?KEY=${key}&Type=json&pIndex=1&pSize=1000` +
-    `&SIGUN_NM=${encodeURIComponent("의왕시")}`;
+    `${GG_BUS_STATION}?KEY=${key}&Type=json&pIndex=${page}&pSize=${PAGE_SIZE}` +
+    `&SIGUN_NM=${encodeURIComponent(sigun)}`;
   const res = await timedFetch(url, { headers: { "User-Agent": UA } }, 15_000);
   const text = await res.text();
 
@@ -91,9 +94,53 @@ export async function fetchUiwangStations(key: string): Promise<BusStation[]> {
     });
   }
 
+  return stations;
+}
+
+/** 의왕시 정류소 (약 389곳) */
+export async function fetchUiwangStations(key: string): Promise<BusStation[]> {
+  const hit = cache.get("uiwang");
+  if (hit) return hit;
+  const stations = await fetchStations(key, "의왕시");
   if (stations.length === 0) throw new Error("의왕시 정류소 목록이 비어 있습니다");
   cache.set("uiwang", stations);
   return stations;
+}
+
+/**
+ * 의왕과 인접 시의 정류소 좌표 색인 (stationId → 정류소).
+ *
+ * GBIS 버스위치 API 는 GPS 좌표 없이 stationId 만 준다. 지도에 찍으려면
+ * 좌표가 필요한데, 경기데이터드림의 STATION_ID 필터는 동작하지 않아
+ * (지정해도 무시되고 엉뚱한 첫 행을 돌려준다) 도시별로 받아 색인을 만든다.
+ *
+ * 의왕을 지나는 노선의 서울 구간 정류소는 여기에 없다. 그 구간 버스는
+ * 위치를 표시하지 않는다 — 시민이 궁금한 건 우리 동네 근처 버스다.
+ */
+const NEARBY_SIGUN = ["의왕시", "안양시", "군포시", "수원시", "과천시", "성남시"];
+
+const indexCache = createTtlCache<Map<string, BusStation>>(24 * 3600_000, 2);
+
+export async function fetchStationIndex(key: string): Promise<Map<string, BusStation>> {
+  const hit = indexCache.get("idx");
+  if (hit) return hit;
+
+  const index = new Map<string, BusStation>();
+  for (const sigun of NEARBY_SIGUN) {
+    try {
+      // 수원·성남은 1000건을 넘어 두 쪽까지 받는다
+      for (let page = 1; page <= 2; page++) {
+        const list = await fetchStations(key, sigun, page);
+        for (const st of list) index.set(st.stationId, st);
+        if (list.length < PAGE_SIZE) break;
+      }
+    } catch (e) {
+      console.error("[busStations:index]", sigun, e);
+    }
+  }
+  if (index.size === 0) throw new Error("정류소 색인을 만들지 못했습니다");
+  indexCache.set("idx", index);
+  return index;
 }
 
 /** 좌표에서 가까운 정류소 */

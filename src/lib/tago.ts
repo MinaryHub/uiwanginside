@@ -1,3 +1,4 @@
+import type { BusPosition } from "./types";
 import {
   timedFetch,
   createTtlCache,
@@ -30,15 +31,6 @@ const CITIES: Record<number, string> = {
   31110: "과천시",
   31020: "성남시",
 };
-
-export interface BusPosition {
-  vehicleNo: string;
-  /** 현재(또는 직전) 정류소 */
-  nodeName: string;
-  nodeOrder: number | null;
-  lat: number;
-  lng: number;
-}
 
 interface RawRoute {
   routeid?: string;
