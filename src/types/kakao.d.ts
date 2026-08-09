@@ -55,21 +55,6 @@ declare namespace kakao.maps {
     });
     setMap(map: Map | null): void;
   }
-  class Circle {
-    constructor(options: {
-      center: LatLng;
-      radius: number;
-      strokeWeight?: number;
-      strokeColor?: string;
-      strokeOpacity?: number;
-      strokeStyle?: string;
-      fillColor?: string;
-      fillOpacity?: number;
-    });
-    setMap(map: Map | null): void;
-    setRadius(r: number): void;
-    setPosition(latlng: LatLng): void;
-  }
   namespace event {
     function addListener(target: unknown, type: string, handler: (...args: never[]) => void): void;
   }

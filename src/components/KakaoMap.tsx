@@ -121,7 +121,6 @@ export interface KakaoMapProps {
   appKey?: string;
   center: { lat: number; lng: number };
   level: number;
-  radius: number;
   places: Place[];
   incidents: Incident[];
   busStops: BusStop[];
@@ -147,6 +146,8 @@ export interface KakaoMapProps {
   onViewFitted: (center: { lat: number; lng: number }, level: number) => void;
   /** 경계 바깥을 어둡게 덮어 시 영역을 강조 */
   dimOutside: boolean;
+  /** 시트가 열려 지도 폭이 바뀌었는지 — 바뀌면 relayout 이 필요하다 */
+  sheetOpen: boolean;
   selectedPlaceId: string | null;
   /** 정류소·사고 등 지도에서 고른 대상 */
   selectedMarkerId: string | null;
@@ -160,7 +161,6 @@ export default function KakaoMap({
   appKey,
   center,
   level,
-  radius,
   places,
   incidents,
   busStops,
@@ -172,6 +172,7 @@ export default function KakaoMap({
   showBoundary,
   activeDong,
   fitBounds,
+  sheetOpen,
   onViewFitted,
   dimOutside,
   selectedPlaceId,
@@ -183,8 +184,14 @@ export default function KakaoMap({
 }: KakaoMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<kakao.maps.Map | null>(null);
-  const overlaysRef = useRef<kakao.maps.CustomOverlay[]>([]);
-  const circleRef = useRef<kakao.maps.Circle | null>(null);
+  /**
+   * 마커를 종류별로 따로 관리한다.
+   * 하나로 묶으면 15초마다 오는 버스 위치 갱신에도 장소 마커까지 전부
+   * 지웠다 다시 그려서 화면이 깜빡인다.
+   */
+  const placeOv = useRef<kakao.maps.CustomOverlay[]>([]);
+  const transitOv = useRef<kakao.maps.CustomOverlay[]>([]);
+  const busOv = useRef<kakao.maps.CustomOverlay[]>([]);
   const boundaryRef = useRef<kakao.maps.Polygon[]>([]);
   const dongRef = useRef<kakao.maps.Polygon[]>([]);
   const movedRef = useRef(onMapMoved);
@@ -230,6 +237,14 @@ export default function KakaoMap({
     // 최초 1회만 — center/level 변경은 아래 effect 가 처리
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appKey]);
+
+  // 시트가 열리고 닫히면 지도 컨테이너 폭이 바뀐다.
+  // relayout 을 부르지 않으면 타일이 어긋난 채 남아 "일부 구역에만 보이는" 것처럼 된다.
+  useEffect(() => {
+    if (!ready || !mapRef.current) return;
+    const t = setTimeout(() => mapRef.current?.relayout(), 220);
+    return () => clearTimeout(t);
+  }, [ready, sheetOpen]);
 
   /**
    * 범위 맞춤. 동 경계처럼 크기가 제각각인 영역을 화면에 담을 때 쓴다.
@@ -332,32 +347,16 @@ export default function KakaoMap({
     dongRef.current.push(poly);
   }, [ready, activeDong]);
 
-  // 검색 반경 원
-  useEffect(() => {
-    if (!ready || !mapRef.current) return;
-    circleRef.current?.setMap(null);
-    const circle = new window.kakao.maps.Circle({
-      center: new window.kakao.maps.LatLng(center.lat, center.lng),
-      radius,
-      strokeWeight: 1.5,
-      strokeColor: "#0f6b60",
-      strokeOpacity: 0.7,
-      strokeStyle: "dash",
-      fillColor: "#0f6b60",
-      fillOpacity: 0.05,
-    });
-    circle.setMap(mapRef.current);
-    circleRef.current = circle;
-  }, [ready, center.lat, center.lng, radius]);
+  // 검색 반경 원은 그리지 않는다.
+  // 큰 점선 원이 "이 밖은 없음" 처럼 읽혀 화면이 제한된 구역처럼 보였다.
+  // 반경은 시트의 슬라이더로 조절하고, 결과는 마커 자체로 드러난다.
 
-  // 마커 동기화
-  useEffect(() => {
-    if (!ready || !mapRef.current) return;
-    const map = mapRef.current;
-    overlaysRef.current.forEach((o) => o.setMap(null));
-    overlaysRef.current = [];
-
-    const add = (
+  /** 오버레이를 특정 목록에 추가하는 공통 헬퍼 */
+  const makeAdder = (bucket: React.RefObject<kakao.maps.CustomOverlay[]>) => {
+    const map = mapRef.current!;
+    bucket.current.forEach((o) => o.setMap(null));
+    bucket.current = [];
+    return (
       lat: number,
       lng: number,
       el: HTMLElement,
@@ -373,28 +372,29 @@ export default function KakaoMap({
         clickable: true,
       });
       ov.setMap(map);
-      overlaysRef.current.push(ov);
+      bucket.current.push(ov);
     };
+  };
 
-    /**
-     * 마커 밀도 조절.
-     * 넓게 보면 이름표가 서로 겹쳐 읽을 수 없으므로 점으로만 찍고,
-     * 가까이 들어오면 이름표를 붙인다. 개수도 화면 배율에 맞춰 제한한다.
-     * (이전에는 340여 개를 전부 이름표로 그려 지도가 읽히지 않았다)
-     */
-    // 이름표는 아주 가까이 봤을 때만. 그 밖에는 작은 점으로 위치만 알린다.
-    // 선택한 곳은 확대 수준과 무관하게 항상 이름표를 붙인다.
+  /**
+   * 장소·병원·랜드마크 마커.
+   *
+   * 이름표는 아주 가까이 봤을 때만. 그 밖에는 작은 점으로 위치만 알린다.
+   * 선택한 곳은 확대 수준과 무관하게 이름표를 붙인다.
+   */
+  useEffect(() => {
+    if (!ready || !mapRef.current) return;
+    const add = makeAdder(placeOv);
+
     const labelled = level <= 2;
     const cap = level <= 3 ? 60 : level <= 5 ? 40 : 20;
 
     // 가까운 순으로 정렬돼 오므로 앞에서 자르면 중심 주변이 남는다
-    const shownPlaces = places.slice(0, cap);
-    for (const p of shownPlaces) {
+    for (const p of places.slice(0, cap)) {
       const def = CATEGORY_MAP[p.category];
       if (!def) continue;
       const active = selectedPlaceId === p.id;
       const r = ratings[p.id];
-      // 별점이 있으면 이름 뒤에 붙여 지도만 보고도 고를 수 있게 한다
       const label = r ? `${p.name} ★${r.avg.toFixed(1)}` : p.name;
       add(
         p.lat,
@@ -407,20 +407,31 @@ export default function KakaoMap({
       );
     }
 
-    // 진료중인 곳은 개수가 적고 중요도가 높아 항상 이름표를 붙인다
+    // 진료중인 곳은 수가 적고 중요도가 높아 항상 이름표를 붙인다
     for (const m of medicalOpen.slice(0, 40)) {
       if (m.lat == null || m.lng == null) continue;
-      add(
-        m.lat!,
-        m.lng!,
-        pinEl(m.kind === "pharmacy" ? "💊" : "🏥", "#17734f", m.name),
-        60,
-      );
+      add(m.lat, m.lng, pinEl(m.kind === "pharmacy" ? "💊" : "🏥", "#17734f", m.name), 60);
     }
 
     for (const l of landmarks) {
       add(l.lat, l.lng, pinEl("📍", "#7c3aed", l.name), 50);
     }
+  }, [
+    ready,
+    level,
+    places,
+    medicalOpen,
+    landmarks,
+    ratings,
+    selectedPlaceId,
+    onSelectPlace,
+  ]);
+
+  /** 정류소·사고·구간속도 — 갱신 주기가 장소와 달라 따로 그린다 */
+  useEffect(() => {
+    if (!ready || !mapRef.current) return;
+    const add = makeAdder(transitOv);
+    const labelled = level <= 2;
 
     for (const st of busStops.slice(0, 12)) {
       const next = st.arrivals?.[0]?.predictSec;
@@ -438,7 +449,7 @@ export default function KakaoMap({
       );
     }
 
-    // 사고·통제는 건수가 적고 가장 중요하므로 항상 이름표 + 강조
+    // 사고는 건수가 적고 가장 중요하므로 항상 이름표 + 강조
     for (const inc of incidents) {
       if (inc.lat == null || inc.lng == null) continue;
       const st = INCIDENT_STYLE[inc.kind];
@@ -454,11 +465,6 @@ export default function KakaoMap({
       );
     }
 
-    // 운행 중인 버스는 지금 이 순간의 정보라 다른 마커에 가리지 않게 맨 위에 둔다
-    for (const b of busPositions?.positions ?? []) {
-      add(b.lat, b.lng, busEl(busPositions!.routeName || "버스", b), 95);
-    }
-
     if (labelled) {
       for (const l of trafficLinks) {
         if (l.lat == null || l.lng == null) continue;
@@ -468,20 +474,22 @@ export default function KakaoMap({
   }, [
     ready,
     level,
-    places,
     busStops,
     incidents,
     trafficLinks,
-    medicalOpen,
-    busPositions,
-    landmarks,
-    ratings,
-    selectedPlaceId,
     selectedMarkerId,
-    onSelectPlace,
     onSelectStop,
     onSelectIncident,
   ]);
+
+  /** 운행 중인 버스 — 15초마다 갱신되므로 반드시 따로 둔다 */
+  useEffect(() => {
+    if (!ready || !mapRef.current) return;
+    const add = makeAdder(busOv);
+    for (const b of busPositions?.positions ?? []) {
+      add(b.lat, b.lng, busEl(busPositions?.routeName || "버스", b), 95);
+    }
+  }, [ready, busPositions]);
 
   return (
     <div className="relative h-full w-full">

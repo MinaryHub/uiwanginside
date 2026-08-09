@@ -24,6 +24,7 @@ import type {
   MedicalPayload,
   NewsPayload,
   TrafficPayload,
+  TrafficLink,
   TransitPayload,
   RatingsPayload,
   BusPositionsPayload,
@@ -44,6 +45,20 @@ import PopulationPanel from "@/components/panels/PopulationPanel";
 import RatingPanel from "@/components/panels/RatingPanel";
 
 const KakaoMap = dynamic(() => import("@/components/KakaoMap"), { ssr: false });
+
+/**
+ * 빈 값은 모듈 상수로 고정한다.
+ * JSX 안에서 [] 나 {} 를 쓰면 렌더마다 새 참조가 만들어져, 지도의
+ * 마커 effect 가 매번 다시 돌고 전체 마커가 지워졌다 다시 그려진다.
+ * 15초마다 오는 버스 위치 갱신이 화면 전체를 깜빡이게 만든 원인이었다.
+ */
+const NO_PLACES: Place[] = [];
+const NO_INCIDENTS: Incident[] = [];
+const NO_STOPS: BusStop[] = [];
+const NO_LINKS: TrafficLink[] = [];
+const NO_MEDICAL: MedicalPayload["places"] = [];
+const NO_LANDMARKS: typeof LANDMARKS = [];
+const NO_RATINGS: RatingsPayload["ratings"] = {};
 
 const POLL = {
   weather: 10 * 60_000,
@@ -246,13 +261,26 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     [placeList, selectedPlaceId],
   );
 
+  const mapPlaces = def?.layers.places ? placeList : NO_PLACES;
+  const mapIncidents = def?.layers.incidents
+    ? (traffic.data?.data.incidents ?? NO_INCIDENTS)
+    : NO_INCIDENTS;
+  const mapStops = def?.layers.bus ? (transit.data?.data.stops ?? NO_STOPS) : NO_STOPS;
+  const mapLinks = def?.layers.traffic
+    ? (traffic.data?.data.links ?? NO_LINKS)
+    : NO_LINKS;
+  const mapRatings =
+    mode === "food" ? (ratings.data?.data.ratings ?? NO_RATINGS) : NO_RATINGS;
+  const mapLandmarks = mode === null ? LANDMARKS : NO_LANDMARKS;
+  const mapBusPositions = busPositions.data?.ok ? busPositions.data.data : null;
+
   const medicalMarkers = useMemo(
     () =>
       mode === "medical"
         ? (medical.data?.data.places ?? []).filter(
             (p) => p.openNow === true && p.lat != null && p.lng != null,
           )
-        : [],
+        : NO_MEDICAL,
     [mode, medical.data],
   );
 
@@ -337,15 +365,14 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           appKey={appKey}
           center={center}
           level={level}
-          radius={def?.layers.places ? radius : 0}
-          places={def?.layers.places ? placeList : []}
-          incidents={def?.layers.incidents ? (traffic.data?.data.incidents ?? []) : []}
-          busStops={def?.layers.bus ? (transit.data?.data.stops ?? []) : []}
-          trafficLinks={def?.layers.traffic ? (traffic.data?.data.links ?? []) : []}
+          places={mapPlaces}
+          incidents={mapIncidents}
+          busStops={mapStops}
+          trafficLinks={mapLinks}
           medicalOpen={medicalMarkers}
-          busPositions={busPositions.data?.ok ? busPositions.data.data : null}
-          ratings={mode === "food" ? (ratings.data?.data.ratings ?? {}) : {}}
-          landmarks={mode === null ? LANDMARKS : []}
+          busPositions={mapBusPositions}
+          ratings={mapRatings}
+          landmarks={mapLandmarks}
           showBoundary
           activeDong={activeDong}
           fitBounds={fitBounds}
@@ -356,6 +383,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           onSelectStop={selectStop}
           onSelectIncident={selectIncident}
           onMapMoved={setCenter}
+          sheetOpen={!!def && sheetOpen}
           onViewFitted={(c, lv) => {
             setCenter(c);
             setLevel(lv);
