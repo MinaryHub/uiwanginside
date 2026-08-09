@@ -25,7 +25,7 @@ export default function PlaceDetailCard({
   /** 맛집 모드에서만 별점 입력을 띄운다 */
   showRating: boolean;
   onClose: () => void;
-  onRated: () => void;
+  onRated: (placeId: string, rating: PlaceRating) => void;
 }) {
   const def = CATEGORY_MAP[place.category];
   const { state, request, canRate, busy, message, submit } = useRating(onRated);

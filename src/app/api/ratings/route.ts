@@ -25,7 +25,7 @@ export async function GET(req: Request) {
     .slice(0, 200);
   const deviceId = sp.get("deviceId")?.slice(0, 64) ?? "";
 
-  if (ids.length === 0) return ok(EMPTY, undefined, 30);
+  if (ids.length === 0) return ok(EMPTY);
 
   try {
     await ensureSchema();
@@ -63,7 +63,12 @@ export async function GET(req: Request) {
       if (!ratings[pid]) ratings[pid] = { avg: stars, count: 1, mine: stars };
     }
 
-    return ok({ ratings, updatedAt: nowISO() } satisfies RatingsPayload, undefined, 30);
+    /**
+     * 캐시하지 않는다. deviceId 별로 내용이 다르고(내 별점), 방금 등록한 값이
+     * 즉시 보여야 한다. 30초 CDN 캐시를 두었더니 등록 직후 재조회가 쓰기 이전
+     * 응답을 받아 와 별점이 나왔다 사라지는 것처럼 보였다.
+     */
+    return ok({ ratings, updatedAt: nowISO() } satisfies RatingsPayload);
   } catch (e) {
     console.error("[ratings:get]", e);
     return fail(EMPTY, `평가 조회 실패: ${e instanceof Error ? e.message : e}`);

@@ -231,6 +231,21 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     });
   }, []);
 
+  /** 등록 결과를 SWR 캐시에 바로 반영한다 (재조회 없이) */
+  const applyRating = useCallback(
+    (placeId: string, r: RatingsPayload["ratings"][string]) => {
+      ratings.mutate(
+        (cur) =>
+          cur && {
+            ...cur,
+            data: { ...cur.data, ratings: { ...cur.data.ratings, [placeId]: r } },
+          },
+        { revalidate: false },
+      );
+    },
+    [ratings],
+  );
+
   const selectStop = useCallback((stop: BusStop) => {
     setSelectedPlaceId(null);
     setMarker((cur) =>
@@ -573,7 +588,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           rating={ratings.data?.data.ratings[selectedPlace.id]}
           showRating={mode === "food"}
           onClose={() => setSelectedPlaceId(null)}
-          onRated={() => ratings.mutate()}
+          onRated={applyRating}
         />
       )}
 
