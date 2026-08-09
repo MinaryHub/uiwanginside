@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Logo from "@/components/Logo";
 import type { HealthCheck } from "@/app/api/health/route";
 import { headers } from "next/headers";
 
@@ -29,8 +30,9 @@ export default async function StatusPage() {
 
   return (
     <main className="mx-auto max-w-3xl px-5 py-10">
-      <div className="mb-6 flex items-baseline gap-3">
-        <h1 className="text-[var(--text-lg)] font-extrabold tracking-tight">API 연동 상태</h1>
+      <div className="mb-6 flex items-center gap-3">
+        <Logo size={26} />
+        <h1 className="text-[var(--text-lg)] font-extrabold tracking-tight">연동 상태</h1>
         <Link href="/" className="text-[var(--text-xs)] font-semibold text-[var(--brand)]">
           ← 포털로
         </Link>

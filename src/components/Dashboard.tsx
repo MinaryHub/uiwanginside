@@ -29,6 +29,7 @@ import type {
   RatingsPayload,
   BusPositionsPayload,
 } from "@/lib/types";
+import Logo from "@/components/Logo";
 import SummaryStrip from "@/components/SummaryStrip";
 import PlaceDetailCard from "@/components/PlaceDetailCard";
 import StopCard from "@/components/StopCard";
@@ -396,10 +397,13 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
               setMode(null);
               setSheetOpen(false);
             }}
-            className="shrink-0 text-[var(--text-base)] font-extrabold tracking-tight"
+            className="flex shrink-0 items-center gap-1.5"
             title="둘러보기로"
           >
-            의왕
+            <Logo size={24} />
+            <span className="text-[var(--text-base)] font-extrabold tracking-tight">
+              의왕
+            </span>
           </button>
           <span className="h-4 w-px shrink-0 bg-[var(--border)]" />
           <div className="min-w-0 flex-1">
