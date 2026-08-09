@@ -22,6 +22,7 @@ import type {
   TrafficPayload,
   TransitPayload,
   RatingsPayload,
+  BusPositionsPayload,
 } from "@/lib/types";
 import SummaryStrip from "@/components/SummaryStrip";
 import PlacesPanel from "@/components/panels/PlacesPanel";
@@ -47,6 +48,8 @@ const POLL = {
   traffic: 60_000,
   transit: 30_000,
   news: 5 * 60_000,
+  /** TAGO 갱신 주기가 10~20초라 그보다 자주 부를 이유가 없다 */
+  busPositions: 15_000,
 };
 
 type MobileTab = "map" | "list" | "info";
@@ -65,6 +68,8 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
   const [activeDong, setActiveDong] = useState<string | null>(null);
   /** 이 범위가 화면에 다 들어오도록 맞춘다 (동 전체보기 등) */
   const [fitBounds, setFitBounds] = useState<LatLngBox | null>(null);
+  /** 지도에 실시간 위치를 표시할 노선 */
+  const [tracked, setTracked] = useState<{ id: string; name: string } | null>(null);
 
   const def = MODE_MAP[mode];
 
@@ -142,6 +147,14 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     revalidateOnFocus: false,
   });
 
+  const busPositions = useSWR<ApiEnvelope<BusPositionsPayload>>(
+    tracked
+      ? `/api/bus-positions?routeId=${tracked.id}&routeName=${encodeURIComponent(tracked.name)}`
+      : null,
+    swrFetcher,
+    { refreshInterval: POLL.busPositions, keepPreviousData: true },
+  );
+
   const refreshAll = useCallback(() => {
     [places, weather, air, traffic, medical, transit, news].forEach((s) => s.mutate());
   }, [places, weather, air, traffic, medical, transit, news]);
@@ -166,6 +179,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
   const changeMode = useCallback((next: ModeId) => {
     setMode(next);
     setSelectedPlaceId(null);
+    setTracked(null);
     setTab("map");
   }, []);
 
@@ -267,6 +281,10 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             res={transit.data}
             isLoading={transit.isLoading}
             onFocus={(lat, lng) => focus(lat, lng, 3)}
+            trackedRouteId={tracked?.id ?? null}
+            onTrackRoute={(id, name) =>
+              setTracked((cur) => (cur?.id === id ? null : { id, name }))
+            }
           />
         );
       case "waste":
@@ -406,6 +424,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             busStops={def.layers.bus ? (transit.data?.data.stops ?? []) : []}
             trafficLinks={def.layers.traffic ? (traffic.data?.data.links ?? []) : []}
             medicalOpen={medicalMarkers}
+            busPositions={busPositions.data?.ok ? busPositions.data.data : null}
             ratings={mode === "food" ? (ratings.data?.data.ratings ?? {}) : {}}
             landmarks={mode === "explore" ? LANDMARKS : []}
             showBoundary={showBoundary}

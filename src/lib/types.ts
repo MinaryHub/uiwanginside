@@ -127,6 +127,24 @@ export interface TransitPayload {
   updatedAt: string;
 }
 
+export interface BusPosition {
+  vehicleNo: string;
+  /** 현재(또는 직전) 정류소 */
+  nodeName: string;
+  nodeOrder: number | null;
+  lat: number;
+  lng: number;
+}
+
+export interface BusPositionsPayload {
+  routeId: string;
+  routeName: string;
+  positions: BusPosition[];
+  /** 조회에 쓴 도시 (노선 소속) */
+  cityName: string;
+  updatedAt: string;
+}
+
 export type AirGrade = "좋음" | "보통" | "나쁨" | "매우나쁨";
 
 export interface AirStation {

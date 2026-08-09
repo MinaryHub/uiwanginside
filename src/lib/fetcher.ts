@@ -83,7 +83,27 @@ export function parseDataGoKr(text: string): unknown {
 /** 일시적 게이트웨이 오류는 한 번 더 시도할 가치가 있다 */
 export function isTransientDataGoKrError(e: unknown): boolean {
   const m = e instanceof Error ? e.message : "";
-  return /SERVICETIMEOUT|서비스 연결실패|^05:|^22:|LIMITED_NUMBER/.test(m);
+  // 99 = 가용 세션 없음(초당 처리량 초과), 04 = 게이트웨이 HTTP 에러.
+  // 둘 다 잠시 뒤 다시 부르면 대개 통과한다.
+  return /SERVICETIMEOUT|서비스 연결실패|가용한 세션|^0?4:|^0?5:|^22:|^99:|LIMITED_NUMBER/.test(
+    m,
+  );
+}
+
+/** 일시 오류면 잠깐 쉬었다 한 번 더 시도한다 */
+export async function retryTransient<T>(
+  fn: () => Promise<T>,
+  label: string,
+  delayMs = 700,
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (e) {
+    if (!isTransientDataGoKrError(e)) throw e;
+    console.warn(`[${label}] 일시 오류, 재시도:`, e instanceof Error ? e.message : e);
+    await new Promise((r) => setTimeout(r, delayMs));
+    return fn();
+  }
 }
 
 /** 프로세스 메모리 TTL 캐시 — 같은 좌표 반복 조회로 외부 API 를 낭비하지 않는다 */

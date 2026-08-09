@@ -4,7 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import { CATEGORY_MAP } from "@/lib/uiwang";
 import { UIWANG_BOUNDARY } from "@/lib/uiwang-boundary";
 import { DONG_BOUNDARIES } from "@/lib/dong-boundaries";
-import type { Place, Incident, BusStop, TrafficLink, PlaceRating } from "@/lib/types";
+import type {
+  Place,
+  Incident,
+  BusStop,
+  TrafficLink,
+  PlaceRating,
+  BusPositionsPayload,
+} from "@/lib/types";
 
 let sdkPromise: Promise<void> | null = null;
 
@@ -72,6 +79,24 @@ function dotEl(color: string, emoji: string) {
   return el;
 }
 
+/** 운행 중인 버스 — 움직이는 대상이라 다른 마커와 확실히 구분되게 진하게 */
+function busEl(routeName: string, nodeName: string) {
+  const el = document.createElement("div");
+  el.style.cssText = `
+    display:flex;align-items:center;gap:5px;
+    padding:4px 10px 4px 7px;border-radius:999px;
+    background:#1a5fb4;color:#fff;border:2px solid #fff;
+    box-shadow:0 2px 10px rgba(16,32,43,.38);
+    font-size:12px;font-weight:800;white-space:nowrap;letter-spacing:-.02em;
+    font-family:Pretendard,-apple-system,"Apple SD Gothic Neo",sans-serif;`;
+  el.innerHTML =
+    `<span style="font-size:12px">🚍</span><span>${routeName}</span>` +
+    (nodeName
+      ? `<span style="font-weight:600;opacity:.85">${nodeName.slice(0, 10)}</span>`
+      : "");
+  return el;
+}
+
 function speedEl(link: TrafficLink) {
   const color =
     link.level === "congested" ? "var(--danger)" : link.level === "slow" ? "var(--warn)" : "var(--ok)";
@@ -97,6 +122,8 @@ export interface KakaoMapProps {
   medicalOpen: { id: string; name: string; kind: string; lat: number | null; lng: number | null }[];
   /** placeId → 별점 집계. 있으면 마커에 함께 표시한다 */
   ratings: Record<string, PlaceRating>;
+  /** 추적 중인 노선의 실시간 버스 위치 */
+  busPositions: BusPositionsPayload | null;
   /** 랜드마크 (둘러보기 모드) */
   landmarks: { name: string; lat: number; lng: number; desc: string }[];
   /** 의왕시 행정경계 표시 */
@@ -127,6 +154,7 @@ export default function KakaoMap({
   busStops,
   trafficLinks,
   medicalOpen,
+  busPositions,
   ratings,
   landmarks,
   showBoundary,
@@ -393,6 +421,11 @@ export default function KakaoMap({
       );
     }
 
+    // 운행 중인 버스는 지금 이 순간의 정보라 다른 마커에 가리지 않게 맨 위에 둔다
+    for (const b of busPositions?.positions ?? []) {
+      add(b.lat, b.lng, busEl(busPositions!.routeName || "버스", b.nodeName), 95);
+    }
+
     if (labelled) {
       for (const l of trafficLinks) {
         if (l.lat == null || l.lng == null) continue;
@@ -407,6 +440,7 @@ export default function KakaoMap({
     incidents,
     trafficLinks,
     medicalOpen,
+    busPositions,
     landmarks,
     ratings,
     selectedPlaceId,

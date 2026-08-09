@@ -23,13 +23,29 @@ const CROWD: Record<number, { label: string; color: string }> = {
   4: { label: "매우혼잡", color: "var(--danger)" },
 };
 
-function ArrivalRow({ a }: { a: BusArrival }) {
+function ArrivalRow({
+  a,
+  tracked,
+  onTrack,
+}: {
+  a: BusArrival;
+  tracked: boolean;
+  onTrack: () => void;
+}) {
   const first = eta(a.predictSec);
   const second = eta(a.predictSec2);
   const crowd = a.crowded ? CROWD[a.crowded] : null;
 
   return (
-    <li className="py-1">
+    <li>
+      <button
+        type="button"
+        onClick={onTrack}
+        aria-pressed={tracked}
+        title="지도에서 이 노선 버스 위치 보기"
+        className="w-full rounded-[var(--radius)] px-1.5 py-1.5 text-left transition hover:bg-[var(--surface-3)]"
+        style={tracked ? { background: "var(--brand-soft)" } : undefined}
+      >
       <div className="flex items-center gap-1.5">
         <span className="w-12 shrink-0 truncate text-[var(--text-sm)] font-extrabold text-[var(--info)]">
           {a.routeName}
@@ -49,6 +65,12 @@ function ArrivalRow({ a }: { a: BusArrival }) {
           {a.predictSec2 != null ? second.text : ""}
         </span>
       </div>
+
+      {tracked && (
+        <div className="mt-0.5 pl-[54px] text-[var(--text-2xs)] font-bold text-[var(--brand)]">
+          지도에서 위치 표시 중
+        </div>
+      )}
 
       {/* 부가 정보는 있을 때만 — 없는 값을 자리만 차지하게 두지 않는다 */}
       {(a.stationsLeft != null || crowd || a.remainSeats != null || a.lowPlate) && (
@@ -73,6 +95,7 @@ function ArrivalRow({ a }: { a: BusArrival }) {
           )}
         </div>
       )}
+      </button>
     </li>
   );
 }
@@ -81,10 +104,15 @@ export default function TransitPanel({
   res,
   isLoading,
   onFocus,
+  trackedRouteId,
+  onTrackRoute,
 }: {
   res?: ApiEnvelope<TransitPayload>;
   isLoading: boolean;
   onFocus: (lat: number, lng: number) => void;
+  /** 지도에 위치를 표시 중인 노선 */
+  trackedRouteId: string | null;
+  onTrackRoute: (routeId: string, routeName: string) => void;
 }) {
   const d = res?.data;
   const stops = d?.stops ?? [];
@@ -143,7 +171,12 @@ export default function TransitPanel({
               {s.arrivals && s.arrivals.length > 0 ? (
                 <ul className="divide-y divide-[var(--border)]">
                   {s.arrivals.map((a) => (
-                    <ArrivalRow key={`${s.stationId}-${a.routeId}-${a.destName}`} a={a} />
+                    <ArrivalRow
+                      key={`${s.stationId}-${a.routeId}-${a.destName}`}
+                      a={a}
+                      tracked={trackedRouteId === a.routeId}
+                      onTrack={() => onTrackRoute(a.routeId, a.routeName)}
+                    />
                   ))}
                 </ul>
               ) : (
