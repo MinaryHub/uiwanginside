@@ -111,7 +111,7 @@ async function checkKakaoRest(): Promise<Partial<HealthCheck>> {
 
 async function checkKma(): Promise<Partial<HealthCheck>> {
   const key = process.env.KMA_SERVICE_KEY;
-  if (!key) return { status: "missing", detail: "키 없음 — 샘플 날씨 표시 중" };
+  if (!key) return { status: "missing", detail: "키 없음 — 날씨가 표시되지 않습니다" };
   const now = new Date(Date.now() + 9 * 3600_000 - 3600_000);
   const p = (n: number) => String(n).padStart(2, "0");
   const date = `${now.getUTCFullYear()}${p(now.getUTCMonth() + 1)}${p(now.getUTCDate())}`;
@@ -133,7 +133,7 @@ async function checkKma(): Promise<Partial<HealthCheck>> {
 async function checkNaver(): Promise<Partial<HealthCheck>> {
   const id = process.env.NAVER_CLIENT_ID;
   const secret = process.env.NAVER_CLIENT_SECRET;
-  if (!id || !secret) return { status: "missing", detail: "키 없음 — 샘플 뉴스 표시 중" };
+  if (!id || !secret) return { status: "missing", detail: "키 없음 — 뉴스가 표시되지 않습니다" };
   // 검색 API 는 NCP NAVER API HUB 로 이전됐다. 키 형태로 어느 쪽인지 판별한다.
   const useNcp = secret.length > 20 || id.length === 10;
   const url = useNcp
@@ -166,7 +166,7 @@ async function checkNaver(): Promise<Partial<HealthCheck>> {
 
 async function checkIts(): Promise<Partial<HealthCheck>> {
   const key = process.env.ITS_API_KEY;
-  if (!key) return { status: "missing", detail: "키 없음 — 샘플 교통정보 표시 중" };
+  if (!key) return { status: "missing", detail: "키 없음 — 사고·정체가 표시되지 않습니다" };
   const { minX, maxX, minY, maxY } = UIWANG.bbox;
   const [res, latencyMs, err] = await timed(() =>
     timedFetch(
@@ -198,27 +198,52 @@ function gbisGatewayError(text: string): string | null {
   return `${h.returnReasonCode}: ${h.returnAuthMsg ?? h.errMsg}`;
 }
 
-/** 주변 정류소 조회 — stationId 를 얻는 단계라 도착정보보다 선행되어야 한다 */
-async function checkGbisStation(): Promise<Partial<HealthCheck>> {
-  const key = process.env.GBIS_SERVICE_KEY;
-  if (!key) return { status: "missing", detail: "키 없음 — 샘플 버스정보 표시 중" };
+/**
+ * 정류소 목록 — 경기데이터드림 BusStation.
+ * GBIS 정류소 조회(data.go.kr)는 승인이 필요해 이쪽으로 우회했다.
+ * stationId·좌표·ARS번호를 모두 주므로 기능상 부족함이 없다.
+ */
+async function checkGgStations(): Promise<Partial<HealthCheck>> {
+  const key = process.env.GG_DATA_KEY;
+  if (!key) return { status: "missing", detail: "경기데이터드림 인증키 미설정" };
   const [res, latencyMs, err] = await timed(() =>
     timedFetch(
-      `https://apis.data.go.kr/6410000/busstationservice/v2/getBusStationAroundListv2?serviceKey=${key}&x=${UIWANG.center.lng}&y=${UIWANG.center.lat}`,
+      `https://openapi.gg.go.kr/BusStation?KEY=${key}&Type=json&pIndex=1&pSize=1` +
+        `&SIGUN_NM=${encodeURIComponent("의왕시")}`,
+      {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/126.0 Safari/537.36",
+        },
+      },
+    ),
+  );
+  if (err) return { status: "error", detail: msg(err), latencyMs };
+  const text = await res!.text();
+  if (text.includes("ERROR-")) {
+    const m = /"CODE":"(ERROR-[^"]+)","MESSAGE":"([^"]*)"/.exec(text);
+    return { status: "error", detail: m ? `${m[1]}: ${m[2]}` : "조회 실패", latencyMs };
+  }
+  const n = /"list_total_count":(\d+)/.exec(text)?.[1];
+  return { status: "live", detail: `정상 · 의왕시 정류소 ${n ?? "?"}곳`, latencyMs };
+}
+
+/** 버스 실시간 위치 — 좌표는 없고 stationId 만 주지만 서울 노선까지 다룬다 */
+async function checkGbisLocation(): Promise<Partial<HealthCheck>> {
+  const key = process.env.GBIS_SERVICE_KEY;
+  if (!key) return { status: "missing", detail: "키 없음" };
+  const [res, latencyMs, err] = await timed(() =>
+    timedFetch(
+      "https://apis.data.go.kr/6410000/buslocationservice/v2/getBusLocationListv2" +
+        `?serviceKey=${key}&routeId=226000032&format=json`,
     ),
   );
   if (err) return { status: "error", detail: msg(err), latencyMs };
   const text = await res!.text();
   const gwErr = gbisGatewayError(text);
-  if (gwErr)
-    return {
-      status: "fallback",
-      detail: gwErr,
-      fallback: "OpenStreetMap 정류소 위치 (도착 시간 없음)",
-      latencyMs,
-    };
-  const count = (text.match(/<busStationAroundList>/g) ?? []).length;
-  return { status: "live", detail: `정상 · 시청 주변 정류소 ${count}곳`, latencyMs };
+  if (gwErr) return { status: "error", detail: gwErr, latencyMs };
+  const n = (text.match(/"plateNo"/g) ?? []).length;
+  return { status: "live", detail: `정상 · 테스트 노선 운행 ${n}대`, latencyMs };
 }
 
 /** 도착정보 조회 — 실제 정류소 ID 로 응답 형식까지 확인 */
@@ -279,30 +304,37 @@ const SPECS: Omit<HealthCheck, "status" | "detail" | "configured">[] = [
     howTo: "openapi.its.go.kr 회원가입 → 인증키 발급",
   },
   {
-    id: "gbis-station",
-    label: "경기버스 ① 정류소 조회",
-    envVars: ["GBIS_SERVICE_KEY"],
-    howTo:
-      "data.go.kr → '경기도_버스정류소 조회' 활용신청. 주변 정류소의 stationId 를 얻는 단계라 도착정보만으로는 동작하지 않습니다",
+    id: "gg-stations",
+    label: "정류소 목록 (경기데이터드림)",
+    envVars: ["GG_DATA_KEY"],
+    howTo: "data.gg.go.kr → OpenAPI 인증키. BusStation 서비스로 stationId·좌표를 얻습니다",
   },
   {
     id: "gbis-arrival",
-    label: "경기버스 ② 도착정보 조회",
+    label: "버스 도착정보 (경기버스)",
     envVars: ["GBIS_SERVICE_KEY"],
     howTo: "data.go.kr → '경기도_버스도착정보 조회' 활용신청",
+  },
+  {
+    id: "gbis-location",
+    label: "버스 실시간 위치 (경기버스)",
+    envVars: ["GBIS_SERVICE_KEY"],
+    howTo: "data.go.kr → '경기도_버스위치정보 조회' 활용신청",
   },
 ];
 
 export async function GET(req: Request) {
   const origin = new URL(req.url).origin;
 
-  const [kakaoRest, kma, naver, its, gbisStation, gbisArrival] = await Promise.all([
+  const [kakaoRest, kma, naver, its, ggStations, gbisArrival, gbisLocation] =
+    await Promise.all([
     checkKakaoRest(),
     checkKma(),
     checkNaver(),
     checkIts(),
-    checkGbisStation(),
+    checkGgStations(),
     checkGbisArrival(),
+    checkGbisLocation(),
   ]);
 
   const results: Record<string, Partial<HealthCheck>> = {
@@ -311,8 +343,9 @@ export async function GET(req: Request) {
     kma,
     naver,
     its,
-    "gbis-station": gbisStation,
+    "gg-stations": ggStations,
     "gbis-arrival": gbisArrival,
+    "gbis-location": gbisLocation,
   };
 
   const checks: HealthCheck[] = SPECS.map((spec) => ({
