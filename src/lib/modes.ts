@@ -38,8 +38,6 @@ export interface ModeDef {
   categories: CategoryKey[];
   layers: MapLayers;
   cards: CardId[];
-  /** 기본 지도 확대 수준 */
-  level: number;
 }
 
 const NO_LAYERS: MapLayers = {
@@ -58,7 +56,6 @@ export const MODES: ModeDef[] = [
     categories: [],
     layers: NO_LAYERS,
     cards: ["population", "news"],
-    level: 7,
   },
   {
     id: "food",
@@ -68,7 +65,6 @@ export const MODES: ModeDef[] = [
     categories: ["FD6", "CE7"],
     layers: { ...NO_LAYERS, places: true },
     cards: ["rating"],
-    level: 4,
   },
   {
     id: "life",
@@ -78,7 +74,6 @@ export const MODES: ModeDef[] = [
     categories: ["MT1", "CS2", "BK9", "OL7"],
     layers: { ...NO_LAYERS, places: true },
     cards: ["waste", "weather", "news"],
-    level: 5,
   },
   {
     id: "medical",
@@ -88,7 +83,6 @@ export const MODES: ModeDef[] = [
     categories: ["HP8", "PM9"],
     layers: { ...NO_LAYERS, places: true },
     cards: ["medical", "air"],
-    level: 5,
   },
   {
     id: "transit",
@@ -98,7 +92,6 @@ export const MODES: ModeDef[] = [
     categories: ["SW8", "PK6"],
     layers: { places: true, bus: true, incidents: true, traffic: true },
     cards: ["transit", "traffic"],
-    level: 5,
   },
   {
     id: "edu",
@@ -108,7 +101,6 @@ export const MODES: ModeDef[] = [
     categories: ["SC4", "CT1", "PO3"],
     layers: { ...NO_LAYERS, places: true },
     cards: ["population", "news"],
-    level: 5,
   },
 ];
 

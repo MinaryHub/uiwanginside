@@ -154,12 +154,17 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     setTab("map");
   }, []);
 
+  /**
+   * 모드는 "무엇을 보여줄지" 만 바꾼다. "어디를 보고 있는지" 는 그대로 둔다.
+   *
+   * 예전에는 모드마다 정해진 확대 수준으로 되돌려서, 청계동을 들여다보다
+   * 맛집을 누르면 화면이 튀었다. 지금 보고 있는 동네의 맛집을 보려는 것이므로
+   * 중심·확대·동 강조를 유지하고 목록만 새 카테고리로 바꾼다.
+   * 시야를 넓히려면 지도 우측의 전체보기 버튼을 쓴다.
+   */
   const changeMode = useCallback((next: ModeId) => {
     setMode(next);
     setSelectedPlaceId(null);
-    setActiveDong(null);
-    setFitBounds(null);
-    setLevel(MODE_MAP[next].level);
     setTab("map");
   }, []);
 
