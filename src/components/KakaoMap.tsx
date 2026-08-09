@@ -44,18 +44,20 @@ function pinEl(
   const el = document.createElement("div");
   // 지도 위 라벨은 배경 지도와 대비가 확실해야 읽힌다.
   // 다크모드에서도 흰 알약을 유지해 지도 타일 위 가독성을 지킨다.
+  const active = !!opts.active;
   el.style.cssText = `
-    display:flex;align-items:center;gap:6px;
-    padding:5px 11px 5px 7px;border-radius:999px;
-    background:${opts.active ? color : "rgba(255,255,255,0.98)"};
-    color:${opts.active ? "#fff" : "#16202b"};
-    border:1.5px solid ${color};
-    box-shadow:0 2px 10px rgba(16,32,43,.2);
-    font-size:12.5px;font-weight:700;white-space:nowrap;cursor:pointer;
-    transform:translateY(-2px);letter-spacing:-.02em;
+    display:flex;align-items:center;gap:4px;
+    padding:${active ? "4px 9px 4px 6px" : "2px 7px 2px 4px"};border-radius:999px;
+    background:${active ? color : "rgba(255,255,255,0.96)"};
+    color:${active ? "#fff" : "#16202b"};
+    border:${active ? 2 : 1}px solid ${color};
+    box-shadow:0 1px ${active ? 8 : 4}px rgba(16,32,43,${active ? 0.3 : 0.16});
+    font-size:${active ? 12 : 11}px;font-weight:${active ? 800 : 600};
+    white-space:nowrap;cursor:pointer;letter-spacing:-.02em;
+    transform:translateY(-2px);
     font-family:Pretendard,-apple-system,"Apple SD Gothic Neo",sans-serif;`;
   if (opts.pulse) el.classList.add("pulse");
-  el.innerHTML = `<span style="font-size:13px">${emoji}</span><span>${label}</span>`;
+  el.innerHTML = `<span style="font-size:${active ? 12 : 11}px">${emoji}</span><span>${label}</span>`;
   return el;
 }
 
@@ -63,9 +65,9 @@ function pinEl(
 function dotEl(color: string, emoji: string) {
   const el = document.createElement("div");
   el.style.cssText = `
-    display:grid;place-items:center;width:24px;height:24px;border-radius:999px;
-    background:rgba(255,255,255,0.98);border:2px solid ${color};
-    box-shadow:0 1px 5px rgba(16,32,43,.22);font-size:12px;cursor:pointer;`;
+    display:grid;place-items:center;width:16px;height:16px;border-radius:999px;
+    background:rgba(255,255,255,0.96);border:2px solid ${color};
+    box-shadow:0 1px 3px rgba(16,32,43,.2);font-size:8px;line-height:1;cursor:pointer;`;
   el.textContent = emoji;
   return el;
 }
@@ -337,8 +339,10 @@ export default function KakaoMap({
      * 가까이 들어오면 이름표를 붙인다. 개수도 화면 배율에 맞춰 제한한다.
      * (이전에는 340여 개를 전부 이름표로 그려 지도가 읽히지 않았다)
      */
-    const labelled = level <= 4;
-    const cap = level <= 3 ? 80 : level <= 5 ? 50 : 25;
+    // 이름표는 아주 가까이 봤을 때만. 그 밖에는 작은 점으로 위치만 알린다.
+    // 선택한 곳은 확대 수준과 무관하게 항상 이름표를 붙인다.
+    const labelled = level <= 2;
+    const cap = level <= 3 ? 60 : level <= 5 ? 40 : 20;
 
     // 가까운 순으로 정렬돼 오므로 앞에서 자르면 중심 주변이 남는다
     const shownPlaces = places.slice(0, cap);

@@ -34,6 +34,7 @@ import NewsPanel from "@/components/panels/NewsPanel";
 import WastePanel from "@/components/panels/WastePanel";
 import PopulationPanel from "@/components/panels/PopulationPanel";
 import RatingPanel from "@/components/panels/RatingPanel";
+import PlaceDetailCard from "@/components/PlaceDetailCard";
 import { getDeviceId } from "@/lib/deviceId";
 
 const KakaoMap = dynamic(() => import("@/components/KakaoMap"), { ssr: false });
@@ -190,10 +191,18 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
 
   const handleSelectPlace = useCallback(
     (p: Place) => {
-      setSelectedPlaceId((id) => (id === p.id ? null : p.id));
-      focus(p.lat, p.lng, 3);
+      setSelectedPlaceId((id) => {
+        if (id === p.id) return null;
+        // 이미 충분히 가까우면 확대를 건드리지 않는다.
+        // 고를 때마다 훅 당기면 주변 가게와 비교하던 맥락을 잃는다.
+        setFitBounds(null);
+        setCenter({ lat: p.lat, lng: p.lng });
+        setLevel((lv) => Math.min(lv, 4));
+        setTab("map");
+        return p.id;
+      });
     },
-    [focus],
+    [],
   );
 
   const selectedPlace = useMemo(
@@ -223,10 +232,9 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
         return (
           <RatingPanel
             key={id}
-            selected={selectedPlace}
             ratings={ratings.data?.data.ratings ?? {}}
             places={placeList}
-            onRated={() => ratings.mutate()}
+            selectedId={selectedPlaceId}
             onSelectPlace={handleSelectPlace}
           />
         );
@@ -425,8 +433,23 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             </button>
           </div>
 
-          {/* 동 바로가기 */}
-          <div className="thin-scroll absolute bottom-3 left-3 right-14 z-10 flex gap-1 overflow-x-auto">
+          {selectedPlace && (
+            <PlaceDetailCard
+              key={selectedPlace.id}
+              place={selectedPlace}
+              rating={ratings.data?.data.ratings[selectedPlace.id]}
+              showRating={mode === "food"}
+              onClose={() => setSelectedPlaceId(null)}
+              onRated={() => ratings.mutate()}
+            />
+          )}
+
+          {/* 동 바로가기 — 상세 카드가 떠 있으면 자리를 비켜준다 */}
+          <div
+            className={`thin-scroll absolute bottom-3 left-3 right-14 z-10 flex gap-1 overflow-x-auto ${
+              selectedPlace ? "hidden" : ""
+            }`}
+          >
             {DONGS.map((d) => {
               const on = activeDong === d.name;
               return (
