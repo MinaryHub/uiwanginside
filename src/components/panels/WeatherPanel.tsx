@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, Skeleton, LiveDot, Unavailable, hhmm } from "@/components/ui";
+import { Section, Skeleton, LiveDot, Unavailable, hhmm } from "@/components/ui";
 import type { WeatherPayload, ApiEnvelope } from "@/lib/types";
 
 const SKY_ICON: Record<string, string> = {
@@ -30,9 +30,8 @@ export default function WeatherPanel({
 }) {
   const d = res?.data;
   return (
-    <Card
+    <Section
       title="날씨"
-      icon="🌤️"
       right={<LiveDot live={d?.source === "kma"} />}
     >
       {isLoading && !d ? (
@@ -88,6 +87,6 @@ export default function WeatherPanel({
           )}
         </>
       )}
-    </Card>
+    </Section>
   );
 }

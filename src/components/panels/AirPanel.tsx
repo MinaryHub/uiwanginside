@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, Skeleton, LiveDot, Unavailable } from "@/components/ui";
+import { Section, Skeleton, LiveDot, Unavailable } from "@/components/ui";
 import type { AirPayload, ApiEnvelope, AirGrade } from "@/lib/types";
 
 const GRADE_STYLE: Record<AirGrade, { color: string; emoji: string }> = {
@@ -54,12 +54,10 @@ export default function AirPanel({
   const d = res?.data;
   const stations = d?.stations ?? [];
   const primary = stations[0];
-  const worst = primary?.pm25Grade ?? primary?.pm10Grade ?? null;
 
   return (
-    <Card
+    <Section
       title="미세먼지"
-      icon={worst ? GRADE_STYLE[worst].emoji : "🌫️"}
       right={<LiveDot live={d?.source === "airkorea"} />}
     >
       {isLoading && !d ? (
@@ -110,6 +108,6 @@ export default function AirPanel({
           )}
         </>
       )}
-    </Card>
+    </Section>
   );
 }

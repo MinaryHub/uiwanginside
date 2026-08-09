@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Card } from "@/components/ui";
+import { Section } from "@/components/ui";
 import {
   DONG_POPULATION,
   TOTAL_POPULATION,
@@ -35,9 +35,8 @@ export default function PopulationPanel({
   const max = Math.max(...rows.map((d) => d.population));
 
   return (
-    <Card
+    <Section
       title="인구"
-      icon="👥"
       right={
         <span className="text-[var(--text-2xs)] font-semibold text-[var(--text-muted)]">
           {POPULATION_AS_OF} 기준
@@ -152,6 +151,6 @@ export default function PopulationPanel({
         동별 인구: 행정안전부 주민등록인구통계 {POPULATION_AS_OF} 기준 · 세대수:{" "}
         {HOUSEHOLDS.source} {HOUSEHOLDS.asOf} 기준 · 면적: 위키백과
       </p>
-    </Card>
+    </Section>
   );
 }

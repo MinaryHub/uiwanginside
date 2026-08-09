@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, Skeleton, Badge, Empty, LiveDot, Unavailable, timeAgo } from "@/components/ui";
+import { Section, Skeleton, Badge, Empty, LiveDot, Unavailable, timeAgo } from "@/components/ui";
 import type { TrafficPayload, ApiEnvelope, Incident } from "@/lib/types";
 
 type Tone = "danger" | "warn" | "info" | "neutral";
@@ -38,7 +38,7 @@ export default function TrafficPanel({
   );
 
   return (
-    <Card title="교통 · 사고" icon="🚗" right={<LiveDot live={d?.source === "its"} />}>
+    <Section title="교통 · 사고" right={<LiveDot live={d?.source === "its"} />}>
       {isLoading && !d ? (
         <Skeleton rows={3} />
       ) : res?.ok === false ? (
@@ -132,6 +132,6 @@ export default function TrafficPanel({
           )}
         </>
       )}
-    </Card>
+    </Section>
   );
 }

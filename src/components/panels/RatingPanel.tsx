@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { Card, Empty } from "@/components/ui";
+import { Section, Empty } from "@/components/ui";
 import { Stars } from "@/components/StarRating";
 import type { Place, PlaceRating } from "@/lib/types";
 
@@ -33,7 +33,7 @@ export default function RatingPanel({
   );
 
   return (
-    <Card title="별점 순위" icon="⭐">
+    <Section title="별점 순위">
       {ranked.length === 0 ? (
         <Empty>
           아직 평가된 가게가 없습니다.
@@ -76,6 +76,6 @@ export default function RatingPanel({
         평가는 의왕시 안에서 위치가 확인된 경우에만 가능하고, 한 기기당 가게별 1회입니다.
         가게 정보는 카카오 로컬 기준입니다.
       </p>
-    </Card>
+    </Section>
   );
 }

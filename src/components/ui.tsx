@@ -4,38 +4,36 @@ import type { ReactNode } from "react";
 
 /* ─────────────────────────────────────────────────────────────
    공통 UI.
-   크기·색은 globals.css 의 토큰만 쓴다. 임의 값을 여기서 만들지 않는다.
+
+   미니멀 원칙
+   - 정보를 담는 그릇을 그리지 않는다. 테두리·헤더바 대신 여백과
+     작은 라벨로 구분한다.
+   - 아이콘은 지도 마커에서만 쓴다. 목록·제목의 이모지는 소음이다.
+   - 크기·색은 globals.css 토큰만 쓴다.
    ───────────────────────────────────────────────────────────── */
 
-export function Card({
+/**
+ * 시트 안의 한 구획.
+ * 카드가 아니라 섹션이다 — 배경도 테두리도 없고 라벨과 여백만 있다.
+ */
+export function Section({
   title,
-  icon,
   right,
   children,
-  className = "",
 }: {
-  title?: string;
-  icon?: string;
+  title: string;
   right?: ReactNode;
   children: ReactNode;
-  className?: string;
 }) {
   return (
-    <section
-      className={`overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-sm)] ${className}`}
-    >
-      {title && (
-        <header className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-3">
-          {icon && (
-            <span aria-hidden className="text-[1.05rem] leading-none">
-              {icon}
-            </span>
-          )}
-          <h2 className="text-[var(--text-base)] font-bold">{title}</h2>
-          {right && <div className="ml-auto flex items-center">{right}</div>}
-        </header>
-      )}
-      <div className="p-4">{children}</div>
+    <section className="border-t border-[var(--border)] px-4 py-4 first:border-t-0">
+      <header className="mb-2.5 flex items-center gap-2">
+        <h2 className="text-[var(--text-2xs)] font-bold uppercase tracking-wide text-[var(--text-faint)]">
+          {title}
+        </h2>
+        {right && <div className="ml-auto flex items-center">{right}</div>}
+      </header>
+      {children}
     </section>
   );
 }
@@ -59,21 +57,19 @@ export function Stat({
         ? "var(--brand)"
         : `var(--${tone})`;
   return (
-    <div className="flex flex-col items-center rounded-[var(--radius)] bg-[var(--surface-2)] px-2 py-3">
+    <div className="flex flex-col">
       <span
         className="tnum text-[var(--text-xl)] font-extrabold leading-none"
         style={{ color }}
       >
         {value}
         {unit && (
-          <span className="ml-0.5 text-[var(--text-2xs)] font-semibold text-[var(--text-muted)]">
+          <span className="ml-0.5 text-[var(--text-2xs)] font-semibold text-[var(--text-faint)]">
             {unit}
           </span>
         )}
       </span>
-      <span className="mt-1.5 text-[var(--text-2xs)] font-semibold text-[var(--text-muted)]">
-        {label}
-      </span>
+      <span className="mt-1 text-[var(--text-2xs)] text-[var(--text-muted)]">{label}</span>
     </div>
   );
 }
@@ -89,14 +85,14 @@ export function Badge({
 }) {
   const color = tone === "neutral" ? "var(--text-muted)" : `var(--${tone})`;
   const soft =
-    tone === "neutral" ? "var(--surface-3)" : `color-mix(in srgb, ${color} 14%, transparent)`;
+    tone === "neutral"
+      ? "var(--surface-3)"
+      : `color-mix(in srgb, ${color} 14%, transparent)`;
   return (
     <span
-      className="inline-flex shrink-0 items-center gap-1 rounded-[6px] px-1.5 py-0.5 text-[var(--text-2xs)] font-bold"
+      className="inline-flex shrink-0 items-center gap-1 rounded-[5px] px-1.5 py-0.5 text-[var(--text-2xs)] font-bold"
       style={
-        filled
-          ? { background: color, color: "var(--surface)" }
-          : { background: soft, color }
+        filled ? { background: color, color: "var(--surface)" } : { background: soft, color }
       }
     >
       {children}
@@ -104,7 +100,7 @@ export function Badge({
   );
 }
 
-/** 기본 동작 버튼 — 터치 영역 44px 를 지킨다 */
+/** 터치 영역 44px 를 지킨다 */
 export function Button({
   children,
   onClick,
@@ -122,14 +118,12 @@ export function Button({
   title?: string;
   type?: "button" | "submit";
 }) {
-  const base =
-    "inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-[var(--radius)] px-3.5 text-[var(--text-sm)] font-bold transition disabled:opacity-45";
   const style =
     variant === "primary"
       ? { background: "var(--brand)", color: "var(--on-brand)" }
       : variant === "secondary"
         ? {
-            background: "var(--surface)",
+            background: "transparent",
             color: "var(--text)",
             border: "1px solid var(--border-strong)",
           }
@@ -140,9 +134,9 @@ export function Button({
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className={`${base} ${full ? "w-full" : ""} ${
-        disabled ? "cursor-not-allowed" : "hover:brightness-[0.97] active:scale-[0.99]"
-      }`}
+      className={`inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-[var(--radius)] px-3.5 text-[var(--text-sm)] font-bold transition disabled:opacity-45 ${
+        full ? "w-full" : ""
+      } ${disabled ? "cursor-not-allowed" : "hover:brightness-[0.97] active:scale-[0.99]"}`}
       style={style}
     >
       {children}
@@ -162,10 +156,7 @@ export function Notice({
   return (
     <p
       className="mb-3 rounded-[var(--radius)] px-3 py-2 text-[var(--text-xs)] leading-relaxed"
-      style={{
-        background: `color-mix(in srgb, ${color} 12%, transparent)`,
-        color,
-      }}
+      style={{ background: `color-mix(in srgb, ${color} 12%, transparent)`, color }}
     >
       {children}
     </p>
@@ -174,7 +165,7 @@ export function Notice({
 
 export function Empty({ children }: { children: ReactNode }) {
   return (
-    <p className="py-7 text-center text-[var(--text-sm)] leading-relaxed text-[var(--text-muted)]">
+    <p className="py-6 text-[var(--text-sm)] leading-relaxed text-[var(--text-muted)]">
       {children}
     </p>
   );
@@ -184,7 +175,7 @@ export function Skeleton({ rows = 3 }: { rows?: number }) {
   return (
     <div className="space-y-2" aria-hidden>
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="skeleton h-11 rounded-[var(--radius)]" />
+        <div key={i} className="skeleton h-10 rounded-[var(--radius)]" />
       ))}
     </div>
   );
@@ -213,8 +204,7 @@ export function hhmm(iso: string): string {
 }
 
 export function LiveDot({ live }: { live: boolean }) {
-  // 연동 전에는 아무 표시도 하지 않는다.
-  // 가짜 데이터를 쓰지 않으므로 경고할 대상이 없다.
+  // 연동 전에는 아무 표시도 하지 않는다. 가짜 데이터가 없으니 경고할 것도 없다.
   if (!live) return null;
   return (
     <span
@@ -230,20 +220,20 @@ export function LiveDot({ live }: { live: boolean }) {
 /** 데이터를 가져오지 못했을 때 — 값을 지어내지 않고 이유만 알린다 */
 export function Unavailable({ reason }: { reason?: string }) {
   return (
-    <div className="rounded-[var(--radius)] bg-[var(--surface-2)] px-4 py-6 text-center">
+    <div className="py-4">
       <p className="text-[var(--text-sm)] font-semibold text-[var(--text-muted)]">
         아직 연동되지 않았습니다
       </p>
       {reason && (
-        <p className="mx-auto mt-1.5 max-w-[280px] text-[var(--text-xs)] leading-relaxed text-[var(--text-faint)]">
+        <p className="mt-1 text-[var(--text-xs)] leading-relaxed text-[var(--text-faint)]">
           {reason}
         </p>
       )}
       <a
         href="/status"
-        className="mt-3 inline-flex min-h-[36px] items-center text-[var(--text-xs)] font-bold text-[var(--brand)] underline underline-offset-4"
+        className="mt-2 inline-flex min-h-[36px] items-center text-[var(--text-xs)] font-bold text-[var(--brand)] underline underline-offset-4"
       >
-        연동 상태 보기 →
+        연동 상태 보기
       </a>
     </div>
   );

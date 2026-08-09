@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, Skeleton, Empty, LiveDot, Unavailable, timeAgo } from "@/components/ui";
+import { Section, Skeleton, Empty, LiveDot, Unavailable, timeAgo } from "@/components/ui";
 import type { NewsPayload, ApiEnvelope } from "@/lib/types";
 
 export default function NewsPanel({
@@ -18,7 +18,7 @@ export default function NewsPanel({
   const presets = ["의왕시", "의왕 교통", "의왕 사고", "의왕 개발", "왕송호수"];
 
   return (
-    <Card title="주요 뉴스" icon="📰" right={<LiveDot live={d?.source === "naver"} />}>
+    <Section title="주요 뉴스" right={<LiveDot live={d?.source === "naver"} />}>
       {isLoading && !d ? (
         <Skeleton rows={4} />
       ) : res?.ok === false ? (
@@ -73,6 +73,6 @@ export default function NewsPanel({
           )}
         </>
       )}
-    </Card>
+    </Section>
   );
 }

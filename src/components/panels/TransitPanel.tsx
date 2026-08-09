@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, Skeleton, Empty, LiveDot, Unavailable } from "@/components/ui";
+import { Section, Skeleton, Empty, LiveDot, Unavailable } from "@/components/ui";
 import type { TransitPayload, ApiEnvelope, BusArrival } from "@/lib/types";
 
 /**
@@ -119,9 +119,8 @@ export default function TransitPanel({
   const positionOnly = d?.source === "osm";
 
   return (
-    <Card
+    <Section
       title="버스 도착"
-      icon="🚌"
       right={
         positionOnly ? (
           <span
@@ -188,6 +187,6 @@ export default function TransitPanel({
           ))}
         </div>
       )}
-    </Card>
+    </Section>
   );
 }

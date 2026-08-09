@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Card, Skeleton, Empty, LiveDot, Unavailable } from "@/components/ui";
+import { Section, Skeleton, Empty, LiveDot, Unavailable } from "@/components/ui";
 import type { MedicalPayload, ApiEnvelope, MedicalPlace } from "@/lib/types";
 
 type Filter = "open" | "hospital" | "pharmacy" | "all";
@@ -20,7 +20,7 @@ function Row({ p, onFocus }: { p: MedicalPlace; onFocus: (p: MedicalPlace) => vo
     <li className="rounded-[var(--radius)] px-2 py-1.5 transition hover:bg-[var(--surface-2)]">
       <div className="flex items-center gap-1.5">
         <span className="shrink-0 text-[var(--text-xs)]">
-          {p.kind === "hospital" ? "🏥" : "💊"}
+          {p.kind === "hospital" ? "병원" : "약국"}
         </span>
         <button
           type="button"
@@ -89,9 +89,8 @@ export default function MedicalPanel({
   const openCount = places.filter((p) => p.openNow === true).length;
 
   return (
-    <Card
+    <Section
       title="진료중인 병원·약국"
-      icon="🏥"
       right={<LiveDot live={d?.source === "nmc"} />}
     >
       {isLoading && !d ? (
@@ -147,6 +146,6 @@ export default function MedicalPanel({
           </p>
         </>
       )}
-    </Card>
+    </Section>
   );
 }

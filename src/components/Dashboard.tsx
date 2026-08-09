@@ -11,6 +11,7 @@ import { UIWANG, DONGS, LANDMARKS } from "@/lib/uiwang";
 import { UIWANG_BBOX } from "@/lib/uiwang-boundary";
 import { DONG_BBOX, type LatLngBox } from "@/lib/dong-boundaries";
 import { MODES, MODE_MAP, type ModeId, type CardId } from "@/lib/modes";
+import { getDeviceId } from "@/lib/deviceId";
 import type {
   ApiEnvelope,
   Place,
@@ -25,6 +26,7 @@ import type {
   BusPositionsPayload,
 } from "@/lib/types";
 import SummaryStrip from "@/components/SummaryStrip";
+import PlaceDetailCard from "@/components/PlaceDetailCard";
 import PlacesPanel from "@/components/panels/PlacesPanel";
 import WeatherPanel from "@/components/panels/WeatherPanel";
 import AirPanel from "@/components/panels/AirPanel";
@@ -35,12 +37,9 @@ import NewsPanel from "@/components/panels/NewsPanel";
 import WastePanel from "@/components/panels/WastePanel";
 import PopulationPanel from "@/components/panels/PopulationPanel";
 import RatingPanel from "@/components/panels/RatingPanel";
-import PlaceDetailCard from "@/components/PlaceDetailCard";
-import { getDeviceId } from "@/lib/deviceId";
 
 const KakaoMap = dynamic(() => import("@/components/KakaoMap"), { ssr: false });
 
-/** 폴링 주기 (ms) */
 const POLL = {
   weather: 10 * 60_000,
   air: 10 * 60_000,
@@ -48,32 +47,35 @@ const POLL = {
   traffic: 60_000,
   transit: 30_000,
   news: 5 * 60_000,
-  /** TAGO 갱신 주기가 10~20초라 그보다 자주 부를 이유가 없다 */
   busPositions: 15_000,
 };
 
-type MobileTab = "map" | "list" | "info";
-
+/**
+ * 지도가 화면이고 나머지는 그 위에 뜬다.
+ *
+ * 이전에는 헤더·모드탭·좌패널·지도·우패널이 화면을 나눠 가져 지도가 3분의 1
+ * 남짓이었다. 지도 중심 포털에서 지도를 양쪽에서 누르고 있었던 셈이다.
+ * 지금은 지도가 전면이고 상단 바·모드 알약·시트가 그 위에 떠 있다.
+ */
 export default function Dashboard({ appKey }: { appKey?: string }) {
   const initial = parseUrlState(useSearchParams());
 
-  const [mode, setMode] = useState<ModeId>(initial.mode);
+  /** null = 둘러보기. 지도만 보이는 기본 상태다. */
+  const [mode, setMode] = useState<ModeId | null>(initial.mode);
   const [center, setCenter] = useState({ lat: initial.lat, lng: initial.lng });
   const [level, setLevel] = useState(initial.level);
   const [radius, setRadius] = useState<number>(initial.radius);
-  const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
-  const [newsQuery, setNewsQuery] = useState("의왕시");
-  const [tab, setTab] = useState<MobileTab>("map");
-  const [showBoundary, setShowBoundary] = useState(true);
-  const [activeDong, setActiveDong] = useState<string | null>(null);
-  /** 이 범위가 화면에 다 들어오도록 맞춘다 (동 전체보기 등) */
   const [fitBounds, setFitBounds] = useState<LatLngBox | null>(null);
-  /** 지도에 실시간 위치를 표시할 노선 */
+  const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
+  const [activeDong, setActiveDong] = useState<string | null>(null);
   const [tracked, setTracked] = useState<{ id: string; name: string } | null>(null);
+  const [newsQuery, setNewsQuery] = useState("의왕시");
+  const [sheetOpen, setSheetOpen] = useState(!!initial.mode);
+  const [dongMenu, setDongMenu] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  const def = MODE_MAP[mode];
+  const def = mode ? MODE_MAP[mode] : null;
 
-  // 조작 도중 값이 그대로 SWR 키가 되면 중간값마다 요청이 나간다
   const dCenter = useDebounced(center, 500);
   const dRadius = useDebounced(radius, 500);
   const geo = `lat=${dCenter.lat.toFixed(4)}&lng=${dCenter.lng.toFixed(4)}`;
@@ -84,7 +86,6 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
   );
   useSyncUrl(urlState);
 
-  const [copied, setCopied] = useState(false);
   const share = useCallback(async () => {
     const url = shareUrl(urlState);
     try {
@@ -98,11 +99,10 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
   }, [urlState]);
 
   // ── 데이터 ────────────────────────────────────────────
-  // 모드가 쓰지 않는 데이터는 아예 요청하지 않는다 (SWR 키를 null 로)
-  const needs = (c: CardId) => def.cards.includes(c);
+  const needs = (c: CardId) => !!def?.cards.includes(c);
 
   const places = useSWR<ApiEnvelope<PlacesPayload>>(
-    def.categories.length
+    def?.categories.length
       ? `/api/places?categories=${def.categories.join(",")}&${geo}&radius=${dRadius}`
       : null,
     swrFetcher,
@@ -125,7 +125,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     keepPreviousData: true,
   });
   const transit = useSWR<ApiEnvelope<TransitPayload>>(
-    def.layers.bus || needs("transit") ? `/api/transit?${geo}` : null,
+    def?.layers.bus || needs("transit") ? `/api/transit?${geo}` : null,
     swrFetcher,
     { refreshInterval: POLL.transit, keepPreviousData: true },
   );
@@ -135,17 +135,18 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     { refreshInterval: POLL.news, keepPreviousData: true },
   );
 
-  /** 지금 화면에 있는 가게들의 별점만 조회한다 */
   const placeList = useMemo(() => places.data?.data.places ?? [], [places.data]);
-  const ratingKey =
+
+  const ratings = useSWR<ApiEnvelope<RatingsPayload>>(
     mode === "food" && placeList.length > 0
-      ? `/api/ratings?placeIds=${placeList.slice(0, 120).map((p) => p.id).join(",")}` +
-        `&deviceId=${encodeURIComponent(getDeviceId())}`
-      : null;
-  const ratings = useSWR<ApiEnvelope<RatingsPayload>>(ratingKey, swrFetcher, {
-    keepPreviousData: true,
-    revalidateOnFocus: false,
-  });
+      ? `/api/ratings?placeIds=${placeList
+          .slice(0, 120)
+          .map((p) => p.id)
+          .join(",")}&deviceId=${encodeURIComponent(getDeviceId())}`
+      : null,
+    swrFetcher,
+    { keepPreviousData: true, revalidateOnFocus: false },
+  );
 
   const busPositions = useSWR<ApiEnvelope<BusPositionsPayload>>(
     tracked
@@ -156,75 +157,57 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
   );
 
   const refreshAll = useCallback(() => {
-    [places, weather, air, traffic, medical, transit, news].forEach((s) => s.mutate());
-  }, [places, weather, air, traffic, medical, transit, news]);
+    [places, weather, air, traffic, medical, transit, news, ratings].forEach((s) =>
+      s.mutate(),
+    );
+  }, [places, weather, air, traffic, medical, transit, news, ratings]);
 
   // ── 동작 ──────────────────────────────────────────────
   const focus = useCallback((lat: number, lng: number, lv = 4) => {
-    // 특정 지점으로 가는 동작이므로 진행 중인 범위 맞춤은 취소한다
     setFitBounds(null);
     setCenter({ lat, lng });
     setLevel(lv);
-    setTab("map");
   }, []);
 
-  /**
-   * 모드는 "무엇을 보여줄지" 만 바꾼다. "어디를 보고 있는지" 는 그대로 둔다.
-   *
-   * 예전에는 모드마다 정해진 확대 수준으로 되돌려서, 청계동을 들여다보다
-   * 맛집을 누르면 화면이 튀었다. 지금 보고 있는 동네의 맛집을 보려는 것이므로
-   * 중심·확대·동 강조를 유지하고 목록만 새 카테고리로 바꾼다.
-   * 시야를 넓히려면 지도 우측의 전체보기 버튼을 쓴다.
-   */
-  const changeMode = useCallback((next: ModeId) => {
-    setMode(next);
-    setSelectedPlaceId(null);
-    setTracked(null);
-    setTab("map");
+  /** 같은 모드를 다시 누르면 해제되어 둘러보기로 돌아간다 */
+  const toggleMode = useCallback((next: ModeId) => {
+    setMode((cur) => {
+      const off = cur === next;
+      setSheetOpen(!off);
+      setSelectedPlaceId(null);
+      setTracked(null);
+      return off ? null : next;
+    });
   }, []);
 
-  /**
-   * 동을 누르면 경계를 강조하고 동 전체가 화면에 들어오도록 맞춘다.
-   * 동마다 면적이 4배 넘게 차이나(청계동 22km² vs 내손2동 2.5km²) 고정 확대
-   * 수준으로는 어떤 동은 잘리고 어떤 동은 너무 작게 보인다.
-   * 같은 동을 다시 누르면 해제한다.
-   */
   const toggleDong = useCallback((d: { name: string }) => {
+    setDongMenu(false);
     setActiveDong((cur) => {
       if (cur === d.name) {
         setFitBounds(null);
         return null;
       }
       const box = DONG_BBOX[d.name];
-      // 새 객체로 넘겨야 같은 동을 다시 골랐을 때도 다시 맞춰진다
       if (box) setFitBounds({ ...box });
-      setTab("map");
       return d.name;
     });
   }, []);
 
-  const handleSelectPlace = useCallback(
-    (p: Place) => {
-      setSelectedPlaceId((id) => {
-        if (id === p.id) return null;
-        // 이미 충분히 가까우면 확대를 건드리지 않는다.
-        // 고를 때마다 훅 당기면 주변 가게와 비교하던 맥락을 잃는다.
-        setFitBounds(null);
-        setCenter({ lat: p.lat, lng: p.lng });
-        setLevel((lv) => Math.min(lv, 4));
-        setTab("map");
-        return p.id;
-      });
-    },
-    [],
-  );
+  const handleSelectPlace = useCallback((p: Place) => {
+    setSelectedPlaceId((id) => {
+      if (id === p.id) return null;
+      setFitBounds(null);
+      setCenter({ lat: p.lat, lng: p.lng });
+      setLevel((lv) => Math.min(lv, 4));
+      return p.id;
+    });
+  }, []);
 
   const selectedPlace = useMemo(
     () => placeList.find((p) => p.id === selectedPlaceId) ?? null,
     [placeList, selectedPlaceId],
   );
 
-  /** 의료 모드에서는 "진료중" 인 곳을 지도에 함께 띄운다 */
   const medicalMarkers = useMemo(
     () =>
       mode === "medical"
@@ -235,11 +218,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     [mode, medical.data],
   );
 
-  const unavailableCount = [places, weather, air, medical, traffic, transit, news].filter(
-    (s) => s.data && s.data.ok === false,
-  ).length;
-
-  // ── 카드 렌더 ─────────────────────────────────────────
+  // ── 시트 내용 ─────────────────────────────────────────
   const card = (id: CardId) => {
     switch (id) {
       case "rating":
@@ -282,8 +261,8 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             isLoading={transit.isLoading}
             onFocus={(lat, lng) => focus(lat, lng, 3)}
             trackedRouteId={tracked?.id ?? null}
-            onTrackRoute={(id, name) =>
-              setTracked((cur) => (cur?.id === id ? null : { id, name }))
+            onTrackRoute={(rid, name) =>
+              setTracked((cur) => (cur?.id === rid ? null : { id: rid, name }))
             }
           />
         );
@@ -306,33 +285,70 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     }
   };
 
+  /** 지도 위에 떠 있는 버튼 공통 스타일 */
+  const mapBtn =
+    "grid h-10 w-10 place-items-center rounded-[var(--radius)] border border-[var(--border)] " +
+    "bg-[var(--surface)]/92 text-[var(--text-base)] font-bold shadow-[var(--shadow-md)] " +
+    "backdrop-blur transition hover:border-[var(--brand)] hover:text-[var(--brand)]";
+
   return (
-    <div className="flex h-dvh flex-col overflow-hidden">
-      {/* ── 헤더: 이름 + 오늘 요약 ─────────────────────── */}
-      <header className="z-30 flex shrink-0 items-center gap-3 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2.5">
-        <button
-          type="button"
-          onClick={() => changeMode("explore")}
-          className="flex shrink-0 items-center gap-1.5"
-        >
-          <span className="grid h-8 w-8 place-items-center rounded-[var(--radius)] bg-[var(--brand)] text-[1.05rem]">
-            🏙️
-          </span>
-          <span className="hidden text-[var(--text-base)] font-extrabold sm:block">
-            의왕 인사이드
-          </span>
-        </button>
+    <div className="relative h-dvh overflow-hidden bg-[var(--bg)]">
+      {/* 지도 — 화면 전체 */}
+      <div className="absolute inset-0">
+        <KakaoMap
+          appKey={appKey}
+          center={center}
+          level={level}
+          radius={def?.layers.places ? radius : 0}
+          places={def?.layers.places ? placeList : []}
+          incidents={def?.layers.incidents ? (traffic.data?.data.incidents ?? []) : []}
+          busStops={def?.layers.bus ? (transit.data?.data.stops ?? []) : []}
+          trafficLinks={def?.layers.traffic ? (traffic.data?.data.links ?? []) : []}
+          medicalOpen={medicalMarkers}
+          busPositions={busPositions.data?.ok ? busPositions.data.data : null}
+          ratings={mode === "food" ? (ratings.data?.data.ratings ?? {}) : {}}
+          landmarks={mode === null ? LANDMARKS : []}
+          showBoundary
+          activeDong={activeDong}
+          fitBounds={fitBounds}
+          dimOutside={mode === null}
+          selectedPlaceId={selectedPlaceId}
+          onSelectPlace={handleSelectPlace}
+          onMapMoved={setCenter}
+          onViewFitted={(c, lv) => {
+            setCenter(c);
+            setLevel(lv);
+          }}
+        />
+      </div>
 
-        <span className="h-4 w-px shrink-0 bg-[var(--border)]" />
-
-        <div className="min-w-0 flex-1">
-          <SummaryStrip
-            weather={weather.data}
-            air={air.data}
-            traffic={traffic.data}
-            medical={medical.data}
-            onOpen={changeMode}
-          />
+      {/* 상단 바 — 이름과 오늘 요약만 */}
+      <header className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-center gap-2 p-3">
+        <div className="pointer-events-auto flex min-w-0 flex-1 items-center gap-2 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)]/92 px-3 py-2 shadow-[var(--shadow-md)] backdrop-blur">
+          <button
+            type="button"
+            onClick={() => {
+              setMode(null);
+              setSheetOpen(false);
+            }}
+            className="shrink-0 text-[var(--text-base)] font-extrabold tracking-tight"
+            title="둘러보기로"
+          >
+            의왕
+          </button>
+          <span className="h-4 w-px shrink-0 bg-[var(--border)]" />
+          <div className="min-w-0 flex-1">
+            <SummaryStrip
+              weather={weather.data}
+              air={air.data}
+              traffic={traffic.data}
+              medical={medical.data}
+              onOpen={(m) => {
+                setMode(m);
+                setSheetOpen(true);
+              }}
+            />
+          </div>
         </div>
 
         <button
@@ -340,231 +356,181 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           onClick={share}
           title="현재 화면 공유"
           aria-label="현재 화면 공유"
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-[var(--radius)] border border-[var(--border)] text-[var(--text-base)] transition hover:border-[var(--brand)] hover:text-[var(--brand)]"
+          className={`pointer-events-auto ${mapBtn}`}
         >
-          {copied ? "✓" : "🔗"}
+          {copied ? "✓" : "↗"}
         </button>
         <button
           type="button"
           onClick={refreshAll}
           title="새로고침"
           aria-label="새로고침"
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-[var(--radius)] border border-[var(--border)] text-[var(--text-base)] transition hover:border-[var(--brand)] hover:text-[var(--brand)]"
+          className={`pointer-events-auto ${mapBtn}`}
         >
           ↻
         </button>
       </header>
 
-      {/* ── 모드 탭 ────────────────────────────────────── */}
-      <nav className="thin-scroll z-20 flex shrink-0 gap-1.5 overflow-x-auto border-b border-[var(--border)] bg-[var(--surface)] px-4 pb-2.5">
-        {MODES.map((m) => {
-          const on = m.id === mode;
-          return (
-            <button
-              key={m.id}
-              type="button"
-              onClick={() => changeMode(m.id)}
-              title={m.hint}
-              aria-pressed={on}
-              className="flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-[var(--text-sm)] font-bold transition"
-              style={
-                on
-                  ? { background: "var(--brand)", color: "#fff" }
-                  : { background: "var(--surface-2)", color: "var(--text-muted)" }
-              }
-            >
-              <span>{m.emoji}</span>
-              {m.label}
-            </button>
-          );
-        })}
+      {/* 모드 — 탭 바를 없애고 지도 위 알약으로 */}
+      <nav
+        className="pointer-events-none absolute inset-x-0 top-[64px] z-20 flex justify-center px-3"
+        aria-label="보기 모드"
+      >
+        <div className="pointer-events-auto flex gap-1 rounded-[var(--radius-full)] border border-[var(--border)] bg-[var(--surface)]/92 p-1 shadow-[var(--shadow-md)] backdrop-blur">
+          {MODES.map((m) => {
+            const on = m.id === mode;
+            return (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => toggleMode(m.id)}
+                aria-pressed={on}
+                className="min-h-[36px] rounded-[var(--radius-full)] px-3.5 text-[var(--text-sm)] font-bold transition"
+                style={
+                  on
+                    ? { background: "var(--brand)", color: "var(--on-brand)" }
+                    : { color: "var(--text-muted)" }
+                }
+              >
+                {m.label}
+              </button>
+            );
+          })}
+        </div>
       </nav>
 
-      {unavailableCount > 0 && (
-        <div className="shrink-0 bg-amber-500/12 px-3 py-1 text-center text-[var(--text-2xs)] font-semibold text-amber-700 md:px-4 dark:text-amber-300">
-일부 정보는 아직 연동되지 않아 표시되지 않습니다{" "}
-          <a href="/status" className="underline underline-offset-2">
-            상태 보기 →
-          </a>
-        </div>
-      )}
-
-      {/* ── 본문 ───────────────────────────────────────── */}
-      <div className="flex min-h-0 flex-1">
-        {/* 좌: 목록 (둘러보기 모드에는 목록이 없다) */}
-        {def.categories.length > 0 && (
-          <aside
-            className={`shrink-0 border-r border-[var(--border)] bg-[var(--surface)] lg:block lg:w-[290px] ${
-              tab === "list" ? "block w-full" : "hidden"
-            }`}
+      {/* 지도 컨트롤 */}
+      <div className="absolute bottom-4 right-3 z-20 flex flex-col gap-1.5">
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setDongMenu((v) => !v)}
+            aria-expanded={dongMenu}
+            title="동으로 이동"
+            className={mapBtn}
+            style={
+              activeDong ? { color: "var(--info)", borderColor: "var(--info)" } : undefined
+            }
           >
-            <PlacesPanel
-              res={places.data}
-              isLoading={places.isLoading}
-              categories={def.categories}
-              radius={radius}
-              onRadiusChange={setRadius}
-              selectedPlaceId={selectedPlaceId}
-              onSelectPlace={handleSelectPlace}
-            />
-          </aside>
-        )}
-
-        {/* 중: 지도 */}
-        <main
-          className={`relative min-w-0 flex-1 lg:block ${tab === "map" ? "block" : "hidden"}`}
-        >
-          <KakaoMap
-            appKey={appKey}
-            center={center}
-            level={level}
-            radius={def.layers.places ? radius : 0}
-            places={def.layers.places ? (places.data?.data.places ?? []) : []}
-            incidents={def.layers.incidents ? (traffic.data?.data.incidents ?? []) : []}
-            busStops={def.layers.bus ? (transit.data?.data.stops ?? []) : []}
-            trafficLinks={def.layers.traffic ? (traffic.data?.data.links ?? []) : []}
-            medicalOpen={medicalMarkers}
-            busPositions={busPositions.data?.ok ? busPositions.data.data : null}
-            ratings={mode === "food" ? (ratings.data?.data.ratings ?? {}) : {}}
-            landmarks={mode === "explore" ? LANDMARKS : []}
-            showBoundary={showBoundary}
-            activeDong={activeDong}
-            fitBounds={fitBounds}
-            onViewFitted={(c, lv) => {
-              // 맞춘 결과를 상태에 반영해 주변 장소·정류소 조회가 새 위치를 따르게 한다
-              setCenter(c);
-              setLevel(lv);
-            }}
-            dimOutside={showBoundary && mode === "explore"}
-            selectedPlaceId={selectedPlaceId}
-            onSelectPlace={handleSelectPlace}
-            onMapMoved={setCenter}
-          />
-
-          <div className="absolute left-3 top-3 z-10 flex gap-1.5">
-            <button
-              type="button"
-              onClick={() => setShowBoundary((v) => !v)}
-              className="inline-flex min-h-[40px] items-center rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)]/95 px-3 text-[var(--text-xs)] font-bold shadow-[var(--shadow-md)] backdrop-blur transition"
-              style={showBoundary ? { color: "var(--brand)" } : { color: "var(--text-muted)" }}
-            >
-              🗾 시경계
-            </button>
-          </div>
-
-          {selectedPlace && (
-            <PlaceDetailCard
-              key={selectedPlace.id}
-              place={selectedPlace}
-              rating={ratings.data?.data.ratings[selectedPlace.id]}
-              showRating={mode === "food"}
-              onClose={() => setSelectedPlaceId(null)}
-              onRated={() => ratings.mutate()}
-            />
-          )}
-
-          {/* 동 바로가기 — 상세 카드가 떠 있으면 자리를 비켜준다 */}
-          <div
-            className={`thin-scroll absolute bottom-3 left-3 right-14 z-10 flex gap-1 overflow-x-auto ${
-              selectedPlace ? "hidden" : ""
-            }`}
-          >
-            {DONGS.map((d) => {
-              const on = activeDong === d.name;
-              return (
+            동
+          </button>
+          {dongMenu && (
+            <div className="fade-up absolute bottom-0 right-12 w-32 overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)]">
+              {DONGS.map((d) => (
                 <button
                   key={d.name}
                   type="button"
-                  aria-pressed={on}
-                  title={`${d.name} 경계 보기 · 인구 ${d.population.toLocaleString("ko-KR")}명`}
                   onClick={() => toggleDong(d)}
-                  className="shrink-0 rounded-full border px-2.5 py-1 text-[var(--text-xs)] font-bold shadow-md backdrop-blur transition"
-                  style={
-                    on
-                      ? { background: "var(--info)", borderColor: "var(--info)", color: "var(--surface)" }
-                      : { borderColor: "var(--border)", background: "color-mix(in srgb, var(--surface) 95%, transparent)" }
-                  }
+                  className="block min-h-[40px] w-full px-3 text-left text-[var(--text-sm)] font-semibold transition hover:bg-[var(--surface-2)]"
+                  style={activeDong === d.name ? { color: "var(--info)" } : undefined}
                 >
                   {d.name}
                 </button>
-              );
-            })}
-          </div>
-
-          <div className="absolute right-3 top-3 z-10 flex flex-col gap-1.5">
-            <button
-              type="button"
-              onClick={() => {
-                setActiveDong(null);
-                setFitBounds({ ...UIWANG_BBOX });
-                setTab("map");
-              }}
-              className="grid h-11 w-11 place-items-center rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)]/95 text-[var(--text-base)] shadow-[var(--shadow-md)] backdrop-blur transition hover:border-[var(--brand)]"
-              title="의왕시 전체보기"
-            >
-              🗾
-            </button>
-            <button
-              type="button"
-              onClick={() => focus(UIWANG.center.lat, UIWANG.center.lng, 5)}
-              className="grid h-11 w-11 place-items-center rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)]/95 text-[var(--text-base)] shadow-[var(--shadow-md)] backdrop-blur transition hover:border-[var(--brand)]"
-              title="의왕시청으로"
-            >
-              🎯
-            </button>
-            <button
-              type="button"
-              onClick={() => setLevel((l) => Math.max(1, l - 1))}
-              className="grid h-11 w-11 place-items-center rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)]/95 text-[var(--text-lg)] font-bold shadow-[var(--shadow-md)] backdrop-blur transition hover:border-[var(--brand)]"
-            >
-              +
-            </button>
-            <button
-              type="button"
-              onClick={() => setLevel((l) => Math.min(12, l + 1))}
-              className="grid h-11 w-11 place-items-center rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)]/95 text-[var(--text-lg)] font-bold shadow-[var(--shadow-md)] backdrop-blur transition hover:border-[var(--brand)]"
-            >
-              −
-            </button>
-          </div>
-        </main>
-
-        {/* 우: 모드별 카드 */}
-        <aside
-          className={`thin-scroll shrink-0 space-y-3 overflow-y-auto border-l border-[var(--border)] bg-[var(--bg)] p-3 lg:block lg:w-[340px] ${
-            tab === "info" ? "block w-full" : "hidden"
-          }`}
+              ))}
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveDong(null);
+                  setFitBounds({ ...UIWANG_BBOX });
+                  setDongMenu(false);
+                }}
+                className="block min-h-[40px] w-full border-t border-[var(--border)] px-3 text-left text-[var(--text-sm)] font-semibold text-[var(--text-muted)] transition hover:bg-[var(--surface-2)]"
+              >
+                의왕시 전체
+              </button>
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => focus(UIWANG.center.lat, UIWANG.center.lng, 5)}
+          title="의왕시청으로"
+          aria-label="의왕시청으로"
+          className={mapBtn}
         >
-          <p className="px-1 pb-0.5 text-[var(--text-xs)] font-semibold text-[var(--text-faint)]">{def.hint}</p>
-          {def.cards.map(card)}
-        </aside>
+          ⌖
+        </button>
+        <button
+          type="button"
+          onClick={() => setLevel((l) => Math.max(1, l - 1))}
+          aria-label="확대"
+          className={mapBtn}
+        >
+          +
+        </button>
+        <button
+          type="button"
+          onClick={() => setLevel((l) => Math.min(12, l + 1))}
+          aria-label="축소"
+          className={mapBtn}
+        >
+          −
+        </button>
       </div>
 
-      {/* ── 모바일 탭바 ────────────────────────────────── */}
-      <nav className="z-30 flex shrink-0 border-t border-[var(--border)] bg-[var(--surface)] lg:hidden">
-        {(
-          [
-            ...(def.categories.length > 0
-              ? [["list", "📋 목록"] as [MobileTab, string]]
-              : []),
-            ["map", "🗺️ 지도"] as [MobileTab, string],
-            ["info", `${def.emoji} ${def.label}`] as [MobileTab, string],
-          ] as [MobileTab, string][]
-        ).map(([k, label]) => (
-          <button
-            key={k}
-            type="button"
-            onClick={() => setTab(k)}
-            className="min-h-[52px] flex-1 text-[var(--text-sm)] font-bold transition"
-            style={{
-              color: tab === k ? "var(--brand)" : "var(--text-muted)",
-              borderTop: `2px solid ${tab === k ? "var(--brand)" : "transparent"}`,
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </nav>
+      {selectedPlace && (
+        <PlaceDetailCard
+          key={selectedPlace.id}
+          place={selectedPlace}
+          rating={ratings.data?.data.ratings[selectedPlace.id]}
+          showRating={mode === "food"}
+          onClose={() => setSelectedPlaceId(null)}
+          onRated={() => ratings.mutate()}
+        />
+      )}
+
+      {/* 시트 — 좌우 두 패널을 하나로 합쳤다 */}
+      {def && (
+        <aside
+          className={`absolute inset-y-0 left-0 z-30 flex w-full flex-col border-r border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)] transition-transform duration-200 sm:w-[360px] ${
+            sheetOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
+        >
+          <header className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-3">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-[var(--text-base)] font-extrabold">{def.label}</h1>
+              <p className="truncate text-[var(--text-2xs)] text-[var(--text-faint)]">
+                {def.hint}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSheetOpen(false)}
+              aria-label="목록 닫기"
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius)] text-[var(--text-base)] text-[var(--text-muted)] transition hover:bg-[var(--surface-2)]"
+            >
+              ✕
+            </button>
+          </header>
+
+          <div className="thin-scroll min-h-0 flex-1 overflow-y-auto">
+            {def.categories.length > 0 && (
+              <PlacesPanel
+                res={places.data}
+                isLoading={places.isLoading}
+                categories={def.categories}
+                radius={radius}
+                onRadiusChange={setRadius}
+                selectedPlaceId={selectedPlaceId}
+                onSelectPlace={handleSelectPlace}
+              />
+            )}
+            {def.cards.map(card)}
+          </div>
+        </aside>
+      )}
+
+      {/* 시트를 닫아둔 상태에서 다시 여는 손잡이 */}
+      {def && !sheetOpen && (
+        <button
+          type="button"
+          onClick={() => setSheetOpen(true)}
+          aria-label={`${def.label} 목록 열기`}
+          className="absolute left-0 top-1/2 z-20 -translate-y-1/2 rounded-r-[var(--radius)] border border-l-0 border-[var(--border)] bg-[var(--surface)]/92 px-2 py-5 text-[var(--text-sm)] font-bold shadow-[var(--shadow-md)] backdrop-blur"
+        >
+          ›
+        </button>
+      )}
     </div>
   );
 }

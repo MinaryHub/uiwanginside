@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Card } from "@/components/ui";
+import { Section } from "@/components/ui";
 import {
   WASTE_KINDS,
   DISCHARGE_WINDOW,
@@ -21,7 +21,7 @@ export default function WastePanel() {
   const summer = isSummer();
 
   return (
-    <Card title="쓰레기 배출" icon="🗑️">
+    <Section title="쓰레기 배출">
       {/* 배출 시간 — 시민이 가장 자주 확인하는 정보라 맨 위에 크게 */}
       <div className="mb-3 rounded-[var(--radius)] bg-[var(--brand-soft)] px-3 py-2.5">
         <div className="text-[var(--text-2xs)] font-bold text-[var(--text-muted)]">배출 가능 시간</div>
@@ -112,6 +112,6 @@ export default function WastePanel() {
           의왕시청 생활쓰레기 안내
         </a>
       </p>
-    </Card>
+    </Section>
   );
 }

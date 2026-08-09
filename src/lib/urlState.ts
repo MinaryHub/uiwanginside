@@ -12,7 +12,8 @@ import { isModeId, type ModeId } from "./modes";
  */
 
 export interface UrlState {
-  mode: ModeId;
+  /** null = 둘러보기 (아무 모드도 고르지 않은 기본 상태) */
+  mode: ModeId | null;
   lat: number;
   lng: number;
   level: number;
@@ -20,7 +21,7 @@ export interface UrlState {
 }
 
 export const DEFAULT_STATE: UrlState = {
-  mode: "explore",
+  mode: null,
   lat: UIWANG.center.lat,
   lng: UIWANG.center.lng,
   level: 7,
@@ -36,7 +37,7 @@ function numOr(raw: string | null, fallback: number, min: number, max: number) {
 export function parseUrlState(sp: ReadonlyURLSearchParams | URLSearchParams): UrlState {
   const m = sp.get("m");
   return {
-    mode: isModeId(m) ? m : DEFAULT_STATE.mode,
+    mode: isModeId(m) ? m : null,
     lat: numOr(sp.get("lat"), DEFAULT_STATE.lat, 33, 39),
     lng: numOr(sp.get("lng"), DEFAULT_STATE.lng, 124, 132),
     level: numOr(sp.get("z"), DEFAULT_STATE.level, 1, 12),
@@ -51,7 +52,7 @@ function toQuery(s: UrlState): string {
   if (s.lng.toFixed(4) !== DEFAULT_STATE.lng.toFixed(4)) p.set("lng", s.lng.toFixed(4));
   if (s.level !== DEFAULT_STATE.level) p.set("z", String(s.level));
   if (s.radius !== DEFAULT_STATE.radius) p.set("r", String(s.radius));
-  if (s.mode !== DEFAULT_STATE.mode) p.set("m", s.mode);
+  if (s.mode) p.set("m", s.mode);
   return p.toString();
 }
 

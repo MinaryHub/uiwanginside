@@ -56,8 +56,8 @@ export default function PlacesPanel({
   const source = res?.data.source;
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="border-b border-[var(--border)] p-2.5">
+    <div>
+      <div className="border-b border-[var(--border)] px-4 py-3.5">
         {/* 모드 안에서 좁히기 — 전체가 기본 */}
         <div className="mb-2 flex flex-wrap gap-1">
           <button
@@ -87,7 +87,6 @@ export default function PlacesPanel({
                     : { background: "var(--surface-2)", color: "var(--text-muted)" }
                 }
               >
-                <span>{def.emoji}</span>
                 {def.label}
                 <span className="opacity-70">{countByCat[c] ?? 0}</span>
               </button>
@@ -121,7 +120,7 @@ export default function PlacesPanel({
         </div>
       </div>
 
-      <div className="thin-scroll flex-1 overflow-y-auto p-2.5">
+      <div className="px-4 py-3.5">
         {isLoading && !res ? (
           <Skeleton rows={6} />
         ) : (
@@ -155,7 +154,7 @@ export default function PlacesPanel({
                       <button
                         type="button"
                         onClick={() => onSelectPlace(p)}
-                        className="w-full rounded-[var(--radius)] px-2 py-1.5 text-left transition hover:bg-[var(--surface-2)]"
+                        className="w-full rounded-[var(--radius)] px-2 py-2 text-left transition hover:bg-[var(--surface-2)]"
                         style={
                           active
                             ? {
@@ -166,7 +165,11 @@ export default function PlacesPanel({
                         }
                       >
                         <div className="flex items-center gap-1.5">
-                          <span className="shrink-0 text-[var(--text-xs)]">{def.emoji}</span>
+                          <span
+                            aria-hidden
+                            className="h-1.5 w-1.5 shrink-0 rounded-full"
+                            style={{ background: def.color }}
+                          />
                           <span className="flex-1 truncate text-[var(--text-sm)] font-semibold">
                             {p.name}
                           </span>

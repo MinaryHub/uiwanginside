@@ -3,14 +3,18 @@ import type { CategoryKey } from "./uiwang";
 /**
  * 목적별 모드.
  *
- * 이전에는 카테고리 11종, 지도 레이어 5종, 우측 카드 8개가 동시에 켜져 있어
- * 화면이 무엇을 말하려는지 알 수 없었다. 시민은 "전부"가 아니라 "지금 필요한 것"을
- * 찾으러 오므로, 목적을 고르면 지도 레이어와 카드 구성이 함께 정해지도록 한다.
+ * 시민은 "전부" 가 아니라 "지금 필요한 것" 을 찾으러 온다. 목적을 고르면
+ * 지도 레이어와 시트 내용이 함께 정해진다.
+ *
+ * 넷으로 줄였다. 예전에는 여섯이었는데 '둘러보기' 는 아무것도 고르지 않은
+ * 기본 상태로 두는 게 자연스럽고(모드를 해제하면 그게 둘러보기다),
+ * '교육·문화' 는 학교·도서관·공공기관이라 생활 범주에 넣어도 어색하지 않다.
+ * 고를 것이 적을수록 무엇을 고를지 고민하는 시간이 준다.
  */
 
-export type ModeId = "explore" | "food" | "life" | "medical" | "transit" | "edu";
+export type ModeId = "food" | "life" | "medical" | "transit";
 
-/** 우측에 띄울 카드 */
+/** 시트에 띄울 내용 */
 export type CardId =
   | "rating"
   | "weather"
@@ -32,8 +36,7 @@ export interface MapLayers {
 export interface ModeDef {
   id: ModeId;
   label: string;
-  emoji: string;
-  /** 탭 아래 한 줄 설명 */
+  /** 시트 상단 한 줄 설명 */
   hint: string;
   categories: CategoryKey[];
   layers: MapLayers;
@@ -49,19 +52,9 @@ const NO_LAYERS: MapLayers = {
 
 export const MODES: ModeDef[] = [
   {
-    id: "explore",
-    label: "둘러보기",
-    emoji: "🗾",
-    hint: "의왕시 전체를 한눈에",
-    categories: [],
-    layers: NO_LAYERS,
-    cards: ["population", "news"],
-  },
-  {
     id: "food",
     label: "맛집",
-    emoji: "🍽️",
-    hint: "의왕 음식점·카페 — 시민이 매긴 별점",
+    hint: "음식점·카페 — 시민이 매긴 별점",
     categories: ["FD6", "CE7"],
     layers: { ...NO_LAYERS, places: true },
     cards: ["rating"],
@@ -69,16 +62,14 @@ export const MODES: ModeDef[] = [
   {
     id: "life",
     label: "생활",
-    emoji: "🛒",
-    hint: "마트·편의점·은행·주유소",
-    categories: ["MT1", "CS2", "BK9", "OL7"],
+    hint: "마트·편의점·은행·학교·공공기관",
+    categories: ["MT1", "CS2", "BK9", "OL7", "SC4", "PO3", "CT1"],
     layers: { ...NO_LAYERS, places: true },
-    cards: ["waste", "weather", "news"],
+    cards: ["waste", "weather", "population", "news"],
   },
   {
     id: "medical",
     label: "의료",
-    emoji: "🏥",
     hint: "지금 진료 중인 병원·약국",
     categories: ["HP8", "PM9"],
     layers: { ...NO_LAYERS, places: true },
@@ -87,20 +78,10 @@ export const MODES: ModeDef[] = [
   {
     id: "transit",
     label: "교통",
-    emoji: "🚌",
-    hint: "버스 도착·사고·정체",
+    hint: "버스 도착·실시간 위치·사고",
     categories: ["SW8", "PK6"],
     layers: { places: true, bus: true, incidents: true, traffic: true },
     cards: ["transit", "traffic"],
-  },
-  {
-    id: "edu",
-    label: "교육·문화",
-    emoji: "🏫",
-    hint: "학교·도서관·공공기관",
-    categories: ["SC4", "CT1", "PO3"],
-    layers: { ...NO_LAYERS, places: true },
-    cards: ["population", "news"],
   },
 ];
 
