@@ -24,7 +24,6 @@ import type {
   MedicalPayload,
   NewsPayload,
   TrafficPayload,
-  TrafficLink,
   TransitPayload,
   RatingsPayload,
   BusPositionsPayload,
@@ -56,7 +55,6 @@ const KakaoMap = dynamic(() => import("@/components/KakaoMap"), { ssr: false });
 const NO_PLACES: Place[] = [];
 const NO_INCIDENTS: Incident[] = [];
 const NO_STOPS: BusStop[] = [];
-const NO_LINKS: TrafficLink[] = [];
 const NO_MEDICAL: MedicalPayload["places"] = [];
 const NO_LANDMARKS: typeof LANDMARKS = [];
 
@@ -281,9 +279,6 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     ? (traffic.data?.data.incidents ?? NO_INCIDENTS)
     : NO_INCIDENTS;
   const mapStops = def?.layers.bus ? (transit.data?.data.stops ?? NO_STOPS) : NO_STOPS;
-  const mapLinks = def?.layers.traffic
-    ? (traffic.data?.data.links ?? NO_LINKS)
-    : NO_LINKS;
   const mapLandmarks = mode === null ? LANDMARKS : NO_LANDMARKS;
   const mapBusPositions = busPositions.data?.ok ? busPositions.data.data : null;
 
@@ -381,7 +376,6 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           places={mapPlaces}
           incidents={mapIncidents}
           busStops={mapStops}
-          trafficLinks={mapLinks}
           medicalOpen={medicalMarkers}
           busPositions={mapBusPositions}
           landmarks={mapLandmarks}

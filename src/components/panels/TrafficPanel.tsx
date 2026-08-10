@@ -105,10 +105,10 @@ export default function TrafficPanel({
           {links.length > 0 && (
             <>
               <h3 className="mb-1.5 mt-3 text-[var(--text-xs)] font-bold text-[var(--text-muted)]">
-                정체 구간 TOP {Math.min(5, links.length)}
+                느린 도로 {Math.min(6, links.length)}곳
               </h3>
               <ul className="space-y-1">
-                {links.slice(0, 5).map((l) => (
+                {links.slice(0, 6).map((l) => (
                   <li
                     key={l.id}
                     className="flex items-center gap-2 rounded-[var(--radius)] bg-[var(--surface-2)] px-2.5 py-1.5"

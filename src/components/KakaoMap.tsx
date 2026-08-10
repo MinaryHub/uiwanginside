@@ -8,7 +8,6 @@ import type {
   Place,
   Incident,
   BusStop,
-  TrafficLink,
   BusPositionsPayload,
 } from "@/lib/types";
 
@@ -104,17 +103,6 @@ function busEl(routeName: string, b: BusPositionsPayload["positions"][number]) {
   return el;
 }
 
-function speedEl(link: TrafficLink) {
-  const color =
-    link.level === "congested" ? "var(--danger)" : link.level === "slow" ? "var(--warn)" : "var(--ok)";
-  const el = document.createElement("div");
-  el.style.cssText = `
-    padding:3px 8px;border-radius:7px;background:${color};color:#fff;
-    font-size:12px;font-weight:800;box-shadow:0 2px 7px rgba(16,32,43,.28);
-    white-space:nowrap;font-variant-numeric:tabular-nums;`;
-  el.textContent = `${link.speed}km/h`;
-  return el;
-}
 
 export interface KakaoMapProps {
   appKey?: string;
@@ -123,7 +111,6 @@ export interface KakaoMapProps {
   places: Place[];
   incidents: Incident[];
   busStops: BusStop[];
-  trafficLinks: TrafficLink[];
   /** 진료중인 병원·약국 (의료 모드) */
   medicalOpen: { id: string; name: string; kind: string; lat: number | null; lng: number | null }[];
   /** 추적 중인 노선의 실시간 버스 위치 */
@@ -161,7 +148,6 @@ export default function KakaoMap({
   places,
   incidents,
   busStops,
-  trafficLinks,
   medicalOpen,
   busPositions,
   landmarks,
@@ -460,18 +446,13 @@ export default function KakaoMap({
       );
     }
 
-    if (labelled) {
-      for (const l of trafficLinks) {
-        if (l.lat == null || l.lng == null) continue;
-        add(l.lat, l.lng, speedEl(l), 30);
-      }
-    }
+    // 구간속도는 지도에 그리지 않는다. ITS 소통정보는 좌표를 주지 않아
+    // (linkId·도로명뿐) 찍을 자리가 없다. 목록으로만 보여준다.
   }, [
     ready,
     level,
     busStops,
     incidents,
-    trafficLinks,
     selectedMarkerId,
     onSelectStop,
     onSelectIncident,
