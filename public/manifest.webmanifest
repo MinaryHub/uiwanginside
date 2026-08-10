@@ -1,0 +1,23 @@
+{
+  "name": "의왕 인사이드",
+  "short_name": "의왕",
+  "description": "의왕시 생활·실시간 정보와 내 사진 지도",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f2f4f6",
+  "theme_color": "#0f6b60",
+  "lang": "ko",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "share_target": {
+    "action": "/share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "files": [{ "name": "photos", "accept": ["image/*"] }]
+    }
+  }
+}

@@ -12,6 +12,7 @@ import { UIWANG_BBOX } from "@/lib/uiwang-boundary";
 import { DONG_BBOX, type LatLngBox } from "@/lib/dong-boundaries";
 import { MODES, MODE_MAP, type ModeId, type CardId } from "@/lib/modes";
 import { getDeviceId } from "@/lib/deviceId";
+import type { Photo, PhotosPayload } from "@/lib/photoTypes";
 import { timeAgo } from "@/components/ui";
 import type {
   ApiEnvelope,
@@ -28,6 +29,7 @@ import type {
   RatingsPayload,
   BusPositionsPayload,
 } from "@/lib/types";
+import Link from "next/link";
 import Logo from "@/components/Logo";
 import SummaryStrip from "@/components/SummaryStrip";
 import PlaceDetailCard from "@/components/PlaceDetailCard";
@@ -57,6 +59,7 @@ const NO_INCIDENTS: Incident[] = [];
 const NO_STOPS: BusStop[] = [];
 const NO_MEDICAL: MedicalPayload["places"] = [];
 const NO_LANDMARKS: typeof LANDMARKS = [];
+const NO_PHOTOS: Photo[] = [];
 
 const POLL = {
   weather: 10 * 60_000,
@@ -180,6 +183,13 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     swrFetcher,
     { refreshInterval: POLL.busPositions, keepPreviousData: true },
   );
+
+  /** 내 사진. 로그인하지 않았으면 서버가 빈 목록을 준다. */
+  const myPhotos = useSWR<ApiEnvelope<PhotosPayload>>("/api/photos", swrFetcher, {
+    revalidateOnFocus: false,
+  });
+  const mapPhotos = myPhotos.data?.data.photos ?? NO_PHOTOS;
+  const [photo, setPhoto] = useState<Photo | null>(null);
 
   const refreshAll = useCallback(() => {
     [places, weather, air, traffic, medical, transit, news, ratings].forEach((s) =>
@@ -377,6 +387,8 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           incidents={mapIncidents}
           busStops={mapStops}
           medicalOpen={medicalMarkers}
+          photos={mapPhotos}
+          onSelectPhoto={setPhoto}
           busPositions={mapBusPositions}
           landmarks={mapLandmarks}
           showBoundary
@@ -429,6 +441,14 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           </div>
         </div>
 
+        <Link
+          href="/gallery"
+          title="내 사진"
+          aria-label="내 사진"
+          className={`pointer-events-auto ${mapBtn}`}
+        >
+          ▣
+        </Link>
         <button
           type="button"
           onClick={share}
@@ -572,6 +592,34 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           <p className="mt-2 text-[var(--text-2xs)] text-[var(--text-faint)]">
             {timeAgo(marker.incident.startedAt)} 접수
           </p>
+        </MapCard>
+      )}
+
+      {photo && (
+        <MapCard
+          key={photo.id}
+          title={photo.caption || "내 사진"}
+          subtitle={new Date(photo.takenAt ?? photo.createdAt).toLocaleDateString("ko-KR", {
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+            timeZone: "Asia/Seoul",
+          })}
+          onClose={() => setPhoto(null)}
+        >
+          {/* 원본을 그대로 쓴다 — Blob URL 은 next/image 최적화 대상이 아니다 */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={photo.url}
+            alt={photo.caption ?? "내 사진"}
+            className="mt-3 max-h-[40vh] w-full rounded-[var(--radius)] object-contain"
+          />
+          <Link
+            href="/gallery"
+            className="mt-3 inline-flex min-h-[40px] items-center text-[var(--text-xs)] font-bold text-[var(--brand)] underline underline-offset-4"
+          >
+            갤러리에서 관리
+          </Link>
         </MapCard>
       )}
 

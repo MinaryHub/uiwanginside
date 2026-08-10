@@ -69,5 +69,24 @@ export async function ensureSchema(): Promise<void> {
       ON place_ratings (device_id, created_at DESC)
   `;
 
+  await sql`
+    CREATE TABLE IF NOT EXISTS photos (
+      id          BIGSERIAL PRIMARY KEY,
+      user_id     TEXT      NOT NULL,
+      url         TEXT      NOT NULL,
+      pathname    TEXT      NOT NULL,
+      caption     TEXT,
+      lat         DOUBLE PRECISION NOT NULL,
+      lng         DOUBLE PRECISION NOT NULL,
+      -- 위치를 어디서 얻었는지. 사진 EXIF 가 가장 정확하고, 없으면 현위치다.
+      loc_source  TEXT      NOT NULL DEFAULT 'device',
+      taken_at    TIMESTAMPTZ,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS photos_user_idx ON photos (user_id, created_at DESC)
+  `;
+
   ensured = true;
 }

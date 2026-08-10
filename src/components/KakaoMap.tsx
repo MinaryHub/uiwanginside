@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { CATEGORY_MAP } from "@/lib/uiwang";
 import { UIWANG_BOUNDARY } from "@/lib/uiwang-boundary";
 import { DONG_BOUNDARIES } from "@/lib/dong-boundaries";
+import type { Photo } from "@/lib/photoTypes";
 import type {
   Place,
   Incident,
@@ -66,6 +67,25 @@ function pinEl(
   return el;
 }
 
+/** 내가 등록한 사진 — 지도 위에 작게 */
+function photoEl(p: Photo, onClick: () => void) {
+  const el = document.createElement("button");
+  el.type = "button";
+  el.title = p.caption ?? "내 사진";
+  el.style.cssText = `
+    display:block;width:38px;height:38px;padding:0;border-radius:9px;
+    border:2px solid #fff;overflow:hidden;cursor:pointer;
+    box-shadow:0 2px 8px rgba(16,32,43,.32);background:#fff;`;
+  const img = document.createElement("img");
+  img.src = p.url;
+  img.alt = "";
+  img.loading = "lazy";
+  img.style.cssText = "width:100%;height:100%;object-fit:cover;display:block;";
+  el.appendChild(img);
+  el.addEventListener("click", onClick);
+  return el;
+}
+
 /** 넓게 볼 때 쓰는 점 마커 — 이름표 없이 위치와 종류만 알린다 */
 function dotEl(color: string, emoji: string) {
   const el = document.createElement("div");
@@ -115,6 +135,9 @@ export interface KakaoMapProps {
   medicalOpen: { id: string; name: string; kind: string; lat: number | null; lng: number | null }[];
   /** 추적 중인 노선의 실시간 버스 위치 */
   busPositions: BusPositionsPayload | null;
+  /** 로그인한 사용자가 등록한 사진 */
+  photos: Photo[];
+  onSelectPhoto: (p: Photo) => void;
   /** 랜드마크 (둘러보기 모드) */
   landmarks: { name: string; lat: number; lng: number; desc: string }[];
   /** 의왕시 행정경계 표시 */
@@ -149,6 +172,8 @@ export default function KakaoMap({
   incidents,
   busStops,
   medicalOpen,
+  photos,
+  onSelectPhoto,
   busPositions,
   landmarks,
   showBoundary,
@@ -174,6 +199,7 @@ export default function KakaoMap({
   const placeOv = useRef<kakao.maps.CustomOverlay[]>([]);
   const transitOv = useRef<kakao.maps.CustomOverlay[]>([]);
   const busOv = useRef<kakao.maps.CustomOverlay[]>([]);
+  const photoOv = useRef<kakao.maps.CustomOverlay[]>([]);
   const boundaryRef = useRef<kakao.maps.Polygon[]>([]);
   const dongRef = useRef<kakao.maps.Polygon[]>([]);
   const movedRef = useRef(onMapMoved);
@@ -457,6 +483,15 @@ export default function KakaoMap({
     onSelectStop,
     onSelectIncident,
   ]);
+
+  /** 내 사진 — 등록·삭제할 때만 바뀐다 */
+  useEffect(() => {
+    if (!ready || !mapRef.current) return;
+    const add = makeAdder(photoOv);
+    for (const p of photos) {
+      add(p.lat, p.lng, photoEl(p, () => onSelectPhoto(p)), 70);
+    }
+  }, [ready, photos, onSelectPhoto]);
 
   /** 운행 중인 버스 — 15초마다 갱신되므로 반드시 따로 둔다 */
   useEffect(() => {
