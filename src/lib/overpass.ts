@@ -54,12 +54,13 @@ function haversine(aLat: number, aLng: number, bLat: number, bLng: number) {
   return Math.round(2 * R * Math.asin(Math.sqrt(s)));
 }
 
-function buildQuery(codes: CategoryKey[], lat: number, lng: number, radius: number) {
+/** Overpass bbox 는 (남,서,북,동) 순서다 */
+function buildQuery(codes: CategoryKey[], box: string) {
   const parts: string[] = [];
   for (const code of codes) {
     for (const filter of OSM_FILTERS[code] ?? []) {
-      parts.push(`node${filter}(around:${radius},${lat},${lng});`);
-      parts.push(`way${filter}(around:${radius},${lat},${lng});`);
+      parts.push(`node${filter}(${box});`);
+      parts.push(`way${filter}(${box});`);
     }
   }
   return `[out:json][timeout:20];(${parts.join("")});out center tags;`;
@@ -224,15 +225,17 @@ export async function fetchOverpassBusStops(
 
 export async function fetchOverpassPlaces(
   codes: CategoryKey[],
-  lat: number,
-  lng: number,
-  radius: number,
+  rect: string,
+  center: { lat: number; lng: number },
 ): Promise<Place[]> {
-  const key = `${codes.slice().sort().join(",")}|${lat.toFixed(3)}|${lng.toFixed(3)}|${radius}`;
+  // rect 는 카카오 형식(minLng,minLat,maxLng,maxLat) — Overpass 순서로 바꾼다
+  const [minLng, minLat, maxLng, maxLat] = rect.split(",").map(Number);
+  const box = `${minLat},${minLng},${maxLat},${maxLng}`;
+  const key = `${codes.slice().sort().join(",")}|${rect}`;
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < TTL) return hit.places;
 
-  const body = `data=${encodeURIComponent(buildQuery(codes, lat, lng, radius))}`;
+  const body = `data=${encodeURIComponent(buildQuery(codes, box))}`;
   let elements: OverpassElement[] | null = null;
   let lastErr: unknown = null;
 
@@ -290,7 +293,7 @@ export async function fetchOverpassPlaces(
       roadAddress: addressOf(tags),
       lat: pLat,
       lng: pLng,
-      distance: haversine(lat, lng, pLat, pLng),
+      distance: haversine(center.lat, center.lng, pLat, pLng),
       url: tags.website ?? tags["contact:website"] ?? "",
     });
   }

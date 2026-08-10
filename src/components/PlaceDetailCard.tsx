@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Stars, StarInput } from "@/components/StarRating";
 import { useRating } from "@/lib/useRating";
+import SaveToList from "@/components/SaveToList";
 import { CATEGORY_MAP } from "@/lib/uiwang";
 import type { Place, PlaceRating } from "@/lib/types";
 
@@ -138,6 +139,8 @@ export default function PlaceDetailCard({
             </a>
           )}
         </div>
+
+        <SaveToList place={place} />
 
         {showRating && (
           <div className="mt-3 border-t border-[var(--border)] pt-3">

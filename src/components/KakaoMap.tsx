@@ -162,6 +162,8 @@ export interface KakaoMapProps {
   onSelectStop: (s: BusStop) => void;
   onSelectIncident: (i: Incident) => void;
   onMapMoved: (c: { lat: number; lng: number }) => void;
+  /** 지도가 멈출 때마다 화면 범위를 알린다 (minLng,minLat,maxLng,maxLat) */
+  onBoundsChanged: (rect: string, center: { lat: number; lng: number }, level: number) => void;
 }
 
 export default function KakaoMap({
@@ -188,6 +190,7 @@ export default function KakaoMap({
   onSelectStop,
   onSelectIncident,
   onMapMoved,
+  onBoundsChanged,
 }: KakaoMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<kakao.maps.Map | null>(null);
@@ -204,6 +207,7 @@ export default function KakaoMap({
   const dongRef = useRef<kakao.maps.Polygon[]>([]);
   const movedRef = useRef(onMapMoved);
   const fittedRef = useRef(onViewFitted);
+  const boundsRef = useRef(onBoundsChanged);
   const [ready, setReady] = useState(false);
   const [sdkError, setSdkError] = useState<string | null>(null);
 
@@ -218,7 +222,8 @@ export default function KakaoMap({
   useEffect(() => {
     movedRef.current = onMapMoved;
     fittedRef.current = onViewFitted;
-  }, [onMapMoved, onViewFitted]);
+    boundsRef.current = onBoundsChanged;
+  }, [onMapMoved, onViewFitted, onBoundsChanged]);
 
   // SDK 로드 + 지도 생성
   useEffect(() => {
@@ -232,10 +237,21 @@ export default function KakaoMap({
           level,
         });
         mapRef.current = map;
-        window.kakao.maps.event.addListener(map, "dragend", () => {
+        const report = () => {
           const c = map.getCenter();
+          const b = map.getBounds();
+          const sw = b.getSouthWest();
+          const ne = b.getNorthEast();
           movedRef.current({ lat: c.getLat(), lng: c.getLng() });
-        });
+          boundsRef.current(
+            `${sw.getLng()},${sw.getLat()},${ne.getLng()},${ne.getLat()}`,
+            { lat: c.getLat(), lng: c.getLng() },
+            map.getLevel(),
+          );
+        };
+        // idle 은 드래그·확대·축소·setBounds 를 모두 아우른다
+        window.kakao.maps.event.addListener(map, "idle", report);
+        report();
         setReady(true);
       })
       .catch((e: Error) => setSdkError(e.message));

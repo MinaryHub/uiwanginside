@@ -88,5 +88,48 @@ export async function ensureSchema(): Promise<void> {
     CREATE INDEX IF NOT EXISTS photos_user_idx ON photos (user_id, created_at DESC)
   `;
 
+  /**
+   * 나만의 장소 리스트.
+   * share_slug 가 있으면 그 링크를 아는 사람은 로그인 없이 볼 수 있다.
+   * 공유를 끄면 slug 를 지워 링크가 즉시 무효가 된다.
+   */
+  await sql`
+    CREATE TABLE IF NOT EXISTS place_lists (
+      id          BIGSERIAL PRIMARY KEY,
+      user_id     TEXT      NOT NULL,
+      owner_name  TEXT,
+      title       TEXT      NOT NULL,
+      description TEXT,
+      share_slug  TEXT      UNIQUE,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS place_lists_user_idx
+      ON place_lists (user_id, updated_at DESC)
+  `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS place_list_items (
+      id         BIGSERIAL PRIMARY KEY,
+      list_id    BIGINT    NOT NULL REFERENCES place_lists(id) ON DELETE CASCADE,
+      place_id   TEXT      NOT NULL,
+      name       TEXT      NOT NULL,
+      category   TEXT      NOT NULL,
+      address    TEXT,
+      phone      TEXT,
+      lat        DOUBLE PRECISION NOT NULL,
+      lng        DOUBLE PRECISION NOT NULL,
+      note       TEXT,
+      sort_order INT       NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (list_id, place_id)
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS place_list_items_list_idx
+      ON place_list_items (list_id, sort_order, created_at)
+  `;
+
   ensured = true;
 }

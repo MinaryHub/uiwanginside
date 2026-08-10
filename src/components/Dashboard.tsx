@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import useSWR from "swr";
@@ -105,8 +105,46 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
   const def = mode ? MODE_MAP[mode] : null;
 
   const dCenter = useDebounced(center, 500);
-  const dRadius = useDebounced(radius, 500);
   const geo = `lat=${dCenter.lat.toFixed(4)}&lng=${dCenter.lng.toFixed(4)}`;
+
+  /**
+   * 장소 조회에 쓰는 화면 범위.
+   *
+   * 지도를 움직일 때마다 다시 조회하면 마커가 계속 바뀌어 눈이 따라가지
+   * 못한다. 그래서 "충분히 움직였을 때" 만 갱신한다 — 확대 수준이 바뀌거나,
+   * 새 화면이 이전에 조회한 범위를 절반 이상 벗어났을 때다.
+   * 살짝 끌어보는 정도로는 화면이 그대로 있다.
+   */
+  const [searchArea, setSearchArea] = useState<{
+    rect: string;
+    lat: number;
+    lng: number;
+  } | null>(null);
+  const areaRef = useRef<{ rect: string; level: number } | null>(null);
+
+  const onBoundsChanged = useCallback(
+    (rect: string, c: { lat: number; lng: number }, lv: number) => {
+      const prev = areaRef.current;
+      let refresh = !prev || prev.level !== lv;
+
+      if (!refresh && prev) {
+        const [aMinX, aMinY, aMaxX, aMaxY] = prev.rect.split(",").map(Number);
+        const [bMinX, bMinY, bMaxX, bMaxY] = rect.split(",").map(Number);
+        const w = bMaxX - bMinX;
+        const h = bMaxY - bMinY;
+        // 가로·세로 어느 쪽으로든 화면의 절반을 넘게 움직였으면 새로 찾는다
+        const movedX = Math.abs((bMinX + bMaxX) / 2 - (aMinX + aMaxX) / 2);
+        const movedY = Math.abs((bMinY + bMaxY) / 2 - (aMinY + aMaxY) / 2);
+        refresh = movedX > w * 0.5 || movedY > h * 0.5;
+      }
+
+      if (refresh) {
+        areaRef.current = { rect, level: lv };
+        setSearchArea({ rect, lat: c.lat, lng: c.lng });
+      }
+    },
+    [],
+  );
 
   const urlState = useMemo(
     () => ({ mode, lat: center.lat, lng: center.lng, level, radius }),
@@ -130,8 +168,10 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
   const needs = (c: CardId) => !!def?.cards.includes(c);
 
   const places = useSWR<ApiEnvelope<PlacesPayload>>(
-    def?.categories.length
-      ? `/api/places?categories=${def.categories.join(",")}&${geo}&radius=${dRadius}`
+    def?.categories.length && searchArea
+      ? `/api/places?categories=${def.categories.join(",")}` +
+          `&rect=${searchArea.rect}&lat=${searchArea.lat.toFixed(4)}` +
+          `&lng=${searchArea.lng.toFixed(4)}`
       : null,
     swrFetcher,
     { keepPreviousData: true, revalidateOnFocus: false },
@@ -401,6 +441,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           onSelectStop={selectStop}
           onSelectIncident={selectIncident}
           onMapMoved={setCenter}
+          onBoundsChanged={onBoundsChanged}
           sheetOpen={!!def && sheetOpen}
           onViewFitted={(c, lv) => {
             setCenter(c);
@@ -441,6 +482,14 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           </div>
         </div>
 
+        <Link
+          href="/lists"
+          title="내 리스트"
+          aria-label="내 리스트"
+          className={`pointer-events-auto ${mapBtn}`}
+        >
+          ☰
+        </Link>
         <Link
           href="/gallery"
           title="내 사진"

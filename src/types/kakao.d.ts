@@ -10,6 +10,8 @@ declare namespace kakao.maps {
     constructor();
     extend(latlng: LatLng): void;
     isEmpty(): boolean;
+    getSouthWest(): LatLng;
+    getNorthEast(): LatLng;
   }
   class Map {
     constructor(container: HTMLElement, options: { center: LatLng; level?: number });
@@ -17,6 +19,7 @@ declare namespace kakao.maps {
     getCenter(): LatLng;
     setLevel(level: number, options?: { animate?: boolean }): void;
     getLevel(): number;
+    getBounds(): LatLngBounds;
     panTo(latlng: LatLng): void;
     /** padding 은 상·우·하·좌 순서 (px) */
     setBounds(
