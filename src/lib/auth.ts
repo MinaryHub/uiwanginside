@@ -13,6 +13,30 @@ import Kakao from "next-auth/providers/kakao";
  * Client Secret 을 쓰고, 카카오 콘솔에서 '카카오 로그인' 을 켜고
  * Redirect URI 를 등록해야 동작한다.
  */
+/**
+ * Auth.js 는 실패를 CallbackRouteError 한 줄로 뭉뜽그리고 진짜 원인은
+ * cause 안에 넣어둔다. 그대로 두면 로그만 보고는 무엇이 틀렸는지 알 수
+ * 없어서, 카카오가 돌려준 응답까지 펼쳐 남긴다.
+ *
+ * 예: Client Secret 활성화를 켜둔 채 값을 안 보내면 카카오는
+ *     KOE010 Bad client credentials 를 준다. 그 문자열이 보여야 한다.
+ */
+function unwrap(err: unknown, depth = 0): string {
+  if (depth > 3 || err === null || err === undefined) return "";
+  if (err instanceof Error) {
+    const inner = unwrap((err as { cause?: unknown }).cause, depth + 1);
+    return `${err.name}: ${err.message}${inner ? ` ← ${inner}` : ""}`;
+  }
+  if (typeof err === "object") {
+    try {
+      return JSON.stringify(err).slice(0, 500);
+    } catch {
+      return String(err);
+    }
+  }
+  return String(err);
+}
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
     Kakao({
@@ -20,6 +44,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       clientSecret: process.env.KAKAO_CLIENT_SECRET,
     }),
   ],
+  logger: {
+    error(err) {
+      console.error("[auth:error]", unwrap(err));
+    },
+    warn(code) {
+      console.warn("[auth:warn]", code);
+    },
+  },
   session: { strategy: "jwt" },
   callbacks: {
     // 카카오 사용자 식별자를 세션까지 실어 보낸다. 사진의 소유자 키로 쓴다.
