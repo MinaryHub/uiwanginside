@@ -208,6 +208,18 @@ export default function KakaoMap({
   const movedRef = useRef(onMapMoved);
   const fittedRef = useRef(onViewFitted);
   const boundsRef = useRef(onBoundsChanged);
+  /**
+   * 지도가 스스로 알려준 중심·확대 수준.
+   *
+   * 이 값이 부모를 거쳐 prop 으로 되돌아왔을 때 다시 panTo 를 부르면 안 된다.
+   * panTo 가 착지하는 지점은 픽셀 단위로 반올림되어 요청한 좌표와 미세하게
+   * 어긋나고, 그 차이가 또 상태를 바꿔 지도가 끝없이 조금씩 흘러간다.
+   * 객체 자체를 기억해 두고 같은 것이 돌아오면 무시한다.
+   */
+  const echoRef = useRef<{ center: { lat: number; lng: number } | null; level: number | null }>({
+    center: null,
+    level: null,
+  });
   const [ready, setReady] = useState(false);
   const [sdkError, setSdkError] = useState<string | null>(null);
 
@@ -242,11 +254,15 @@ export default function KakaoMap({
           const b = map.getBounds();
           const sw = b.getSouthWest();
           const ne = b.getNorthEast();
-          movedRef.current({ lat: c.getLat(), lng: c.getLng() });
+          const here = { lat: c.getLat(), lng: c.getLng() };
+          const lv = map.getLevel();
+          // 되돌아온 값을 알아보려고 넘긴 객체 그대로를 기억해 둔다
+          echoRef.current = { center: here, level: lv };
+          movedRef.current(here);
           boundsRef.current(
             `${sw.getLng()},${sw.getLat()},${ne.getLng()},${ne.getLat()}`,
-            { lat: c.getLat(), lng: c.getLng() },
-            map.getLevel(),
+            here,
+            lv,
           );
         };
         // idle 은 드래그·확대·축소·setBounds 를 모두 아우른다
@@ -283,17 +299,23 @@ export default function KakaoMap({
     // 경계선이 화면 끝에 붙지 않도록 여백을 준다
     map.setBounds(b, 48, 48, 48, 48);
     const c = map.getCenter();
-    fittedRef.current({ lat: c.getLat(), lng: c.getLng() }, map.getLevel());
+    const here = { lat: c.getLat(), lng: c.getLng() };
+    const lv = map.getLevel();
+    echoRef.current = { center: here, level: lv };
+    fittedRef.current(here, lv);
   }, [ready, fitBounds]);
 
-  // 외부에서 center 변경 시 이동
+  // 바깥에서 center 가 바뀌면 이동한다.
+  // 단, 지도가 직접 알려준 값이 돌아온 것이면 이미 그 자리에 있으므로 놔둔다.
   useEffect(() => {
     if (!ready || !mapRef.current) return;
+    if (center === echoRef.current.center) return;
     mapRef.current.panTo(new window.kakao.maps.LatLng(center.lat, center.lng));
-  }, [ready, center.lat, center.lng]);
+  }, [ready, center]);
 
   useEffect(() => {
     if (!ready || !mapRef.current) return;
+    if (level === echoRef.current.level) return;
     mapRef.current.setLevel(level, { animate: true });
   }, [ready, level]);
 
