@@ -54,6 +54,8 @@ export default function PlacesPanel({
   }, [places, keyword, only]);
 
   const source = res?.data.source;
+  const total = res?.data.total ?? 0;
+  const truncated = total > places.length;
 
   return (
     <div>
@@ -131,6 +133,15 @@ export default function PlacesPanel({
               <p className="text-[var(--text-2xs)] font-semibold text-[var(--text-muted)]">
                 {filtered.length}곳 · 가까운 순
               </p>
+              {/* 다 가져오지 못했으면 숨기지 않고 그대로 알린다 */}
+              {truncated && (
+                <span
+                  title="카카오 로컬은 조회 한 번에 45곳까지만 줍니다. 화면을 격자로 나눠 여러 번 조회해 채우지만, 아주 촘촘한 곳은 전부 담기지 않습니다. 지도를 확대하면 남김없이 보입니다."
+                  className="ml-1.5 text-[var(--text-2xs)] font-semibold text-[var(--text-faint)]"
+                >
+                  / 화면 안 {res?.data.total}곳
+                </span>
+              )}
               {source && (
                 <span
                   title={SOURCE_META[source].title}

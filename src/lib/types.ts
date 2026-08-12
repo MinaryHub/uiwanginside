@@ -20,6 +20,12 @@ export type PlaceSource = "kakao" | "osm";
 export interface PlacesPayload {
   places: Place[];
   source: PlaceSource;
+  /**
+   * 화면 안에 실제로 존재하는 곳의 수.
+   * places 보다 클 수 있다 — 카카오가 한 번에 주는 양에 한도가 있어서다.
+   * 얼마나 덜 보여주고 있는지 사용자에게 알리는 데 쓴다.
+   */
+  total?: number;
 }
 
 export interface WeatherNow {

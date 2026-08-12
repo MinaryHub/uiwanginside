@@ -21,42 +21,93 @@ interface KakaoDoc {
 }
 
 /**
- * 카카오 로컬은 페이지당 15건, 최대 3페이지(45건)까지 수집한다.
+ * 카카오 로컬의 한도는 조회 한 번당 45곳이다 (15건 × 3페이지).
+ * 조건을 어떻게 주든 그 이상은 오지 않는다. 실측하면 이렇다.
  *
- * 중심 반경(radius) 이 아니라 화면 범위(rect) 로 찾는다. 반경으로 찾으면
- * 결과가 중심 주변에 몰려 지도 가장자리는 비어 보인다 — "일부만 표시되는"
- * 것처럼 느껴지는 원인이었다.
+ *   시청 주변 한 화면(약 2.4km) 음식점 total_count 547 / pageable_count 45
+ *
+ * 그래서 화면 전체를 한 번에 조회하면 547곳 중 45곳만 받는다. 어디를
+ * 주든 화면은 비어 보인다. 화면을 격자로 쪼개 칸마다 따로 조회하면
+ * 칸마다 45곳 한도가 새로 생겨 화면 전체가 고르게 찬다.
  */
+const GRID = 3;
+const PER_PAGE = 15;
+const MAX_PAGES = 3;
+/** 추가 페이지 요청 상한 — 조밀한 화면에서 호출이 폭발하지 않게 막는다 */
+const EXTRA_BUDGET = 18;
+
+/** rect 를 n×n 으로 쪼갠다 */
+function tiles(rect: string, n: number): string[] {
+  const [minX, minY, maxX, maxY] = rect.split(",").map(Number);
+  const w = (maxX - minX) / n;
+  const h = (maxY - minY) / n;
+  const out: string[] = [];
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      out.push(
+        `${minX + i * w},${minY + j * h},${minX + (i + 1) * w},${minY + (j + 1) * h}`,
+      );
+    }
+  }
+  return out;
+}
+
+async function fetchPage(
+  key: string,
+  code: CategoryKey,
+  rect: string,
+  page: number,
+): Promise<{ docs: KakaoDoc[]; total: number }> {
+  // sort=accuracy — 거리순으로 받으면 칸 안에서도 한쪽으로 쏠린다.
+  // 목록 정렬은 아래에서 직접 잰 거리로 한다.
+  const url =
+    `https://dapi.kakao.com/v2/local/search/category.json` +
+    `?category_group_code=${code}&rect=${rect}` +
+    `&size=${PER_PAGE}&page=${page}&sort=accuracy`;
+  const res = await timedFetch(url, { headers: { Authorization: `KakaoAK ${key}` } });
+  // 오류를 삼키면 "결과 0건" 으로 둔갑해 OSM 폴백이 동작하지 않는다.
+  if (!res.ok) {
+    throw new Error(`kakao ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  }
+  const json = (await res.json()) as {
+    documents: KakaoDoc[];
+    meta: { total_count: number };
+  };
+  return { docs: json.documents, total: json.meta.total_count };
+}
+
 async function searchCategory(
   key: string,
   code: CategoryKey,
   rect: string,
   center: { lat: number; lng: number },
-): Promise<Place[]> {
-  const out: Place[] = [];
-  for (let page = 1; page <= 3; page++) {
-    const url =
-      `https://dapi.kakao.com/v2/local/search/category.json` +
-      /*
-       * sort=accuracy 로 받는다. 거리순으로 받으면 화면에 545곳이 있어도
-       * 중심에서 가까운 45곳만 와서 가장자리가 텅 빈다.
-       * 목록 정렬은 아래에서 직접 계산한 거리로 한다.
-       */
-      `?category_group_code=${code}&rect=${rect}` +
-      `&size=15&page=${page}&sort=accuracy`;
-    const res = await timedFetch(url, {
-      headers: { Authorization: `KakaoAK ${key}` },
-    });
-    // 오류를 삼키면 "결과 0건" 으로 둔갑해 OSM 폴백이 동작하지 않는다.
-    if (!res.ok) {
-      throw new Error(`kakao ${res.status}: ${(await res.text()).slice(0, 200)}`);
-    }
-    const json = (await res.json()) as {
-      documents: KakaoDoc[];
-      meta: { is_end: boolean };
-    };
-    for (const d of json.documents) {
-      out.push({
+): Promise<{ places: Place[]; total: number }> {
+  const cells = tiles(rect, GRID);
+
+  // 1차: 칸마다 첫 페이지. 여기서 칸별 총 개수를 알게 된다.
+  const first = await Promise.all(cells.map((c) => fetchPage(key, code, c, 1)));
+
+  // 2차: 첫 페이지로 다 담기지 않은 칸만 더 받는다.
+  // 성긴 칸에 헛된 요청을 보내지 않으려고 두 번에 나눠 부른다.
+  const extra: { cell: string; page: number }[] = [];
+  first.forEach((r, i) => {
+    const pages = Math.min(MAX_PAGES, Math.ceil(r.total / PER_PAGE));
+    for (let p = 2; p <= pages; p++) extra.push({ cell: cells[i], page: p });
+  });
+  // 촘촘한 칸을 먼저 채운다
+  extra.sort((a, b) => a.page - b.page);
+  const rest = await Promise.all(
+    extra.slice(0, EXTRA_BUDGET).map((e) => fetchPage(key, code, e.cell, e.page)),
+  );
+
+  // 칸 경계에 걸친 곳이 두 번 올 수 있다
+  const seen = new Set<string>();
+  const places: Place[] = [];
+  for (const { docs } of [...first, ...rest]) {
+    for (const d of docs) {
+      if (seen.has(d.id)) continue;
+      seen.add(d.id);
+      places.push({
         id: d.id,
         name: d.place_name,
         category: code,
@@ -71,9 +122,9 @@ async function searchCategory(
         url: d.place_url,
       });
     }
-    if (json.meta.is_end) break;
   }
-  return out;
+  // 칸은 서로 겹치지 않으므로 칸별 총합이 곧 화면 안의 총 개수다
+  return { places, total: first.reduce((s, r) => s + r.total, 0) };
 }
 
 
@@ -82,7 +133,11 @@ async function searchCategory(
  * 5분 캐시. 좌표는 소수점 3자리(약 100m)로 뭉뚱그려 키를 만든다.
  * 지도를 조금씩 움직일 때마다 캐시가 빗나가면 캐시가 의미가 없다.
  */
-const cache = createTtlCache<{ places: Place[]; source: "kakao" | "osm" }>(5 * 60_000);
+const cache = createTtlCache<{
+  places: Place[];
+  source: "kakao" | "osm";
+  total: number;
+}>(5 * 60_000);
 const CACHE_TTL_SEC = 300;
 
 export async function GET(req: Request) {
@@ -108,7 +163,7 @@ export async function GET(req: Request) {
       : `${lng - dLng},${lat - dLat},${lng + dLng},${lat + dLat}`;
 
   if (codes.length === 0) {
-    return ok({ places: [], source: "kakao" as const }, undefined, CACHE_TTL_SEC);
+    return ok({ places: [], source: "kakao" as const, total: 0 }, undefined, CACHE_TTL_SEC);
   }
 
   const cacheKey = `${codes.slice().sort().join(",")}|${rect}`;
@@ -123,9 +178,13 @@ export async function GET(req: Request) {
       const results = await Promise.all(
         codes.map((c) => searchCategory(key, c, rect, { lat, lng })),
       );
-      const places = results.flat();
+      const places = results.flatMap((r) => r.places);
       places.sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
-      const payload = { places, source: "kakao" as const };
+      const payload = {
+        places,
+        source: "kakao" as const,
+        total: results.reduce((s, r) => s + r.total, 0),
+      };
       cache.set(cacheKey, payload);
       return ok(payload, undefined, CACHE_TTL_SEC);
     } catch (e) {
@@ -137,9 +196,10 @@ export async function GET(req: Request) {
   // 2순위: OpenStreetMap — 무인증이지만 샘플이 아닌 실제 데이터
   try {
     const places = await fetchOverpassPlaces(codes, rect, { lat, lng });
-    cache.set(cacheKey, { places, source: "osm" as const });
+    // OSM 은 화면 안의 것을 모두 주므로 받은 수가 곧 총 개수다
+    cache.set(cacheKey, { places, source: "osm" as const, total: places.length });
     return ok(
-      { places, source: "osm" as const },
+      { places, source: "osm" as const, total: places.length },
       key
         ? "카카오 로컬 호출에 실패해 OpenStreetMap 데이터로 대체했습니다. (© OpenStreetMap contributors)"
         : "KAKAO_REST_KEY 미설정 — OpenStreetMap 실제 데이터로 표시 중입니다. (© OpenStreetMap contributors)",
@@ -147,7 +207,7 @@ export async function GET(req: Request) {
   } catch (e) {
     console.error("[places:osm]", e);
     return fail(
-      { places: [], source: "osm" as const },
+      { places: [], source: "osm" as const, total: 0 },
       "카카오·OpenStreetMap 모두 조회에 실패했습니다.",
     );
   }

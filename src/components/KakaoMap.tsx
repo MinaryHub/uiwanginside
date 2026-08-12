@@ -97,6 +97,59 @@ function dotEl(color: string, emoji: string) {
   return el;
 }
 
+/**
+ * 화면에 고르게 흩어 놓는다.
+ *
+ * 전에는 중심에서 가까운 순으로 앞에서 40개를 잘랐다. 목록이 거리순으로
+ * 정렬돼 오므로 잘라낸 결과는 언제나 가운데 뭉치였고, 가장자리는 통째로
+ * 비었다. 마커 과밀을 막으려던 장치가 정반대 문제를 만들고 있었다.
+ *
+ * 이제는 화면을 마커 크기만 한 칸으로 나눠 칸마다 하나씩만 남긴다.
+ * 덜어내는 것은 어차피 겹쳐서 안 보였을 것뿐이라 어느 구석도 비지 않고,
+ * 남는 수는 화면 크기에 따라 저절로 정해진다. 화면 밖 한 칸까지 두어
+ * 살짝 끌었을 때 가장자리가 늦게 차는 일이 없게 한다.
+ */
+function spread(
+  map: kakao.maps.Map,
+  container: HTMLDivElement | null,
+  places: Place[],
+  labelled: boolean,
+  selectedId: string | null,
+): Place[] {
+  const w = container?.clientWidth ?? 0;
+  const h = container?.clientHeight ?? 0;
+  if (!w || !h || places.length === 0) return places;
+
+  const b = map.getBounds();
+  const sw = b.getSouthWest();
+  const ne = b.getNorthEast();
+  const spanLng = ne.getLng() - sw.getLng();
+  const spanLat = ne.getLat() - sw.getLat();
+  if (spanLng <= 0 || spanLat <= 0) return places;
+
+  // 이름표가 붙으면 가로로 넓게 자리를 먹는다
+  const cellW = labelled ? 116 : 30;
+  const cellH = labelled ? 40 : 30;
+  const cols = Math.max(1, Math.round(w / cellW));
+  const rows = Math.max(1, Math.round(h / cellH));
+
+  const taken = new Set<string>();
+  const out: Place[] = [];
+  for (const p of places) {
+    if (p.id === selectedId) continue; // 고른 곳은 아래에서 무조건 넣는다
+    const cx = Math.floor(((p.lng - sw.getLng()) / spanLng) * cols);
+    const cy = Math.floor(((p.lat - sw.getLat()) / spanLat) * rows);
+    if (cx < -1 || cy < -1 || cx > cols || cy > rows) continue;
+    const k = `${cx}:${cy}`;
+    if (taken.has(k)) continue;
+    taken.add(k);
+    out.push(p);
+  }
+  const picked = selectedId ? places.find((p) => p.id === selectedId) : undefined;
+  if (picked) out.push(picked);
+  return out;
+}
+
 /** 운행 중인 버스 — 움직이는 대상이라 다른 마커와 확실히 구분되게 진하게 */
 function busEl(routeName: string, b: BusPositionsPayload["positions"][number]) {
   // 혼잡할수록 붉게. 색만으로 판단하지 않도록 라벨도 함께 붙인다.
@@ -433,10 +486,8 @@ export default function KakaoMap({
     const add = makeAdder(placeOv);
 
     const labelled = level <= 2;
-    const cap = level <= 3 ? 60 : level <= 5 ? 40 : 20;
 
-    // 가까운 순으로 정렬돼 오므로 앞에서 자르면 중심 주변이 남는다
-    for (const p of places.slice(0, cap)) {
+    for (const p of spread(mapRef.current, containerRef.current, places, labelled, selectedPlaceId)) {
       const def = CATEGORY_MAP[p.category];
       if (!def) continue;
       const active = selectedPlaceId === p.id;
