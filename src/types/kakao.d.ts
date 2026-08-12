@@ -43,6 +43,9 @@ declare namespace kakao.maps {
     });
     setMap(map: Map | null): void;
     setPosition(latlng: LatLng): void;
+    /** 오버레이를 지웠다 만들지 않고 내용만 갈아 끼운다 */
+    setContent(content: HTMLElement | string): void;
+    setZIndex(zIndex: number): void;
   }
   class Polygon {
     /** path 가 LatLng[][] 이면 첫 배열이 외곽, 이후 배열은 구멍(hole)이다 */

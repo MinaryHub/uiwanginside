@@ -257,7 +257,13 @@ export default function KakaoMap({
    * 하나로 묶으면 15초마다 오는 버스 위치 갱신에도 장소 마커까지 전부
    * 지웠다 다시 그려서 화면이 깜빡인다.
    */
-  const placeOv = useRef<kakao.maps.CustomOverlay[]>([]);
+  /**
+   * 장소 마커는 배열이 아니라 키로 들고 있는다.
+   * 다시 그릴 때 무엇이 그대로인지 알아야 손대지 않고 둘 수 있다.
+   */
+  const placeMarks = useRef(
+    new Map<string, { ov: kakao.maps.CustomOverlay; sig: string; place?: Place }>(),
+  );
   const transitOv = useRef<kakao.maps.CustomOverlay[]>([]);
   const busOv = useRef<kakao.maps.CustomOverlay[]>([]);
   const photoOv = useRef<kakao.maps.CustomOverlay[]>([]);
@@ -266,6 +272,8 @@ export default function KakaoMap({
   const movedRef = useRef(onMapMoved);
   const fittedRef = useRef(onViewFitted);
   const boundsRef = useRef(onBoundsChanged);
+  // 마커를 그대로 두고 재사용하므로, 붙여둔 클릭 핸들러가 낡지 않게 ref 로 읽는다
+  const selectRef = useRef(onSelectPlace);
   /**
    * 지도가 스스로 알려준 중심·확대 수준.
    *
@@ -293,7 +301,8 @@ export default function KakaoMap({
     movedRef.current = onMapMoved;
     fittedRef.current = onViewFitted;
     boundsRef.current = onBoundsChanged;
-  }, [onMapMoved, onViewFitted, onBoundsChanged]);
+    selectRef.current = onSelectPlace;
+  }, [onMapMoved, onViewFitted, onBoundsChanged, onSelectPlace]);
 
   // SDK 로드 + 지도 생성
   useEffect(() => {
@@ -485,38 +494,109 @@ export default function KakaoMap({
    *
    * 이름표는 아주 가까이 봤을 때만. 그 밖에는 작은 점으로 위치만 알린다.
    * 선택한 곳은 확대 수준과 무관하게 이름표를 붙인다.
+   *
+   * 지웠다 다시 만들지 않고 달라진 것만 손댄다. 전부 다시 그리면
+   * 확대·축소할 때마다 마커가 한 번 사라졌다 나타난다 — 데이터가 새로
+   * 도착할 때마다 같은 마커를 지웠다 같은 자리에 다시 만들기 때문이다.
+   * 모바일에서는 그 사이가 눈에 보일 만큼 길다.
    */
   useEffect(() => {
     if (!ready || !mapRef.current) return;
-    const add = makeAdder(placeOv);
-
+    const map = mapRef.current;
     const labelled = level <= 2;
 
-    for (const p of spread(mapRef.current, containerRef.current, places, labelled, selectedPlaceId)) {
+    /** 겉모습이 같으면 손대지 않는다 */
+    type Want = {
+      lat: number;
+      lng: number;
+      sig: string;
+      zIndex: number;
+      el: () => HTMLElement;
+      payload?: Place;
+    };
+    const want = new Map<string, Want>();
+
+    for (const p of spread(map, containerRef.current, places, labelled, selectedPlaceId)) {
       const def = CATEGORY_MAP[p.category];
       if (!def) continue;
       const active = selectedPlaceId === p.id;
-      // 별점은 이름표에 붙이지 않는다. 뒤늦게 도착하면 라벨이 바뀌며
-      // 마커가 다시 그려져 배지가 튀어나오는 것처럼 보인다. 상세 카드에서 보여준다.
-      add(
-        p.lat,
-        p.lng,
-        active || labelled
-          ? pinEl(def.emoji, def.color, p.name, { active })
-          : dotEl(def.color, def.emoji),
-        active ? 90 : 10,
-        () => onSelectPlace(p),
-      );
+      const pin = active || labelled;
+      want.set(`p:${p.id}`, {
+        lat: p.lat,
+        lng: p.lng,
+        // 별점은 이름표에 넣지 않는다. 뒤늦게 도착하면 겉모습이 바뀌며
+        // 배지가 튀어나오는 것처럼 보인다. 상세 카드에서 보여준다.
+        sig: `${pin ? "pin" : "dot"}|${active}|${p.category}|${p.name}`,
+        zIndex: active ? 90 : 10,
+        el: () =>
+          pin ? pinEl(def.emoji, def.color, p.name, { active }) : dotEl(def.color, def.emoji),
+        payload: p,
+      });
     }
 
     // 진료중인 곳은 수가 적고 중요도가 높아 항상 이름표를 붙인다
     for (const m of medicalOpen.slice(0, 40)) {
       if (m.lat == null || m.lng == null) continue;
-      add(m.lat, m.lng, pinEl(m.kind === "pharmacy" ? "💊" : "🏥", "#17734f", m.name), 60);
+      want.set(`m:${m.id}`, {
+        lat: m.lat,
+        lng: m.lng,
+        sig: `med|${m.kind}|${m.name}`,
+        zIndex: 60,
+        el: () => pinEl(m.kind === "pharmacy" ? "💊" : "🏥", "#17734f", m.name),
+      });
     }
 
     for (const l of landmarks) {
-      add(l.lat, l.lng, pinEl("📍", "#7c3aed", l.name), 50);
+      want.set(`l:${l.name}`, {
+        lat: l.lat,
+        lng: l.lng,
+        sig: `mark|${l.name}`,
+        zIndex: 50,
+        el: () => pinEl("📍", "#7c3aed", l.name),
+      });
+    }
+
+    const live = placeMarks.current;
+
+    // 사라진 것만 지운다
+    for (const [key, entry] of live) {
+      if (!want.has(key)) {
+        entry.ov.setMap(null);
+        live.delete(key);
+      }
+    }
+
+    for (const [key, w] of want) {
+      const cur = live.get(key);
+      if (!cur) {
+        const el = w.el();
+        el.addEventListener("click", () => {
+          const e = live.get(key);
+          if (e?.place) selectRef.current(e.place);
+        });
+        const ov = new window.kakao.maps.CustomOverlay({
+          position: new window.kakao.maps.LatLng(w.lat, w.lng),
+          content: el,
+          yAnchor: 1,
+          zIndex: w.zIndex,
+          clickable: true,
+        });
+        ov.setMap(map);
+        live.set(key, { ov, sig: w.sig, place: w.payload });
+        continue;
+      }
+      // 같은 마커가 그대로 있으면 최신 데이터만 갈아 끼우고 둔다
+      cur.place = w.payload;
+      if (cur.sig !== w.sig) {
+        const el = w.el();
+        el.addEventListener("click", () => {
+          const e = live.get(key);
+          if (e?.place) selectRef.current(e.place);
+        });
+        cur.ov.setContent(el);
+        cur.ov.setZIndex(w.zIndex);
+        cur.sig = w.sig;
+      }
     }
   }, [
     ready,

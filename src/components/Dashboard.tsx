@@ -124,6 +124,10 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
 
   const onBoundsChanged = useCallback(
     (rect: string, c: { lat: number; lng: number }, lv: number) => {
+      // 손가락으로 벌려 확대하면 지도만 바뀌고 상태는 그대로였다.
+      // 이름표를 붙일지 정하는 기준과 주소창이 옛 값을 보고 있었다.
+      setLevel(lv);
+
       const prev = areaRef.current;
       let refresh = !prev || prev.level !== lv;
 
