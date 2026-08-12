@@ -2,6 +2,8 @@ import { timedFetch, ok, fail, createTtlCache } from "@/lib/fetcher";
 import { fetchOverpassPlaces } from "@/lib/overpass";
 import { haversine } from "@/lib/busStations";
 import { UIWANG, CATEGORY_MAP, type CategoryKey } from "@/lib/uiwang";
+import { UIWANG_BBOX } from "@/lib/uiwang-boundary";
+import { isInsideUiwang } from "@/lib/geo";
 import type { Place } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -51,7 +53,31 @@ function gridFor(rect: string): number {
   return 4;
 }
 
-/** rect 를 n×n 으로 쪼갠다 */
+/**
+ * 화면 범위를 의왕시 경계 상자로 잘라낸다.
+ *
+ * 의왕 포털이므로 군포·안양 가게는 보여주지 않는다. 화면을 넓게 빼면
+ * 절반 넘게가 이웃 도시 것이었다 (실측: 1,141곳 중 722곳).
+ * 조회 전에 잘라내면 헛된 호출도 함께 줄어든다.
+ * 겹치지 않으면 null — 화면이 통째로 의왕 밖이라는 뜻이다.
+ */
+function clipToCity(rect: string): string | null {
+  const [minX, minY, maxX, maxY] = rect.split(",").map(Number);
+  const x0 = Math.max(minX, UIWANG_BBOX.minLng);
+  const y0 = Math.max(minY, UIWANG_BBOX.minLat);
+  const x1 = Math.min(maxX, UIWANG_BBOX.maxLng);
+  const y1 = Math.min(maxY, UIWANG_BBOX.maxLat);
+  if (x1 <= x0 || y1 <= y0) return null;
+  return `${x0},${y0},${x1},${y1}`;
+}
+
+/**
+ * rect 를 n×n 으로 쪼갠다.
+ *
+ * 경계 상자는 사각형이고 시 경계는 그렇지 않다. 네 귀퉁이가 모두
+ * 시 밖인 칸은 조회해 봐야 버릴 것만 나오므로 건너뛴다.
+ * 다만 칸이 시를 가로지르는 경우가 있어, 변의 중점까지 함께 본다.
+ */
 function tiles(rect: string, n: number): string[] {
   const [minX, minY, maxX, maxY] = rect.split(",").map(Number);
   const w = (maxX - minX) / n;
@@ -59,9 +85,18 @@ function tiles(rect: string, n: number): string[] {
   const out: string[] = [];
   for (let i = 0; i < n; i++) {
     for (let j = 0; j < n; j++) {
-      out.push(
-        `${minX + i * w},${minY + j * h},${minX + (i + 1) * w},${minY + (j + 1) * h}`,
-      );
+      const a = minX + i * w;
+      const b = minY + j * h;
+      const c = a + w;
+      const d = b + h;
+      const probes: [number, number][] = [
+        [b, a], [b, c], [d, a], [d, c],           // 네 귀퉁이
+        [(b + d) / 2, (a + c) / 2],                // 가운데
+        [b, (a + c) / 2], [d, (a + c) / 2],        // 위·아래 변 중점
+        [(b + d) / 2, a], [(b + d) / 2, c],        // 좌·우 변 중점
+      ];
+      if (!probes.some(([lat, lng]) => isInsideUiwang(lat, lng))) continue;
+      out.push(`${a},${b},${c},${d}`);
     }
   }
   return out;
@@ -122,6 +157,9 @@ async function searchCategory(
     for (const d of docs) {
       if (seen.has(d.id)) continue;
       seen.add(d.id);
+      // 경계 상자는 사각형이라 여기까지 이웃 도시 것이 딸려 온다.
+      // 실제 경계로 한 번 더 거른다.
+      if (!isInsideUiwang(Number(d.y), Number(d.x))) continue;
       places.push({
         id: d.id,
         name: d.place_name,
@@ -138,8 +176,20 @@ async function searchCategory(
       });
     }
   }
-  // 칸은 서로 겹치지 않으므로 칸별 총합이 곧 화면 안의 총 개수다
-  return { places, total: first.reduce((s, r) => s + r.total, 0) };
+  /*
+   * 화면 안의 총 개수.
+   *
+   * 칸은 서로 겹치지 않으므로 칸별 총합이 곧 총 개수다. 다만 카카오가
+   * 알려주는 총 개수는 사각형 기준이라 시 경계 밖까지 센다. 시 안쪽에
+   * 온전히 든 칸은 그대로 맞고, 경계에 걸친 칸은 실제로 받아 본 것 중
+   * 몇 할이 시 안이었는지로 환산한다. 경계 부근은 어림수다.
+   */
+  const total = first.reduce((s, r) => {
+    if (r.docs.length === 0) return s;
+    const inCity = r.docs.filter((d) => isInsideUiwang(Number(d.y), Number(d.x))).length;
+    return s + Math.round(r.total * (inCity / r.docs.length));
+  }, 0);
+  return { places, total };
 }
 
 
@@ -172,12 +222,15 @@ export async function GET(req: Request) {
   const dLat = radius / 111_000;
   // 위도 37도에서 경도 1도는 약 88km
   const dLng = radius / 88_000;
-  const rect =
+  const asked =
     rectParam && rectParam.split(",").length === 4
       ? rectParam
       : `${lng - dLng},${lat - dLat},${lng + dLng},${lat + dLat}`;
 
-  if (codes.length === 0) {
+  // 의왕 밖은 애초에 찾지 않는다
+  const rect = clipToCity(asked);
+
+  if (codes.length === 0 || !rect) {
     return ok({ places: [], source: "kakao" as const, total: 0 }, undefined, CACHE_TTL_SEC);
   }
 
@@ -210,8 +263,11 @@ export async function GET(req: Request) {
 
   // 2순위: OpenStreetMap — 무인증이지만 샘플이 아닌 실제 데이터
   try {
-    const places = await fetchOverpassPlaces(codes, rect, { lat, lng });
-    // OSM 은 화면 안의 것을 모두 주므로 받은 수가 곧 총 개수다
+    // OSM 도 사각형으로 찾으므로 실제 경계로 걸러야 한다
+    const places = (await fetchOverpassPlaces(codes, rect, { lat, lng })).filter((p) =>
+      isInsideUiwang(p.lat, p.lng),
+    );
+    // OSM 은 범위 안의 것을 모두 주므로 걸러낸 수가 곧 총 개수다
     cache.set(cacheKey, { places, source: "osm" as const, total: places.length });
     return ok(
       { places, source: "osm" as const, total: places.length },
