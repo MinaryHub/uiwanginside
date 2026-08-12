@@ -127,9 +127,14 @@ function spread(
   const spanLat = ne.getLat() - sw.getLat();
   if (spanLng <= 0 || spanLat <= 0) return places;
 
-  // 이름표가 붙으면 가로로 넓게 자리를 먹는다
-  const cellW = labelled ? 116 : 30;
-  const cellH = labelled ? 40 : 30;
+  /*
+   * 칸 크기가 곧 마커 사이 최소 간격이다. 점 마커가 16px 이라 22px 이면
+   * 서로 닿지 않으면서 가장 촘촘하다. 30px 에서 22px 로 좁히니 같은
+   * 데이터로 그려지는 마커가 102개에서 129개로 늘었다 — 호출은 그대로다.
+   * 이름표가 붙는 확대 수준에서는 가로로 넓게 자리를 먹는다.
+   */
+  const cellW = labelled ? 116 : 22;
+  const cellH = labelled ? 40 : 22;
   const cols = Math.max(1, Math.round(w / cellW));
   const rows = Math.max(1, Math.round(h / cellH));
 

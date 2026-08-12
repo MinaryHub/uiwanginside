@@ -30,11 +30,26 @@ interface KakaoDoc {
  * 주든 화면은 비어 보인다. 화면을 격자로 쪼개 칸마다 따로 조회하면
  * 칸마다 45곳 한도가 새로 생겨 화면 전체가 고르게 찬다.
  */
-const GRID = 3;
 const PER_PAGE = 15;
 const MAX_PAGES = 3;
 /** 추가 페이지 요청 상한 — 조밀한 화면에서 호출이 폭발하지 않게 막는다 */
-const EXTRA_BUDGET = 18;
+const EXTRA_BUDGET = 24;
+
+/**
+ * 몇 칸으로 쪼갤지는 화면 크기가 정한다.
+ *
+ * 좁게 확대한 화면은 그 안의 총 개수부터 적어 45곳 한도에 걸리지 않는다.
+ * 거기서까지 잘게 쪼개면 다섯 곳 찾자고 32번을 부르는 꼴이 된다.
+ * 넓은 화면일수록 잘게 쪼갠다.
+ */
+function gridFor(rect: string): number {
+  const [minX, , maxX] = rect.split(",").map(Number);
+  const km = (maxX - minX) * 88; // 위도 37도에서 경도 1도 ≈ 88km
+  if (km < 0.8) return 1;
+  if (km < 1.6) return 2;
+  if (km < 3) return 3;
+  return 4;
+}
 
 /** rect 를 n×n 으로 쪼갠다 */
 function tiles(rect: string, n: number): string[] {
@@ -82,7 +97,7 @@ async function searchCategory(
   rect: string,
   center: { lat: number; lng: number },
 ): Promise<{ places: Place[]; total: number }> {
-  const cells = tiles(rect, GRID);
+  const cells = tiles(rect, gridFor(rect));
 
   // 1차: 칸마다 첫 페이지. 여기서 칸별 총 개수를 알게 된다.
   const first = await Promise.all(cells.map((c) => fetchPage(key, code, c, 1)));
