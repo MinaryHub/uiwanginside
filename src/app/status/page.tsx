@@ -36,6 +36,13 @@ export default async function StatusPage() {
         <Link href="/" className="text-[var(--text-xs)] font-semibold text-[var(--brand)]">
           ← 포털로
         </Link>
+        {/* 관리자만 열리지만, 어디 있는지는 알 수 있어야 한다 */}
+        <Link
+          href="/admin"
+          className="ml-auto text-[var(--text-xs)] font-semibold text-[var(--brand)]"
+        >
+          접속 통계 →
+        </Link>
       </div>
 
       {error && (

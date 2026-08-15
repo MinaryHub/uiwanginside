@@ -72,3 +72,23 @@ export async function currentUserId(): Promise<string | null> {
   const session = await auth();
   return session?.user?.id ?? null;
 }
+
+/**
+ * 관리자 카카오 id 목록.
+ *
+ * 코드에 박아두지 않고 환경변수로 둔다. 관리자가 바뀔 때 배포하지 않아도
+ * 되고, 저장소가 공개되어도 누가 관리자인지 드러나지 않는다.
+ * 값을 넣지 않으면 관리자가 아무도 없다 — 비어 있을 때 전원 허용하는
+ * 편의는 그대로 구멍이 된다.
+ */
+export function adminIds(): string[] {
+  return (process.env.ADMIN_KAKAO_IDS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+export async function currentAdminId(): Promise<string | null> {
+  const id = await currentUserId();
+  return id && adminIds().includes(id) ? id : null;
+}

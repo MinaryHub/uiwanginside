@@ -131,5 +131,30 @@ export async function ensureSchema(): Promise<void> {
       ON place_list_items (list_id, sort_order, created_at)
   `;
 
+  /**
+   * 접속 기록.
+   *
+   * 개인을 알아볼 수 있는 것은 남기지 않는다. IP 도 UA 원문도 저장하지
+   * 않고, 방문자 구분은 브라우저가 스스로 만든 임의의 값(visitor_id)만
+   * 쓴다. 이 값은 서버가 발급하지도, 어디에도 내보내지도 않는다.
+   */
+  await sql`
+    CREATE TABLE IF NOT EXISTS visits (
+      id         BIGSERIAL PRIMARY KEY,
+      at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+      path       TEXT      NOT NULL,
+      -- 어떤 목적으로 왔는지 (맛집·생활·의료·교통, 없으면 둘러보기)
+      mode       TEXT,
+      -- 유입 경로는 호스트만. 전체 URL 은 사생활이 묻어난다.
+      referrer   TEXT,
+      device     TEXT      NOT NULL DEFAULT 'unknown',
+      visitor_id TEXT      NOT NULL,
+      session_id TEXT      NOT NULL,
+      member     BOOLEAN   NOT NULL DEFAULT false
+    )
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS visits_at_idx ON visits (at DESC)`;
+  await sql`CREATE INDEX IF NOT EXISTS visits_visitor_idx ON visits (visitor_id, at DESC)`;
+
   ensured = true;
 }

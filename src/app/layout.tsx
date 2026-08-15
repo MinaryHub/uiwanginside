@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { Suspense } from "react";
 import ServiceWorker from "@/components/ServiceWorker";
+import VisitTracker from "@/components/VisitTracker";
 
 export const metadata: Metadata = {
   title: "의왕 인사이드 — 의왕시 생활·실시간 정보 포털",
@@ -35,6 +37,10 @@ export default function RootLayout({
       <body className="antialiased">
         {children}
         <ServiceWorker />
+        {/* useSearchParams 를 쓰므로 Suspense 로 감싸야 정적 생성이 막히지 않는다 */}
+        <Suspense fallback={null}>
+          <VisitTracker />
+        </Suspense>
       </body>
     </html>
   );
