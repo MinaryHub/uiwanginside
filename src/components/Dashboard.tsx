@@ -483,7 +483,13 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
       </div>
 
       {/* 상단 바 — 이름과 오늘 요약만 */}
-      <header className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-center gap-2 p-3">
+      {/*
+        상단 바와 모드 알약은 항상 맨 위에 둔다.
+        시트가 inset-y-0 으로 화면을 통째로 덮으면서 z 가 같아, 나중에
+        그려지는 쪽이 이겨 날씨·미세먼지 줄이 가려져 있었다. 시트는 이
+        영역 아래에서 시작한다 (아래 top-[112px]).
+      */}
+      <header className="pointer-events-none absolute inset-x-0 top-0 z-40 flex items-center gap-2 p-3">
         <div className="pointer-events-auto flex min-w-0 flex-1 items-center gap-2 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)]/92 px-3 py-2 shadow-[var(--shadow-md)] backdrop-blur">
           <button
             type="button"
@@ -552,7 +558,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
 
       {/* 모드 — 탭 바를 없애고 지도 위 알약으로 */}
       <nav
-        className="pointer-events-none absolute inset-x-0 top-[64px] z-20 flex justify-center px-3"
+        className="pointer-events-none absolute inset-x-0 top-[64px] z-40 flex justify-center px-3"
         aria-label="보기 모드"
       >
         <div className="pointer-events-auto flex gap-1 rounded-[var(--radius-full)] border border-[var(--border)] bg-[var(--surface)]/92 p-1 shadow-[var(--shadow-md)] backdrop-blur">
@@ -741,7 +747,12 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
       {/* 시트 — 좌우 두 패널을 하나로 합쳤다 */}
       {def && (
         <aside
-          className={`absolute inset-y-0 left-0 z-30 flex w-full flex-col border-r border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)] transition-transform duration-200 sm:w-[360px] ${
+          /*
+           * 상단 바(64px) 와 모드 알약(그 아래 44px) 밑에서 시작한다.
+           * 화면을 통째로 덮으면 지금 날씨가 어떤지, 어느 모드를 보고
+           * 있는지가 시트에 가려 보이지 않는다.
+           */
+          className={`absolute bottom-0 left-0 top-[112px] z-30 flex w-full flex-col rounded-tr-[var(--radius-lg)] border-r border-t border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)] transition-transform duration-200 sm:w-[360px] ${
             sheetOpen ? "translate-x-0" : "-translate-x-full"
           }`}
         >
