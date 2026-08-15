@@ -85,7 +85,7 @@ async function save(urls: Map<string, string>) {
   }
 }
 
-async function fromDb(id: string): Promise<string | null> {
+async function fromDb(id: string): Promise<{ url: string; age: number } | null> {
   if (!hasDb()) return null;
   try {
     await ensureSchema();
@@ -94,13 +94,22 @@ async function fromDb(id: string): Promise<string | null> {
       SELECT url, at FROM cctv_urls WHERE id = ${id}
     `) as { url: string; at: string }[];
     if (rows.length === 0) return null;
-    const age = Date.now() - new Date(rows[0].at).getTime();
-    return age < STALE_MS ? rows[0].url : null;
+    return { url: rows[0].url, age: Date.now() - new Date(rows[0].at).getTime() };
   } catch (e) {
     console.error("[cctv:load]", e);
     return null;
   }
 }
+
+/**
+ * ITS 가 막혀 있는 동안은 두드리지 않는다.
+ *
+ * 막히면 연결 시도가 10.5초를 잡아먹고 실패한다. 그때마다 시도하면
+ * 저장해 둔 주소가 멀쩡한데도 영상 한 장에 11~14초가 걸린다 (실측).
+ * 한 번 막힌 것을 확인하면 잠시 쉬었다 다시 본다.
+ */
+const DOWN_MS = 5 * 60_000;
+let itsDownUntil = 0;
 
 /**
  * 이 카메라의 지금 영상 주소.
@@ -112,14 +121,25 @@ export async function cctvUrl(id: string): Promise<string | null> {
   const hit = mem.get(id);
   if (hit && Date.now() - hit.at < FRESH_MS) return hit.url;
 
-  try {
-    const fresh = await refresh();
-    const url = fresh.get(id);
-    if (url) return url;
-  } catch (e) {
-    console.error("[cctv:refresh]", e);
+  // 저장해 둔 것이 충분히 최근이면 ITS 를 부를 이유가 없다
+  const saved = await fromDb(id);
+  if (saved && saved.age < FRESH_MS) {
+    mem.set(id, { url: saved.url, at: Date.now() - saved.age });
+    return saved.url;
+  }
+
+  if (Date.now() >= itsDownUntil) {
+    try {
+      const fresh = await refresh();
+      const url = fresh.get(id);
+      if (url) return url;
+    } catch (e) {
+      itsDownUntil = Date.now() + DOWN_MS;
+      console.error("[cctv:refresh]", e);
+    }
   }
 
   // ITS 가 막혔다. 마지막으로 받아둔 주소로 버틴다.
-  return hit?.url ?? (await fromDb(id));
+  if (hit && Date.now() - hit.at < STALE_MS) return hit.url;
+  return saved && saved.age < STALE_MS ? saved.url : null;
 }
