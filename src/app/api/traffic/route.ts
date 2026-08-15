@@ -1,7 +1,7 @@
 import { timedFetch, ok, fail, nowISO } from "@/lib/fetcher";
 import { UIWANG } from "@/lib/uiwang";
 import { cityTiles, spaceMeanSpeed } from "@/lib/traffic";
-import { uiwangRoadNames } from "@/lib/roads";
+import { UIWANG_ROAD_NAMES } from "@/lib/uiwang-roads";
 import type {
   TrafficPayload,
   Incident,
@@ -116,14 +116,13 @@ export async function GET() {
   if (!key) return fail(EMPTY, "ITS 인증키가 설정되지 않았습니다.");
 
   try {
-    const [evRes, tiled, inCity] = await Promise.all([
+    const [evRes, tiled] = await Promise.all([
       timedFetch(
         `${ITS}/eventInfo?apiKey=${key}&type=all&eventType=all&${BBOX}&getType=json`,
         {},
         12_000,
       ),
       fetchTiles(key),
-      uiwangRoadNames(),
     ]);
 
     const incidents: Incident[] = [];
@@ -164,7 +163,7 @@ export async function GET() {
         // 이름 없는 구간("-")은 어느 도로인지 알 수 없어 그릴 수 없다
         if (!name || name === "-") continue;
         // 칸은 사각형이라 수원·군포 이면도로가 딸려 온다. 의왕에 있는 길만 남긴다.
-        if (inCity.size > 0 && !inCity.has(name)) continue;
+        if (!UIWANG_ROAD_NAMES.has(name)) continue;
         if (!Number.isFinite(speed) || speed <= 0) continue;
         if (!Number.isFinite(travelTime) || travelTime <= 0) continue;
         const k = `${name}|${tile}`;
