@@ -156,5 +156,20 @@ export async function ensureSchema(): Promise<void> {
   await sql`CREATE INDEX IF NOT EXISTS visits_at_idx ON visits (at DESC)`;
   await sql`CREATE INDEX IF NOT EXISTS visits_visitor_idx ON visits (visitor_id, at DESC)`;
 
+  /**
+   * CCTV 영상 주소.
+   *
+   * ITS 가 Vercel 에서 이따금 막힌다. 마지막으로 받아둔 주소를 남겨,
+   * 막힌 동안에도 영상이 계속 나오게 한다. 서명 주소라 오래되면 못 쓰므로
+   * 받은 시각을 함께 둔다.
+   */
+  await sql`
+    CREATE TABLE IF NOT EXISTS cctv_urls (
+      id  TEXT PRIMARY KEY,
+      url TEXT NOT NULL,
+      at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `;
+
   ensured = true;
 }

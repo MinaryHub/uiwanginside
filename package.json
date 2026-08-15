@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "verify:geo": "node scripts/verify-geo.mjs",
-    "roads:fetch": "node scripts/fetch-roads.mjs"
+    "roads:fetch": "node scripts/fetch-roads.mjs",
+    "cctv:fetch": "node scripts/fetch-cctv.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

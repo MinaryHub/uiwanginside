@@ -1,5 +1,5 @@
 import { timedFetch } from "@/lib/fetcher";
-import { fetchCctv } from "@/lib/cctv";
+import { cctvUrl } from "@/lib/cctv";
 
 export const dynamic = "force-dynamic";
 
@@ -10,18 +10,18 @@ export const dynamic = "force-dynamic";
  * 대신 받아 넘긴다.
  *
  * 받는 것은 id 뿐이다. 주소를 받아 그대로 열어주면 남의 서버를 우리
- * 이름으로 두드리는 통로가 된다. id 는 우리가 만든 목록에 있어야만
- * 하고, 없으면 404 다.
+ * 이름으로 두드리는 통로가 된다. id 는 우리 목록에 있어야만 하고,
+ * 없으면 404 다.
  */
 export async function GET(req: Request) {
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return new Response("id required", { status: 400 });
 
   try {
-    const cam = (await fetchCctv()).find((c) => c.id === id);
-    if (!cam) return new Response("not found", { status: 404 });
+    const url = await cctvUrl(id);
+    if (!url) return new Response("not found", { status: 404 });
 
-    const res = await timedFetch(cam.url, {}, 10_000);
+    const res = await timedFetch(url, {}, 10_000);
     if (!res.ok || !res.body) return new Response("upstream error", { status: 502 });
 
     const type = res.headers.get("content-type") ?? "";

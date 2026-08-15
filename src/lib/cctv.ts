@@ -1,61 +1,42 @@
-import { timedFetch, createTtlCache } from "./fetcher";
-import { isInsideUiwang } from "./geo";
+import { timedFetch } from "./fetcher";
 import { UIWANG_BBOX } from "./uiwang-boundary";
-import type { Cctv } from "./cctvTypes";
+import { UIWANG_CCTV } from "./uiwang-cctv";
+import { getSql, ensureSchema, hasDb } from "./db";
 
 /**
- * 의왕시 안의 도로 CCTV.
+ * 도로 CCTV 영상 주소 찾기.
  *
- * ITS 는 세 가지 형식을 준다 — HLS 실시간, MP4, JPEG 정지영상.
- * 정지영상을 쓴다. 실시간을 보려면 브라우저마다 재생 방식이 갈려
- * hls.js 같은 라이브러리를 얹어야 하는데, 길 상태를 확인하는 목적에는
- * 몇 초마다 갱신되는 사진으로 충분하고 데이터도 훨씬 적게 든다.
+ * 카메라가 어디에 무엇이 있는지는 uiwang-cctv.ts 에 굳혀 두었다.
+ * 여기서 하는 일은 서명이 붙은 영상 주소를 받아오는 것뿐이다.
  *
- * 영상 주소는 http 로만 열린다 (cctvsec.ktict.co.kr:8090, https 는 연결
- * 실패). https 페이지에서 http 이미지는 브라우저가 막으므로 서버가
- * 중계해야 한다. 그래서 주소를 클라이언트로 내보내지 않고 여기 두고,
- * /api/cctv/image 가 id 로만 찾아 가져온다 — 임의의 주소를 받아 대신
- * 열어주는 통로가 되면 그 자체가 구멍이다.
+ * 나눠 둔 이유가 있다. openapi.its.go.kr 은 Vercel 에서 이따금 통째로
+ * 막힌다 (UND_ERR_CONNECT_TIMEOUT, 10초 뒤 실패). 반면 영상 서버
+ * cctvsec.ktict.co.kr 은 같은 곳에서 37ms 에 열린다. 그래서
+ *
+ *   - 목록은 ITS 없이도 늘 나온다 → 카메라가 지도에서 사라지지 않는다
+ *   - 주소는 한 번 받아 두면 10분 뒤에도 쓸 수 있다 (실측) → 마지막으로
+ *     받아둔 것을 DB 에 남겨, ITS 가 막힌 동안에도 영상이 계속 나온다
+ *
+ * 인스턴스 메모리가 아니라 DB 에 두는 것은 서버리스라 인스턴스가 자주
+ * 갈리기 때문이다. 메모리에만 두면 새 인스턴스마다 다시 막힌 ITS 를
+ * 두드리게 된다.
  */
 const ITS = "https://openapi.its.go.kr:9443";
 
-/** 서명이 붙은 주소라 오래 들고 있을 수 없다 */
-const TTL_MS = 3 * 60_000;
+/** 이보다 최근에 받은 주소면 다시 받지 않는다 */
+const FRESH_MS = 5 * 60_000;
+/** 이보다 오래되면 만료됐다고 보고 쓰지 않는다 */
+const STALE_MS = 60 * 60_000;
 
 interface ItsCctv {
   cctvname?: string;
   cctvurl?: string;
-  coordx?: number;
-  coordy?: number;
 }
 
-export interface CctvEntry extends Cctv {
-  url: string;
-}
+/** 프로세스가 살아 있는 동안의 캐시. DB 왕복을 줄인다. */
+const mem = new Map<string, { url: string; at: number }>();
 
-/** 이름·좌표가 같으면 늘 같은 id 가 나온다 */
-function makeId(name: string, lat: number, lng: number): string {
-  const s = `${name}|${lat.toFixed(5)}|${lng.toFixed(5)}`;
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return (h >>> 0).toString(36);
-}
-
-/** "[영동선] 부곡" → { road: "영동선", name: "부곡" } */
-function split(raw: string): { road: string; name: string } {
-  const m = raw.match(/^\[([^\]]+)\]\s*(.*)$/);
-  return m ? { road: m[1], name: m[2] || raw } : { road: "", name: raw };
-}
-
-const cache = createTtlCache<CctvEntry[]>(TTL_MS);
-
-export async function fetchCctv(): Promise<CctvEntry[]> {
-  const cached = cache.get("cctv");
-  if (cached) return cached;
-
+async function refresh(): Promise<Map<string, string>> {
   const key = process.env.ITS_API_KEY;
   if (!key) throw new Error("ITS 인증키가 설정되지 않았습니다.");
 
@@ -70,16 +51,75 @@ export async function fetchCctv(): Promise<CctvEntry[]> {
 
   // 소통정보와 응답 모양이 다르다 — body.items 가 아니라 response.data 다
   const json = (await res.json()) as { response?: { data?: ItsCctv[] } };
-  const out: CctvEntry[] = [];
+  const byRaw = new Map<string, string>();
   for (const c of json.response?.data ?? []) {
-    const lat = Number(c.coordy);
-    const lng = Number(c.coordx);
-    if (!c.cctvname || !c.cctvurl || !Number.isFinite(lat) || !Number.isFinite(lng)) continue;
-    // 사각형으로 받았으니 실제 경계로 거른다 (범위 112대 → 의왕 15대)
-    if (!isInsideUiwang(lat, lng)) continue;
-    const { road, name } = split(c.cctvname);
-    out.push({ id: makeId(c.cctvname, lat, lng), name, road, lat, lng, url: c.cctvurl });
+    if (c.cctvname && c.cctvurl) byRaw.set(c.cctvname, c.cctvurl);
   }
-  if (out.length > 0) cache.set("cctv", out);
-  return out;
+
+  const now = Date.now();
+  const found = new Map<string, string>();
+  for (const cam of UIWANG_CCTV) {
+    const url = byRaw.get(cam.raw);
+    if (!url) continue;
+    found.set(cam.id, url);
+    mem.set(cam.id, { url, at: now });
+  }
+  if (found.size > 0) void save(found);
+  return found;
+}
+
+async function save(urls: Map<string, string>) {
+  if (!hasDb()) return;
+  try {
+    await ensureSchema();
+    const sql = getSql();
+    for (const [id, url] of urls) {
+      await sql`
+        INSERT INTO cctv_urls (id, url, at) VALUES (${id}, ${url}, now())
+        ON CONFLICT (id) DO UPDATE SET url = EXCLUDED.url, at = now()
+      `;
+    }
+  } catch (e) {
+    // 저장에 실패해도 이번 요청은 이미 주소를 들고 있다
+    console.error("[cctv:save]", e);
+  }
+}
+
+async function fromDb(id: string): Promise<string | null> {
+  if (!hasDb()) return null;
+  try {
+    await ensureSchema();
+    const sql = getSql();
+    const rows = (await sql`
+      SELECT url, at FROM cctv_urls WHERE id = ${id}
+    `) as { url: string; at: string }[];
+    if (rows.length === 0) return null;
+    const age = Date.now() - new Date(rows[0].at).getTime();
+    return age < STALE_MS ? rows[0].url : null;
+  } catch (e) {
+    console.error("[cctv:load]", e);
+    return null;
+  }
+}
+
+/**
+ * 이 카메라의 지금 영상 주소.
+ * 없으면 null — 카드가 "지금은 영상을 받을 수 없습니다" 를 보여준다.
+ */
+export async function cctvUrl(id: string): Promise<string | null> {
+  if (!UIWANG_CCTV.some((c) => c.id === id)) return null;
+
+  const hit = mem.get(id);
+  if (hit && Date.now() - hit.at < FRESH_MS) return hit.url;
+
+  try {
+    const fresh = await refresh();
+    const url = fresh.get(id);
+    if (url) return url;
+  } catch (e) {
+    console.error("[cctv:refresh]", e);
+  }
+
+  // ITS 가 막혔다. 마지막으로 받아둔 주소로 버틴다.
+  return hit?.url ?? (await fromDb(id));
 }
