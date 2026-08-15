@@ -12,8 +12,24 @@ import type {
 
 export const dynamic = "force-dynamic";
 
-/** 돌발상황은 자주 바뀐다 */
-const CACHE_SEC = 45;
+/**
+ * 돌발상황은 자주 바뀌지만, 한 번 부를 때 ITS 를 16번 두드린다.
+ * 45초로 두면 한 시간에 1,280번이다. 소통정보가 갱신되는 주기가
+ * 몇 분이라 90초로 늘려도 잃는 것이 없고, 차단당할 빌미도 줄인다.
+ */
+const CACHE_SEC = 90;
+
+/**
+ * 마지막으로 성공한 응답.
+ *
+ * ITS 는 이따금 연결 자체가 되지 않는다 (UND_ERR_CONNECT_TIMEOUT).
+ * 그때마다 지도에서 도로 색이 통째로 사라지면 깜빡이는 것으로 보인다.
+ * 잠깐의 실패는 직전 값으로 버틴다. 다만 15분이 넘은 것은 더 이상
+ * '지금 소통상태' 가 아니므로 내보내지 않는다 — 낡은 값을 현재인 척
+ * 보여주느니 없다고 하는 편이 낫다.
+ */
+const STALE_MAX_MS = 15 * 60_000;
+let lastGood: { at: number; payload: TrafficPayload } | null = null;
 
 /** ITS 국가교통정보센터 오픈API */
 const ITS = "https://openapi.its.go.kr:9443";
@@ -196,33 +212,39 @@ export async function GET() {
     }
     const roadLinks = [...worstByRoad.values()].sort((a, b) => a.speed - b.speed);
 
-    if (incidents.length === 0 && roadLinks.length === 0) {
-      return ok(
-        {
-          incidents,
-          links: roadLinks,
-          speeds,
-          source: "its",
-          updatedAt: nowISO(),
-        } satisfies TrafficPayload,
-        "현재 의왕시 범위에 보고된 돌발상황이 없습니다.",
-        CACHE_SEC,
-      );
-    }
 
+    const payload: TrafficPayload = {
+      incidents,
+      links: roadLinks.slice(0, 12),
+      speeds,
+      source: "its",
+      updatedAt: nowISO(),
+    };
+    // 한 칸도 못 받았으면 성공이 아니다 — 낡은 값이 있으면 그쪽이 낫다
+    if (speeds.length === 0 && incidents.length === 0) {
+      return staleOr("ITS 에서 소통정보를 받지 못했습니다.");
+    }
+    lastGood = { at: Date.now(), payload };
     return ok(
-      {
-        incidents,
-        links: roadLinks.slice(0, 12),
-        speeds,
-        source: "its",
-        updatedAt: nowISO(),
-      } satisfies TrafficPayload,
-      undefined,
+      payload,
+      // 소통정보는 왔는데 돌발만 없는 것은 정상이다. 그렇다고 말해준다.
+      incidents.length === 0 ? "현재 의왕시 범위에 보고된 돌발상황이 없습니다." : undefined,
       CACHE_SEC,
     );
   } catch (e) {
     console.error("[traffic]", e);
-    return fail(EMPTY, `ITS API 호출 실패: ${e instanceof Error ? e.message : e}`);
+    return staleOr(`ITS API 호출 실패: ${e instanceof Error ? e.message : e}`);
   }
+}
+
+function staleOr(reason: string) {
+  if (lastGood && Date.now() - lastGood.at < STALE_MAX_MS) {
+    const min = Math.round((Date.now() - lastGood.at) / 60_000);
+    return ok(
+      lastGood.payload,
+      `${reason} — ${min}분 전 값을 그대로 보여주고 있습니다.`,
+      30,
+    );
+  }
+  return fail(EMPTY, reason);
 }
