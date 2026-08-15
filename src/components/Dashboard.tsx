@@ -12,6 +12,12 @@ import { UIWANG_BBOX } from "@/lib/uiwang-boundary";
 import { DONG_BBOX, type LatLngBox } from "@/lib/dong-boundaries";
 import { MODES, MODE_MAP, type ModeId, type CardId } from "@/lib/modes";
 import { getDeviceId } from "@/lib/deviceId";
+import {
+  buildSegments,
+  LEVEL_COLOR,
+  LEVEL_LABEL,
+  type TrafficSegment,
+} from "@/lib/traffic";
 import type { Photo, PhotosPayload } from "@/lib/photoTypes";
 import { timeAgo } from "@/components/ui";
 import type {
@@ -28,6 +34,7 @@ import type {
   TransitPayload,
   RatingsPayload,
   BusPositionsPayload,
+  RoadsPayload,
 } from "@/lib/types";
 import Link from "next/link";
 import Logo from "@/components/Logo";
@@ -60,6 +67,7 @@ const NO_STOPS: BusStop[] = [];
 const NO_MEDICAL: MedicalPayload["places"] = [];
 const NO_LANDMARKS: typeof LANDMARKS = [];
 const NO_PHOTOS: Photo[] = [];
+const NO_SEGMENTS: TrafficSegment[] = [];
 
 const POLL = {
   weather: 10 * 60_000,
@@ -333,6 +341,25 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     ? (traffic.data?.data.incidents ?? NO_INCIDENTS)
     : NO_INCIDENTS;
   const mapStops = def?.layers.bus ? (transit.data?.data.stops ?? NO_STOPS) : NO_STOPS;
+
+  /**
+   * 도로 소통상태.
+   *
+   * 형상은 하루가 지나도 그대로라 한 번만 받는다. 속도는 45초마다 오지만
+   * 7KB 남짓이다. 둘을 여기서 맞물려 그릴 조각을 만든다.
+   */
+  const roads = useSWR<ApiEnvelope<RoadsPayload>>(
+    def?.layers.traffic ? "/api/roads" : null,
+    swrFetcher,
+    { revalidateOnFocus: false, revalidateIfStale: false, dedupingInterval: 6 * 60 * 60_000 },
+  );
+  const trafficSegments = useMemo(() => {
+    if (!def?.layers.traffic) return NO_SEGMENTS;
+    const ways = roads.data?.data.roads;
+    const speeds = traffic.data?.data.speeds;
+    if (!ways?.length || !speeds?.length) return NO_SEGMENTS;
+    return buildSegments(ways, speeds);
+  }, [def?.layers.traffic, roads.data, traffic.data]);
   const mapLandmarks = mode === null ? LANDMARKS : NO_LANDMARKS;
   const mapBusPositions = busPositions.data?.ok ? busPositions.data.data : null;
 
@@ -437,6 +464,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           landmarks={mapLandmarks}
           showBoundary
           activeDong={activeDong}
+          trafficSegments={trafficSegments}
           fitBounds={fitBounds}
           dimOutside={mode === null}
           selectedPlaceId={selectedPlaceId}
@@ -618,6 +646,29 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           −
         </button>
       </div>
+
+      {/* 색만 칠해두고 뜻을 안 알려주면 읽을 수 없다 */}
+      {trafficSegments.length > 0 && (
+        <div className="absolute bottom-3 left-3 z-20 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)]/92 px-2.5 py-2 shadow-[var(--shadow-md)] backdrop-blur">
+          <p className="mb-1 text-[var(--text-2xs)] font-bold text-[var(--text-muted)]">
+            도로 소통
+          </p>
+          <div className="flex gap-2.5">
+            {(["congested", "slow", "smooth"] as const).map((lv) => (
+              <span key={lv} className="flex items-center gap-1">
+                <span
+                  aria-hidden
+                  className="h-[3px] w-4 rounded-full"
+                  style={{ background: LEVEL_COLOR[lv] }}
+                />
+                <span className="text-[var(--text-2xs)] font-semibold">
+                  {LEVEL_LABEL[lv]}
+                </span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {marker?.kind === "stop" && (
         <StopCard

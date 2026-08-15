@@ -91,10 +91,39 @@ export interface TrafficLink {
   lng: number | null;
 }
 
+/**
+ * 격자 칸 하나에서 잰 도로별 속도.
+ * 좌표가 없는 ITS 소통정보를 지도에 올리기 위한 최소 단위다 —
+ * "이 도로의 이 칸 언저리가 이 속도" 까지가 알 수 있는 전부다.
+ */
+export interface RoadSpeed {
+  road: string;
+  tile: number;
+  /** 통행시간으로 가중한 공간평균속도 (km/h) */
+  speed: number;
+  /** 이 칸에서 집계에 쓰인 링크 수 */
+  links: number;
+}
+
 export interface TrafficPayload {
   incidents: Incident[];
   links: TrafficLink[];
+  /** 지도에 그릴 구간별 속도 */
+  speeds: RoadSpeed[];
   source: "its";
+  updatedAt: string;
+}
+
+/** OSM 에서 가져온 도로 한 조각의 형상 */
+export interface RoadWay {
+  name: string;
+  /** 도시고속·고속도로 — 소통상태 기준이 다르다 */
+  expressway: boolean;
+  path: [number, number][];
+}
+
+export interface RoadsPayload {
+  roads: RoadWay[];
   updatedAt: string;
 }
 

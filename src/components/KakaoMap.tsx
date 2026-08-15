@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { CATEGORY_MAP } from "@/lib/uiwang";
 import { UIWANG_BOUNDARY } from "@/lib/uiwang-boundary";
 import { DONG_BOUNDARIES } from "@/lib/dong-boundaries";
+import { LEVEL_COLOR, type TrafficLevel, type TrafficSegment } from "@/lib/traffic";
 import type { Photo } from "@/lib/photoTypes";
 import type {
   Place,
@@ -96,6 +97,17 @@ function dotEl(color: string, emoji: string) {
   el.textContent = emoji;
   return el;
 }
+
+/**
+ * 소통상태별 선 모양.
+ * 원활한 길까지 진하게 칠하면 지도가 온통 선으로 덮여 정작 막히는 곳이
+ * 묻힌다. 원활은 옅게 깔고, 막힐수록 굵고 진하게 한다.
+ */
+const STROKE: Record<TrafficLevel, { strokeColor: string; strokeWeight: number; strokeOpacity: number }> = {
+  smooth: { strokeColor: LEVEL_COLOR.smooth, strokeWeight: 4, strokeOpacity: 0.3 },
+  slow: { strokeColor: LEVEL_COLOR.slow, strokeWeight: 5, strokeOpacity: 0.75 },
+  congested: { strokeColor: LEVEL_COLOR.congested, strokeWeight: 6, strokeOpacity: 0.85 },
+};
 
 /**
  * 화면에 고르게 흩어 놓는다.
@@ -198,6 +210,8 @@ export interface KakaoMapProps {
   onSelectPhoto: (p: Photo) => void;
   /** 랜드마크 (둘러보기 모드) */
   landmarks: { name: string; lat: number; lng: number; desc: string }[];
+  /** 도로 소통상태 — 도로 형상에 ITS 속도를 입힌 조각들 */
+  trafficSegments: TrafficSegment[];
   /** 의왕시 행정경계 표시 */
   showBoundary: boolean;
   /** 강조할 행정동 이름 (null 이면 없음) */
@@ -236,6 +250,7 @@ export default function KakaoMap({
   onSelectPhoto,
   busPositions,
   landmarks,
+  trafficSegments,
   showBoundary,
   activeDong,
   fitBounds,
@@ -269,6 +284,10 @@ export default function KakaoMap({
   const photoOv = useRef<kakao.maps.CustomOverlay[]>([]);
   const boundaryRef = useRef<kakao.maps.Polygon[]>([]);
   const dongRef = useRef<kakao.maps.Polygon[]>([]);
+  /** 소통정보 선. 45초마다 색만 바뀌므로 마커와 같은 방식으로 재사용한다. */
+  const roadLines = useRef(
+    new Map<string, { line: kakao.maps.Polyline; level: TrafficLevel }>(),
+  );
   const movedRef = useRef(onMapMoved);
   const fittedRef = useRef(onViewFitted);
   const boundsRef = useRef(onBoundsChanged);
@@ -459,6 +478,47 @@ export default function KakaoMap({
     poly.setMap(map);
     dongRef.current.push(poly);
   }, [ready, activeDong]);
+
+  /**
+   * 도로 소통상태.
+   *
+   * 45초마다 새 값이 오는데, 선은 그대로고 색만 바뀌는 경우가 대부분이다.
+   * 지웠다 다시 그리면 도로망 전체가 한 번 깜빡이므로, 마커와 마찬가지로
+   * 키로 들고 있으면서 색이 달라진 것만 setOptions 로 갈아 끼운다.
+   */
+  useEffect(() => {
+    if (!ready || !mapRef.current) return;
+    const map = mapRef.current;
+    const live = roadLines.current;
+    const want = new Map(trafficSegments.map((s) => [s.key, s]));
+
+    for (const [key, entry] of live) {
+      if (!want.has(key)) {
+        entry.line.setMap(null);
+        live.delete(key);
+      }
+    }
+
+    for (const [key, seg] of want) {
+      const cur = live.get(key);
+      if (cur) {
+        if (cur.level !== seg.level) {
+          cur.line.setOptions(STROKE[seg.level]);
+          cur.level = seg.level;
+        }
+        continue;
+      }
+      const line = new window.kakao.maps.Polyline({
+        path: seg.path.map(([lat, lng]) => new window.kakao.maps.LatLng(lat, lng)),
+        strokeStyle: "solid",
+        // 경계선(2)·동(5) 위, 마커(10+) 아래
+        zIndex: 6,
+        ...STROKE[seg.level],
+      });
+      line.setMap(map);
+      live.set(key, { line, level: seg.level });
+    }
+  }, [ready, trafficSegments]);
 
   // 검색 반경 원은 그리지 않는다.
   // 큰 점선 원이 "이 밖은 없음" 처럼 읽혀 화면이 제한된 구역처럼 보였다.

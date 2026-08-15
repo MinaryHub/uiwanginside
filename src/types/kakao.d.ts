@@ -61,6 +61,24 @@ declare namespace kakao.maps {
     });
     setMap(map: Map | null): void;
   }
+  class Polyline {
+    constructor(options: {
+      path: LatLng[];
+      strokeWeight?: number;
+      strokeColor?: string;
+      strokeOpacity?: number;
+      strokeStyle?: string;
+      zIndex?: number;
+    });
+    setMap(map: Map | null): void;
+    /** 색만 바꿀 때 쓴다. 지웠다 다시 만들면 깜빡인다. */
+    setOptions(options: {
+      strokeWeight?: number;
+      strokeColor?: string;
+      strokeOpacity?: number;
+      zIndex?: number;
+    }): void;
+  }
   namespace event {
     function addListener(target: unknown, type: string, handler: (...args: never[]) => void): void;
   }
