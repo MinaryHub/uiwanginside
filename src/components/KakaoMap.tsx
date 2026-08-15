@@ -6,6 +6,7 @@ import { UIWANG_BOUNDARY } from "@/lib/uiwang-boundary";
 import { DONG_BOUNDARIES } from "@/lib/dong-boundaries";
 import { LEVEL_COLOR, type TrafficLevel, type TrafficSegment } from "@/lib/traffic";
 import type { Photo } from "@/lib/photoTypes";
+import type { Cctv } from "@/lib/cctvTypes";
 import type {
   Place,
   Incident,
@@ -212,6 +213,9 @@ export interface KakaoMapProps {
   landmarks: { name: string; lat: number; lng: number; desc: string }[];
   /** 도로 소통상태 — 도로 형상에 ITS 속도를 입힌 조각들 */
   trafficSegments: TrafficSegment[];
+  /** 도로 CCTV */
+  cctvs: Cctv[];
+  onSelectCctv: (c: Cctv) => void;
   /** 의왕시 행정경계 표시 */
   showBoundary: boolean;
   /** 강조할 행정동 이름 (null 이면 없음) */
@@ -251,6 +255,8 @@ export default function KakaoMap({
   busPositions,
   landmarks,
   trafficSegments,
+  cctvs,
+  onSelectCctv,
   showBoundary,
   activeDong,
   fitBounds,
@@ -706,13 +712,30 @@ export default function KakaoMap({
       );
     }
 
-    // 구간속도는 지도에 그리지 않는다. ITS 소통정보는 좌표를 주지 않아
-    // (linkId·도로명뿐) 찍을 자리가 없다. 목록으로만 보여준다.
+    // CCTV 는 열다섯 대뿐이고 모두 고속도로 위라 겹치지 않는다.
+    // 이름표를 늘 붙여도 화면이 붐비지 않는다.
+    for (const c of cctvs) {
+      const on = selectedMarkerId === `cctv:${c.id}`;
+      add(
+        c.lat,
+        c.lng,
+        on || labelled
+          ? pinEl("📹", "#5b21b6", c.name, { active: on })
+          : dotEl("#5b21b6", "📹"),
+        on ? 92 : 30,
+        () => onSelectCctv(c),
+      );
+    }
+
+    // 구간속도는 여기서 그리지 않는다. 좌표가 없어 점으로 찍을 수 없고,
+    // 도로 형상에 색을 입히는 방식으로 따로 그린다 (위 소통상태 effect).
   }, [
     ready,
     level,
     busStops,
     incidents,
+    cctvs,
+    onSelectCctv,
     selectedMarkerId,
     onSelectStop,
     onSelectIncident,

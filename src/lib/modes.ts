@@ -21,6 +21,7 @@ export type CardId =
   | "air"
   | "medical"
   | "traffic"
+  | "cctv"
   | "transit"
   | "waste"
   | "population"
@@ -31,6 +32,8 @@ export interface MapLayers {
   bus: boolean;
   incidents: boolean;
   traffic: boolean;
+  /** 도로 CCTV — 모두 고속도로 위라 교통 모드에서만 의미가 있다 */
+  cctv: boolean;
 }
 
 export interface ModeDef {
@@ -48,6 +51,7 @@ const NO_LAYERS: MapLayers = {
   bus: false,
   incidents: false,
   traffic: false,
+  cctv: false,
 };
 
 export const MODES: ModeDef[] = [
@@ -78,10 +82,10 @@ export const MODES: ModeDef[] = [
   {
     id: "transit",
     label: "교통",
-    hint: "버스 도착·실시간 위치·사고",
+    hint: "버스 도착·실시간 위치·정체·CCTV",
     categories: ["SW8", "PK6"],
-    layers: { places: true, bus: true, incidents: true, traffic: true },
-    cards: ["transit", "traffic"],
+    layers: { places: true, bus: true, incidents: true, traffic: true, cctv: true },
+    cards: ["transit", "traffic", "cctv"],
   },
 ];
 

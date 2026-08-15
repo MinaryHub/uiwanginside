@@ -19,6 +19,7 @@ import {
   type TrafficSegment,
 } from "@/lib/traffic";
 import type { Photo, PhotosPayload } from "@/lib/photoTypes";
+import type { Cctv, CctvPayload } from "@/lib/cctvTypes";
 import { timeAgo } from "@/components/ui";
 import type {
   ApiEnvelope,
@@ -41,6 +42,7 @@ import Logo from "@/components/Logo";
 import SummaryStrip from "@/components/SummaryStrip";
 import PlaceDetailCard from "@/components/PlaceDetailCard";
 import StopCard from "@/components/StopCard";
+import CctvCard from "@/components/CctvCard";
 import MapCard from "@/components/MapCard";
 import PlacesPanel from "@/components/panels/PlacesPanel";
 import WeatherPanel from "@/components/panels/WeatherPanel";
@@ -48,6 +50,7 @@ import AirPanel from "@/components/panels/AirPanel";
 import MedicalPanel from "@/components/panels/MedicalPanel";
 import TrafficPanel from "@/components/panels/TrafficPanel";
 import TransitPanel from "@/components/panels/TransitPanel";
+import CctvPanel from "@/components/panels/CctvPanel";
 import NewsPanel from "@/components/panels/NewsPanel";
 import WastePanel from "@/components/panels/WastePanel";
 import PopulationPanel from "@/components/panels/PopulationPanel";
@@ -68,6 +71,7 @@ const NO_MEDICAL: MedicalPayload["places"] = [];
 const NO_LANDMARKS: typeof LANDMARKS = [];
 const NO_PHOTOS: Photo[] = [];
 const NO_SEGMENTS: TrafficSegment[] = [];
+const NO_CCTVS: Cctv[] = [];
 
 const POLL = {
   weather: 10 * 60_000,
@@ -101,7 +105,10 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
    * 카드가 두 개 겹쳐 뜨면 어느 것을 보고 있는지 알 수 없다.
    */
   const [marker, setMarker] = useState<
-    { kind: "stop"; stop: BusStop } | { kind: "incident"; incident: Incident } | null
+    | { kind: "stop"; stop: BusStop }
+    | { kind: "incident"; incident: Incident }
+    | { kind: "cctv"; cctv: Cctv }
+    | null
   >(null);
   const [activeDong, setActiveDong] = useState<string | null>(null);
   const [tracked, setTracked] = useState<{ id: string; name: string } | null>(null);
@@ -324,12 +331,19 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     );
   }, []);
 
+  const selectCctv = useCallback((cctv: Cctv) => {
+    setSelectedPlaceId(null);
+    setMarker((cur) => (cur?.kind === "cctv" && cur.cctv.id === cctv.id ? null : { kind: "cctv", cctv }));
+  }, []);
+
   const markerId =
     marker?.kind === "stop"
       ? `stop:${marker.stop.stationId}`
       : marker?.kind === "incident"
         ? `incident:${marker.incident.id}`
-        : null;
+        : marker?.kind === "cctv"
+          ? `cctv:${marker.cctv.id}`
+          : null;
 
   const selectedPlace = useMemo(
     () => placeList.find((p) => p.id === selectedPlaceId) ?? null,
@@ -353,6 +367,14 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     swrFetcher,
     { revalidateOnFocus: false, revalidateIfStale: false, dedupingInterval: 6 * 60 * 60_000 },
   );
+  const cctv = useSWR<ApiEnvelope<CctvPayload>>(
+    def?.layers.cctv ? "/api/cctv" : null,
+    swrFetcher,
+    // 카메라 위치는 바뀌지 않는다. 영상만 카드에서 따로 갱신한다.
+    { revalidateOnFocus: false, dedupingInterval: 30 * 60_000 },
+  );
+  const mapCctvs = def?.layers.cctv ? (cctv.data?.data.cameras ?? NO_CCTVS) : NO_CCTVS;
+
   const trafficSegments = useMemo(() => {
     if (!def?.layers.traffic) return NO_SEGMENTS;
     const ways = roads.data?.data.roads;
@@ -406,6 +428,20 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             res={traffic.data}
             isLoading={traffic.isLoading}
             onFocus={(lat, lng) => focus(lat, lng, 4)}
+          />
+        );
+      case "cctv":
+        return (
+          <CctvPanel
+            key={id}
+            res={cctv.data}
+            isLoading={cctv.isLoading}
+            onSelect={(c) => {
+              selectCctv(c);
+              // 폰에서는 시트가 화면을 덮어 영상 카드가 가려진다
+              if (window.innerWidth < 640) setSheetOpen(false);
+              focus(c.lat, c.lng, 4);
+            }}
           />
         );
       case "transit":
@@ -465,6 +501,8 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           showBoundary
           activeDong={activeDong}
           trafficSegments={trafficSegments}
+          cctvs={mapCctvs}
+          onSelectCctv={selectCctv}
           fitBounds={fitBounds}
           dimOutside={mode === null}
           selectedPlaceId={selectedPlaceId}
@@ -703,6 +741,14 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             {timeAgo(marker.incident.startedAt)} 접수
           </p>
         </MapCard>
+      )}
+
+      {marker?.kind === "cctv" && (
+        <CctvCard
+          key={marker.cctv.id}
+          cctv={marker.cctv}
+          onClose={() => setMarker(null)}
+        />
       )}
 
       {photo && (
