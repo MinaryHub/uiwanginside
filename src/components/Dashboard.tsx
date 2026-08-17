@@ -650,7 +650,8 @@ export default function Dashboard({
         그려지는 쪽이 이겨 날씨·미세먼지 줄이 가려져 있었다. 시트는 이
         영역 아래에서 시작한다 (아래 top-[112px]).
       */}
-      <header className="pointer-events-none absolute inset-x-0 top-0 z-40 flex items-center gap-2 p-3">
+      <header className="pointer-events-none absolute inset-x-0 top-0 z-40 p-3">
+        <div className="flex items-center gap-2">
         <div className="pointer-events-auto flex min-w-0 flex-1 items-center gap-2 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)]/92 px-3 py-2 shadow-[var(--shadow-md)] backdrop-blur">
           <button
             type="button"
@@ -666,8 +667,13 @@ export default function Dashboard({
               의왕
             </span>
           </button>
-          <span className="h-4 w-px shrink-0 bg-[var(--border)]" />
-          <div className="min-w-0 flex-1">
+          {/*
+            좁은 화면에서는 이 자리에 두지 않는다. 실측하면 요약에 남는
+            폭이 109px 뿐이어서 기온 하나만 보이고 미세먼지·사고·진료중·
+            특보가 모두 옆으로 밀렸다. 아래 자기 줄로 내린다.
+          */}
+          <span className="hidden h-4 w-px shrink-0 bg-[var(--border)] sm:block" />
+          <div className="hidden min-w-0 flex-1 sm:block">
             <SummaryStrip
               weather={weather.data}
               air={air.data}
@@ -709,11 +715,31 @@ export default function Dashboard({
         >
           ↻
         </button>
+        </div>
+
+        {/*
+          좁은 화면 전용 요약 줄.
+          로고와 버튼 넷이 한 줄을 다 쓰는 바람에 요약이 109px 로 눌려
+          기온만 보였다. 폭을 다 쓰는 자기 줄을 주면 미세먼지·사고·
+          진료중·특보가 함께 들어온다. 지도를 46px 내주는 대신이다.
+        */}
+        <div className="pointer-events-auto mt-1.5 flex h-10 items-center overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)]/92 px-2 shadow-[var(--shadow-md)] backdrop-blur sm:hidden">
+          <SummaryStrip
+            weather={weather.data}
+            air={air.data}
+            traffic={traffic.data}
+            medical={medical.data}
+            onOpen={(m) => {
+              setMode(m);
+              setSheetOpen(true);
+            }}
+          />
+        </div>
       </header>
 
       {/* 모드 — 탭 바를 없애고 지도 위 알약으로 */}
       <nav
-        className="pointer-events-none absolute inset-x-0 top-[64px] z-40 flex justify-center px-3"
+        className="pointer-events-none absolute inset-x-0 top-[104px] z-40 flex justify-center px-3 sm:top-[64px]"
         aria-label="보기 모드"
       >
         <div className="pointer-events-auto flex gap-1 rounded-[var(--radius-full)] border border-[var(--border)] bg-[var(--surface)]/92 p-1 shadow-[var(--shadow-md)] backdrop-blur">
@@ -746,7 +772,7 @@ export default function Dashboard({
         확대·축소를 누를 수 없었다. 모드 알약 아래 오른쪽으로 옮겨
         무엇이 떠 있든 늘 누를 수 있게 한다.
       */}
-      <div className="absolute right-3 top-[120px] z-20 flex flex-col gap-1.5">
+      <div className="absolute right-3 top-[160px] z-20 flex flex-col gap-1.5 sm:top-[120px]">
         <div className="relative">
           <button
             type="button"
@@ -841,7 +867,7 @@ export default function Dashboard({
         되는 이야기라 잠깐 떴다 사라지는 자리에 둔다.
       */}
       {locNotice && (
-        <div className="pointer-events-none absolute inset-x-0 top-[116px] z-40 flex justify-center px-3">
+        <div className="pointer-events-none absolute inset-x-0 top-[156px] z-40 flex justify-center px-3 sm:top-[116px]">
           <button
             type="button"
             onClick={() => setLocNotice(null)}
@@ -990,7 +1016,7 @@ export default function Dashboard({
            * 화면을 통째로 덮으면 지금 날씨가 어떤지, 어느 모드를 보고
            * 있는지가 시트에 가려 보이지 않는다.
            */
-          className={`absolute bottom-0 left-0 top-[112px] z-30 flex w-full flex-col rounded-tr-[var(--radius-lg)] border-r border-t border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)] transition-transform duration-200 sm:w-[360px] ${
+          className={`absolute bottom-0 left-0 top-[152px] z-30 flex w-full flex-col sm:top-[112px] rounded-tr-[var(--radius-lg)] border-r border-t border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)] transition-transform duration-200 sm:w-[360px] ${
             sheetOpen ? "translate-x-0" : "-translate-x-full"
           }`}
         >
