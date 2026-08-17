@@ -283,10 +283,30 @@ export default function Dashboard({
   }, [places, weather, air, traffic, medical, transit, news, ratings]);
 
   // ── 동작 ──────────────────────────────────────────────
-  const focus = useCallback((lat: number, lng: number, lv = 4) => {
-    setFitBounds(null);
-    setCenter({ lat, lng });
-    setLevel(lv);
+  /**
+   * 한 지점을 화면 가운데로.
+   *
+   * 전에는 중심과 확대 수준을 따로 걸었다. 지도에서는 이것이 이동
+   * 애니메이션(panTo)과 확대 애니메이션(setLevel) 두 개로 나뉘어 같은
+   * 순간에 시작되고, 서로를 끊어 엉뚱한 자리에 멈추곤 했다. 검색으로
+   * 고른 곳이 화면 밖에 남는 것도 이 때문이었다.
+   *
+   * setBounds 는 중심과 확대 수준을 한 번에 정한다. 동 경계를 맞출 때
+   * 쓰던 길과 같다 — 그쪽은 처음부터 문제가 없었다.
+   *
+   * 세 번째 값은 확대 수준이 아니라 "가운데에서 몇 미터까지 보일지" 다.
+   * 지도가 알아서 그에 맞는 확대 수준을 고른다.
+   */
+  const focus = useCallback((lat: number, lng: number, spanM = 400) => {
+    const dLat = spanM / 111_000;
+    // 위도 37도에서 경도 1도는 약 88km
+    const dLng = spanM / 88_000;
+    setFitBounds({
+      minLat: lat - dLat,
+      maxLat: lat + dLat,
+      minLng: lng - dLng,
+      maxLng: lng + dLng,
+    });
   }, []);
 
   /** 같은 모드를 다시 누르면 해제되어 둘러보기로 돌아간다 */
@@ -336,15 +356,13 @@ export default function Dashboard({
         return;
       }
       if (s.inUiwang) {
-        setFitBounds(null);
-        setCenter({ lat: s.lat, lng: s.lng });
-        setLevel((lv) => Math.min(lv, 4));
+        focus(s.lat, s.lng, 350);
       } else {
         setLocNotice("의왕시 밖에 계십니다. 의왕 전체를 보여드립니다.");
         setFitBounds({ ...UIWANG_BBOX });
       }
     });
-  }, [myLocation]);
+  }, [myLocation, focus]);
 
   const me = myLocation.state.status === "ok" ? myLocation.state : null;
 
@@ -358,11 +376,9 @@ export default function Dashboard({
     setPinned(p);
     setMarker(null);
     setSelectedPlaceId(p.id);
-    setFitBounds(null);
-    setCenter({ lat: p.lat, lng: p.lng });
-    setLevel((lv) => Math.min(lv, 3));
+    focus(p.lat, p.lng, 250);
     setSheetOpen(false);
-  }, []);
+  }, [focus]);
 
   const revealMap = useCallback(() => {
     if (typeof window !== "undefined" && window.innerWidth < 640) setSheetOpen(false);
@@ -373,14 +389,12 @@ export default function Dashboard({
       setMarker(null);
       setSelectedPlaceId((id) => {
         if (id === p.id) return null;
-        setFitBounds(null);
-        setCenter({ lat: p.lat, lng: p.lng });
-        setLevel((lv) => Math.min(lv, 4));
+        focus(p.lat, p.lng, 350);
         revealMap();
         return p.id;
       });
     },
-    [revealMap],
+    [revealMap, focus],
   );
 
   /** 등록 결과를 SWR 캐시에 바로 반영한다 (재조회 없이) */
@@ -528,7 +542,7 @@ export default function Dashboard({
             key={id}
             res={medical.data}
             isLoading={medical.isLoading}
-            onFocus={(lat, lng) => focus(lat, lng, 3)}
+            onFocus={(lat, lng) => focus(lat, lng, 250)}
           />
         );
       case "traffic":
@@ -537,7 +551,7 @@ export default function Dashboard({
             key={id}
             res={traffic.data}
             isLoading={traffic.isLoading}
-            onFocus={(lat, lng) => focus(lat, lng, 4)}
+            onFocus={(lat, lng) => focus(lat, lng, 500)}
           />
         );
       case "cctv":
@@ -548,7 +562,7 @@ export default function Dashboard({
             isLoading={cctv.isLoading}
             onSelect={(c) => {
               selectCctv(c);
-              focus(c.lat, c.lng, 4);
+              focus(c.lat, c.lng, 500);
             }}
           />
         );
@@ -558,7 +572,7 @@ export default function Dashboard({
             key={id}
             res={transit.data}
             isLoading={transit.isLoading}
-            onFocus={(lat, lng) => focus(lat, lng, 3)}
+            onFocus={(lat, lng) => focus(lat, lng, 250)}
             trackedRouteId={tracked?.id ?? null}
             onTrackRoute={(rid, name) =>
               setTracked((cur) => (cur?.id === rid ? null : { id: rid, name }))
@@ -774,7 +788,7 @@ export default function Dashboard({
               <button
                 type="button"
                 onClick={() => {
-                  focus(UIWANG.center.lat, UIWANG.center.lng, 5);
+                  focus(UIWANG.center.lat, UIWANG.center.lng, 1500);
                   setDongMenu(false);
                 }}
                 className="block min-h-[40px] w-full border-t border-[var(--border)] px-3 text-left text-[var(--text-sm)] font-semibold text-[var(--text-muted)] transition hover:bg-[var(--surface-2)]"

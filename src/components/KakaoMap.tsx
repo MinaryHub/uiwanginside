@@ -319,6 +319,11 @@ export default function KakaoMap({
   // 마커를 그대로 두고 재사용하므로, 붙여둔 클릭 핸들러가 낡지 않게 ref 로 읽는다
   const selectRef = useRef(onSelectPlace);
   /**
+   * 시트가 열려 있는지. deps 에 넣으면 시트를 여닫을 때마다 지도가
+   * 다시 맞춰져 제멋대로 움직인다. 범위를 맞추는 순간에만 들여다본다.
+   */
+  const sheetRef = useRef(sheetOpen);
+  /**
    * 지도가 스스로 알려준 중심·확대 수준.
    *
    * 이 값이 부모를 거쳐 prop 으로 되돌아왔을 때 다시 panTo 를 부르면 안 된다.
@@ -346,7 +351,8 @@ export default function KakaoMap({
     fittedRef.current = onViewFitted;
     boundsRef.current = onBoundsChanged;
     selectRef.current = onSelectPlace;
-  }, [onMapMoved, onViewFitted, onBoundsChanged, onSelectPlace]);
+    sheetRef.current = sheetOpen;
+  }, [onMapMoved, onViewFitted, onBoundsChanged, onSelectPlace, sheetOpen]);
 
   // SDK 로드 + 지도 생성
   useEffect(() => {
@@ -407,8 +413,17 @@ export default function KakaoMap({
     const b = new window.kakao.maps.LatLngBounds();
     b.extend(new window.kakao.maps.LatLng(fitBounds.minLat, fitBounds.minLng));
     b.extend(new window.kakao.maps.LatLng(fitBounds.maxLat, fitBounds.maxLng));
-    // 경계선이 화면 끝에 붙지 않도록 여백을 준다
-    map.setBounds(b, 48, 48, 48, 48);
+    /*
+     * 경계선이 화면 끝에 붙지 않도록 여백을 준다.
+     *
+     * 넓은 화면에서 시트가 열려 있으면 지도의 왼쪽 360px 은 목록에
+     * 덮여 있다. 지도 컨테이너는 늘 화면 전체라 그대로 가운데를 맞추면
+     * 찾던 곳이 목록 뒤로 들어간다. 그만큼 왼쪽을 비켜 놓고 맞춘다.
+     * 좁은 화면은 시트가 통째로 덮으므로 따질 것이 없다.
+     */
+    const wide = (containerRef.current?.clientWidth ?? 0) >= 640;
+    const left = wide && sheetRef.current ? 384 : 48;
+    map.setBounds(b, 48, 48, 48, left);
     const c = map.getCenter();
     const here = { lat: c.getLat(), lng: c.getLng() };
     const lv = map.getLevel();
