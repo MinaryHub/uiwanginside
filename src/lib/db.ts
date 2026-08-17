@@ -171,5 +171,24 @@ export async function ensureSchema(): Promise<void> {
     )
   `;
 
+  /**
+   * 마지막으로 성공한 소통정보.
+   *
+   * ITS 가 Vercel 에서 이따금 통째로 막힌다. 인스턴스 메모리에만 두면
+   * 서버리스라 인스턴스가 갈릴 때마다 빈손으로 시작해, 막힌 동안 도로
+   * 색이 통째로 사라진다. CCTV 주소와 같은 이유로 여기 둔다.
+   *
+   * failed_at 은 마지막으로 실패한 시각이다. 막힌 것을 확인하고도
+   * 인스턴스마다 다시 두드리면 요청 하나가 11초씩 걸린다.
+   */
+  await sql`
+    CREATE TABLE IF NOT EXISTS traffic_snapshot (
+      id        TEXT PRIMARY KEY,
+      payload   JSONB,
+      at        TIMESTAMPTZ,
+      failed_at TIMESTAMPTZ
+    )
+  `;
+
   ensured = true;
 }

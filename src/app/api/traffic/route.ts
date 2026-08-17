@@ -2,6 +2,7 @@ import { timedFetch, ok, fail, nowISO } from "@/lib/fetcher";
 import { UIWANG } from "@/lib/uiwang";
 import { cityTiles, spaceMeanSpeed } from "@/lib/traffic";
 import { UIWANG_ROAD_NAMES } from "@/lib/uiwang-roads";
+import { getSql, ensureSchema, hasDb } from "@/lib/db";
 import type {
   TrafficPayload,
   Incident,
@@ -20,16 +21,72 @@ export const dynamic = "force-dynamic";
 const CACHE_SEC = 90;
 
 /**
- * 마지막으로 성공한 응답.
+ * 마지막으로 성공한 응답을 DB 에 둔다.
  *
- * ITS 는 이따금 연결 자체가 되지 않는다 (UND_ERR_CONNECT_TIMEOUT).
- * 그때마다 지도에서 도로 색이 통째로 사라지면 깜빡이는 것으로 보인다.
- * 잠깐의 실패는 직전 값으로 버틴다. 다만 15분이 넘은 것은 더 이상
- * '지금 소통상태' 가 아니므로 내보내지 않는다 — 낡은 값을 현재인 척
- * 보여주느니 없다고 하는 편이 낫다.
+ * ITS 는 이따금 연결 자체가 되지 않는다 (UND_ERR_CONNECT_TIMEOUT, 10.5초).
+ * 처음에는 인스턴스 메모리에 들고 있었는데, 서버리스라 인스턴스가 갈릴
+ * 때마다 빈손으로 시작해 도로 색이 통째로 사라졌다. 실제로 그렇게 됐다.
+ *
+ * 겸해서 이 값이 캐시 노릇도 한다. 90초 안에 받아둔 것이 있으면 ITS 를
+ * 아예 부르지 않으므로, 인스턴스가 몇 개든 ITS 는 90초에 한 번만 열린다.
+ *
+ * 15분이 넘은 것은 더 이상 '지금 소통상태' 가 아니므로 내보내지 않는다 —
+ * 낡은 값을 현재인 척 보여주느니 없다고 하는 편이 낫다.
  */
+const FRESH_MS = CACHE_SEC * 1000;
 const STALE_MAX_MS = 15 * 60_000;
-let lastGood: { at: number; payload: TrafficPayload } | null = null;
+/** 막힌 것을 확인한 뒤 다시 두드리기까지 */
+const RETRY_MS = 2 * 60_000;
+
+interface Snapshot {
+  payload: TrafficPayload | null;
+  age: number;
+  failedAgo: number;
+}
+
+async function readSnapshot(): Promise<Snapshot | null> {
+  if (!hasDb()) return null;
+  try {
+    await ensureSchema();
+    const sql = getSql();
+    const rows = (await sql`
+      SELECT payload, at, failed_at FROM traffic_snapshot WHERE id = 'latest'
+    `) as { payload: TrafficPayload | null; at: string | null; failed_at: string | null }[];
+    if (rows.length === 0) return null;
+    const r = rows[0];
+    return {
+      payload: r.payload,
+      age: r.at ? Date.now() - new Date(r.at).getTime() : Infinity,
+      failedAgo: r.failed_at ? Date.now() - new Date(r.failed_at).getTime() : Infinity,
+    };
+  } catch (e) {
+    console.error("[traffic:read]", e);
+    return null;
+  }
+}
+
+async function writeSnapshot(payload: TrafficPayload | null, failed: boolean) {
+  if (!hasDb()) return;
+  try {
+    await ensureSchema();
+    const sql = getSql();
+    if (failed) {
+      await sql`
+        INSERT INTO traffic_snapshot (id, failed_at) VALUES ('latest', now())
+        ON CONFLICT (id) DO UPDATE SET failed_at = now()
+      `;
+    } else {
+      await sql`
+        INSERT INTO traffic_snapshot (id, payload, at, failed_at)
+        VALUES ('latest', ${JSON.stringify(payload)}::jsonb, now(), NULL)
+        ON CONFLICT (id) DO UPDATE
+          SET payload = EXCLUDED.payload, at = now(), failed_at = NULL
+      `;
+    }
+  } catch (e) {
+    console.error("[traffic:write]", e);
+  }
+}
 
 /** ITS 국가교통정보센터 오픈API */
 const ITS = "https://openapi.its.go.kr:9443";
@@ -131,6 +188,17 @@ export async function GET() {
   const key = process.env.ITS_API_KEY;
   if (!key) return fail(EMPTY, "ITS 인증키가 설정되지 않았습니다.");
 
+  const snap = await readSnapshot();
+
+  // 90초 안에 받아둔 것이 있으면 ITS 를 부를 이유가 없다
+  if (snap?.payload && snap.age < FRESH_MS) {
+    return ok(snap.payload, undefined, CACHE_SEC);
+  }
+  // 막힌 것을 방금 확인했다면 또 11초를 기다리지 않는다
+  if (snap && snap.failedAgo < RETRY_MS) {
+    return staleOr("ITS 에 연결되지 않습니다.", snap);
+  }
+
   try {
     const [evRes, tiled] = await Promise.all([
       timedFetch(
@@ -222,9 +290,10 @@ export async function GET() {
     };
     // 한 칸도 못 받았으면 성공이 아니다 — 낡은 값이 있으면 그쪽이 낫다
     if (speeds.length === 0 && incidents.length === 0) {
-      return staleOr("ITS 에서 소통정보를 받지 못했습니다.");
+      void writeSnapshot(null, true);
+      return staleOr("ITS 에서 소통정보를 받지 못했습니다.", snap);
     }
-    lastGood = { at: Date.now(), payload };
+    void writeSnapshot(payload, false);
     return ok(
       payload,
       // 소통정보는 왔는데 돌발만 없는 것은 정상이다. 그렇다고 말해준다.
@@ -233,18 +302,19 @@ export async function GET() {
     );
   } catch (e) {
     console.error("[traffic]", e);
-    return staleOr(`ITS API 호출 실패: ${e instanceof Error ? e.message : e}`);
+    void writeSnapshot(null, true);
+    return staleOr(`ITS API 호출 실패: ${e instanceof Error ? e.message : e}`, snap);
   }
 }
 
-function staleOr(reason: string) {
-  if (lastGood && Date.now() - lastGood.at < STALE_MAX_MS) {
-    const min = Math.round((Date.now() - lastGood.at) / 60_000);
-    return ok(
-      lastGood.payload,
-      `${reason} — ${min}분 전 값을 그대로 보여주고 있습니다.`,
-      30,
-    );
+/**
+ * 실패했을 때. 낡았더라도 15분 안쪽이면 그것을 내보낸다.
+ * 몇 분 전 값인지 함께 알려, 지금인 척하지는 않는다.
+ */
+function staleOr(reason: string, snap: Snapshot | null) {
+  if (snap?.payload && snap.age < STALE_MAX_MS) {
+    const min = Math.max(1, Math.round(snap.age / 60_000));
+    return ok(snap.payload, `${reason} — ${min}분 전 값을 보여주고 있습니다.`, 30);
   }
   return fail(EMPTY, reason);
 }
