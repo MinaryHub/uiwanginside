@@ -322,6 +322,91 @@ async function checkKakaoLogin(origin: string): Promise<Partial<HealthCheck>> {
   };
 }
 
+/**
+ * 응급의료·미세먼지는 이 화면에 항목이 없어, 망가진 채로 오래 지나갔다.
+ * 의료 모드가 통째로 비어 있는데도 아무 데서도 드러나지 않았다.
+ * 화면에 쓰는 것은 모두 여기 올린다.
+ */
+async function checkEmergency(): Promise<Partial<HealthCheck>> {
+  const key = process.env.EMERGENCY_SERVICE_KEY ?? process.env.KMA_SERVICE_KEY;
+  if (!key) return { status: "missing", detail: "키 없음 — 진료중 병원·약국이 비어 있습니다" };
+  const [res, latencyMs, err] = await timed(() =>
+    timedFetch(
+      `https://apis.data.go.kr/B552657/HsptlAsembySearchService/getHsptlMdcncListInfoInqire` +
+        `?serviceKey=${key}&Q0=${encodeURIComponent("경기도")}` +
+        `&Q1=${encodeURIComponent("의왕시")}&pageNo=1&numOfRows=1`,
+    ),
+  );
+  if (err) return { status: "error", detail: msg(err), latencyMs };
+  const text = await res!.text();
+  if (text.includes("SERVICE_KEY_IS_NOT_REGISTERED")) {
+    return {
+      status: "error",
+      detail: "이 서비스에 활용신청이 안 되어 있습니다 — data.go.kr 에서 신청 필요",
+      latencyMs,
+    };
+  }
+  const code = (text.match(/<resultCode>([^<]+)</) ?? [])[1];
+  if (code && code !== "00") {
+    const m = (text.match(/<resultMsg>([^<]+)</) ?? [])[1] ?? "";
+    return { status: "error", detail: `${code}: ${m}`, latencyMs };
+  }
+  const total = (text.match(/<totalCount>(\d+)</) ?? [])[1] ?? "?";
+  return { status: "live", detail: `정상 · 의왕시 의료기관 ${total}곳`, latencyMs };
+}
+
+async function checkAir(): Promise<Partial<HealthCheck>> {
+  const key = process.env.AIRKOREA_SERVICE_KEY ?? process.env.KMA_SERVICE_KEY;
+  if (!key) return { status: "missing", detail: "키 없음 — 미세먼지가 표시되지 않습니다" };
+  const [res, latencyMs, err] = await timed(() =>
+    timedFetch(
+      `https://apis.data.go.kr/B552584/ArpltnInforInqireSvc/getMsrstnAcctoRltmMesureDnsty` +
+        `?serviceKey=${key}&returnType=json&numOfRows=1&pageNo=1&dataTerm=DAILY&ver=1.3` +
+        `&stationName=${encodeURIComponent("고천동")}`,
+    ),
+  );
+  if (err) return { status: "error", detail: msg(err), latencyMs };
+  const text = await res!.text();
+  if (text.includes("SERVICE_KEY_IS_NOT_REGISTERED")) {
+    return { status: "error", detail: "활용신청이 안 되어 있습니다", latencyMs };
+  }
+  try {
+    const h = JSON.parse(text)?.response?.header;
+    if (h?.resultCode === "00") {
+      return { status: "live", detail: "정상 · 고천동 측정소", latencyMs };
+    }
+    // 에어코리아는 "05: 서비스 연결실패" 를 자주 낸다. 셋 중 둘이 실패했다.
+    return { status: "error", detail: `${h?.resultCode}: ${h?.resultMsg}`, latencyMs };
+  } catch {
+    return { status: "error", detail: `예상 밖 응답: ${text.slice(0, 80)}`, latencyMs };
+  }
+}
+
+async function checkNeis(): Promise<Partial<HealthCheck>> {
+  const [res, latencyMs, err] = await timed(() =>
+    timedFetch(
+      `https://open.neis.go.kr/hub/schoolInfo?Type=json&pIndex=1&pSize=100` +
+        `&ATPT_OFCDC_SC_CODE=J10${process.env.NEIS_API_KEY ? `&KEY=${process.env.NEIS_API_KEY}` : ""}`,
+    ),
+  );
+  if (err) return { status: "error", detail: msg(err), latencyMs };
+  try {
+    const rows = (await res!.json())?.schoolInfo?.[1]?.row ?? [];
+    // 키가 없으면 요청당 5행으로 묶인다 — 학급 수를 셀 수 없다
+    if (rows.length <= 5) {
+      return {
+        status: "fallback",
+        detail: `키 없이 동작 중 (요청당 ${rows.length}행) — 학급 수는 표시되지 않습니다`,
+        fallback: "인증키 없는 호출",
+        latencyMs,
+      };
+    }
+    return { status: "live", detail: `정상 · 한 번에 ${rows.length}행`, latencyMs };
+  } catch {
+    return { status: "error", detail: "예상 밖 응답", latencyMs };
+  }
+}
+
 const SPECS: Omit<HealthCheck, "status" | "detail" | "configured">[] = [
   {
     id: "kakao-js",
@@ -342,6 +427,26 @@ const SPECS: Omit<HealthCheck, "status" | "detail" | "configured">[] = [
     howTo:
       "제품 설정 → 카카오 로그인 → 보안 → Client Secret 생성 후 활성화 ON. " +
       "리다이렉트 URI 는 JavaScript 키가 아니라 REST API 키 쪽에 등록해야 한다",
+  },
+  {
+    id: "emergency",
+    label: "응급의료 (진료중 병원·약국)",
+    envVars: ["KMA_SERVICE_KEY"],
+    howTo:
+      "data.go.kr → 국립중앙의료원_전국 병·의원 찾기 서비스 + 약국정보 서비스 각각 활용신청. " +
+      "키는 기존 것을 그대로 쓴다 (서비스별 신청이 따로 필요할 뿐)",
+  },
+  {
+    id: "air",
+    label: "에어코리아 (미세먼지)",
+    envVars: ["KMA_SERVICE_KEY"],
+    howTo: "data.go.kr → 한국환경공단_에어코리아_대기오염정보 활용신청",
+  },
+  {
+    id: "neis",
+    label: "나이스 (학교 정보·급식)",
+    envVars: ["NEIS_API_KEY"],
+    howTo: "open.neis.go.kr → 인증키 신청 (즉시 발급). 없어도 동작하지만 요청당 5행 제한",
   },
   {
     id: "kma",
@@ -400,6 +505,9 @@ export async function GET(req: Request) {
     "kakao-js": await checkKakaoJs(origin),
     "kakao-rest": kakaoRest,
     "kakao-login": await checkKakaoLogin(origin),
+    emergency: await checkEmergency(),
+    air: await checkAir(),
+    neis: await checkNeis(),
     kma,
     naver,
     its,
