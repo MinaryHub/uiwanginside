@@ -5,8 +5,9 @@ import { Stars, StarInput } from "@/components/StarRating";
 import { useRating } from "@/lib/useRating";
 import SaveToList from "@/components/SaveToList";
 import SchoolFacts from "@/components/SchoolFacts";
+import PlaceHours from "@/components/PlaceHours";
 import { CATEGORY_MAP } from "@/lib/uiwang";
-import type { Place, PlaceRating } from "@/lib/types";
+import type { MedicalPlace, Place, PlaceRating } from "@/lib/types";
 
 /**
  * 지도에서 선택한 장소의 상세 카드.
@@ -19,6 +20,8 @@ export default function PlaceDetailCard({
   place,
   rating,
   showRating,
+  medical,
+  medicalDay,
   onClose,
   onRated,
 }: {
@@ -26,6 +29,10 @@ export default function PlaceDetailCard({
   rating?: PlaceRating;
   /** 맛집 모드에서만 별점 입력을 띄운다 */
   showRating: boolean;
+  /** 앱이 이미 받아둔 진료중 병원·약국 목록 — 병원 진료시간을 여기서 찾는다 */
+  medical: MedicalPlace[];
+  /** 1=월 … 7=일 */
+  medicalDay: number;
   onClose: () => void;
   onRated: (placeId: string, rating: PlaceRating) => void;
 }) {
@@ -103,6 +110,8 @@ export default function PlaceDetailCard({
             </p>
           )
         )}
+
+        <PlaceHours place={place} medical={medical} day={medicalDay} />
 
         {(place.roadAddress || place.address) && (
           <p className="mt-2 text-[var(--text-xs)] leading-relaxed text-[var(--text-muted)]">

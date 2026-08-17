@@ -946,6 +946,8 @@ export default function Dashboard({
           place={selectedPlace}
           rating={ratings.data?.data.ratings[selectedPlace.id]}
           showRating={mode === "food"}
+          medical={medical.data?.data.places ?? NO_MEDICAL}
+          medicalDay={medical.data?.data.day ?? 0}
           onClose={() => setSelectedPlaceId(null)}
           onRated={applyRating}
         />

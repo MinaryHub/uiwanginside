@@ -9,7 +9,8 @@
     "lint": "eslint",
     "verify:geo": "node scripts/verify-geo.mjs",
     "roads:fetch": "node scripts/fetch-roads.mjs",
-    "cctv:fetch": "node scripts/fetch-cctv.mjs"
+    "cctv:fetch": "node scripts/fetch-cctv.mjs",
+    "hours:fetch": "node scripts/fetch-hours.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
