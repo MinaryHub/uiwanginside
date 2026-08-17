@@ -287,16 +287,29 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     });
   }, []);
 
-  const handleSelectPlace = useCallback((p: Place) => {
-    setMarker(null);
-    setSelectedPlaceId((id) => {
-      if (id === p.id) return null;
-      setFitBounds(null);
-      setCenter({ lat: p.lat, lng: p.lng });
-      setLevel((lv) => Math.min(lv, 4));
-      return p.id;
-    });
+  /**
+   * 휴대폰에서는 시트가 화면을 다 덮는다.
+   * 목록에서 무엇을 고르면 상세 카드가 시트 뒤에 깔려 보이지 않았다.
+   * 고르는 순간 시트를 접어 지도와 카드를 드러낸다 — 손잡이로 다시 연다.
+   */
+  const revealMap = useCallback(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 640) setSheetOpen(false);
   }, []);
+
+  const handleSelectPlace = useCallback(
+    (p: Place) => {
+      setMarker(null);
+      setSelectedPlaceId((id) => {
+        if (id === p.id) return null;
+        setFitBounds(null);
+        setCenter({ lat: p.lat, lng: p.lng });
+        setLevel((lv) => Math.min(lv, 4));
+        revealMap();
+        return p.id;
+      });
+    },
+    [revealMap],
+  );
 
   /** 등록 결과를 SWR 캐시에 바로 반영한다 (재조회 없이) */
   const applyRating = useCallback(
@@ -313,28 +326,41 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     [ratings],
   );
 
-  const selectStop = useCallback((stop: BusStop) => {
-    setSelectedPlaceId(null);
-    setMarker((cur) =>
-      cur?.kind === "stop" && cur.stop.stationId === stop.stationId
-        ? null
-        : { kind: "stop", stop },
-    );
-  }, []);
+  const selectStop = useCallback(
+    (stop: BusStop) => {
+      setSelectedPlaceId(null);
+      setMarker((cur) => {
+        if (cur?.kind === "stop" && cur.stop.stationId === stop.stationId) return null;
+        revealMap();
+        return { kind: "stop", stop };
+      });
+    },
+    [revealMap],
+  );
 
-  const selectIncident = useCallback((incident: Incident) => {
-    setSelectedPlaceId(null);
-    setMarker((cur) =>
-      cur?.kind === "incident" && cur.incident.id === incident.id
-        ? null
-        : { kind: "incident", incident },
-    );
-  }, []);
+  const selectIncident = useCallback(
+    (incident: Incident) => {
+      setSelectedPlaceId(null);
+      setMarker((cur) => {
+        if (cur?.kind === "incident" && cur.incident.id === incident.id) return null;
+        revealMap();
+        return { kind: "incident", incident };
+      });
+    },
+    [revealMap],
+  );
 
-  const selectCctv = useCallback((cctv: Cctv) => {
-    setSelectedPlaceId(null);
-    setMarker((cur) => (cur?.kind === "cctv" && cur.cctv.id === cctv.id ? null : { kind: "cctv", cctv }));
-  }, []);
+  const selectCctv = useCallback(
+    (cctv: Cctv) => {
+      setSelectedPlaceId(null);
+      setMarker((cur) => {
+        if (cur?.kind === "cctv" && cur.cctv.id === cctv.id) return null;
+        revealMap();
+        return { kind: "cctv", cctv };
+      });
+    },
+    [revealMap],
+  );
 
   const markerId =
     marker?.kind === "stop"
@@ -349,6 +375,9 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     () => placeList.find((p) => p.id === selectedPlaceId) ?? null,
     [placeList, selectedPlaceId],
   );
+
+  /** 화면 아래에 카드가 떠 있는가 — 범례를 비켜 주는 판단에 쓴다 */
+  const bottomCard = !!(selectedPlaceId || marker || photo);
 
   const mapPlaces = def?.layers.places ? placeList : NO_PLACES;
   const mapIncidents = def?.layers.incidents
@@ -438,8 +467,6 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             isLoading={cctv.isLoading}
             onSelect={(c) => {
               selectCctv(c);
-              // 폰에서는 시트가 화면을 덮어 영상 카드가 가려진다
-              if (window.innerWidth < 640) setSheetOpen(false);
               focus(c.lat, c.lng, 4);
             }}
           />
@@ -622,8 +649,14 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
         </div>
       </nav>
 
-      {/* 지도 컨트롤 */}
-      <div className="absolute bottom-4 right-3 z-20 flex flex-col gap-1.5">
+      {/*
+        지도 컨트롤.
+        예전에는 오른쪽 아래였는데, 장소·사고·CCTV 카드가 모두 화면
+        아래에 뜨고 휴대폰에서는 카드가 화면 폭을 다 쓴다. 카드가 열리면
+        확대·축소를 누를 수 없었다. 모드 알약 아래 오른쪽으로 옮겨
+        무엇이 떠 있든 늘 누를 수 있게 한다.
+      */}
+      <div className="absolute right-3 top-[120px] z-20 flex flex-col gap-1.5">
         <div className="relative">
           <button
             type="button"
@@ -638,7 +671,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             동
           </button>
           {dongMenu && (
-            <div className="fade-up absolute bottom-0 right-12 w-32 overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)]">
+            <div className="fade-up absolute right-12 top-0 w-32 overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)]">
               {DONGS.map((d) => (
                 <button
                   key={d.name}
@@ -692,8 +725,8 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
       </div>
 
       {/* 색만 칠해두고 뜻을 안 알려주면 읽을 수 없다 */}
-      {trafficSegments.length > 0 && (
-        <div className="absolute bottom-3 left-3 z-20 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)]/92 px-2.5 py-2 shadow-[var(--shadow-md)] backdrop-blur">
+      {trafficSegments.length > 0 && !bottomCard && (
+        <div className="absolute bottom-3 left-3 z-10 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)]/92 px-2.5 py-2 shadow-[var(--shadow-md)] backdrop-blur">
           <p className="mb-1 text-[var(--text-2xs)] font-bold text-[var(--text-muted)]">
             도로 소통
           </p>

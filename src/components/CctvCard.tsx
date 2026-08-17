@@ -41,7 +41,7 @@ export default function CctvCard({ cctv, onClose }: { cctv: Cctv; onClose: () =>
   }, [live]);
 
   return (
-    <div className="absolute bottom-3 left-1/2 z-40 w-[calc(100%-24px)] max-w-[420px] -translate-x-1/2 overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)]">
+    <div className="fade-up absolute inset-x-3 bottom-3 z-30 mx-auto max-w-[440px] overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)]">
       <div className="flex items-center gap-2 px-3 py-2">
         <div className="min-w-0 flex-1">
           <p className="truncate text-[var(--text-sm)] font-extrabold">
@@ -58,7 +58,7 @@ export default function CctvCard({ cctv, onClose }: { cctv: Cctv; onClose: () =>
           onClick={reload}
           aria-label="지금 다시 받기"
           title="지금 다시 받기"
-          className="grid h-9 w-9 shrink-0 place-items-center rounded-[var(--radius)] text-[var(--text-muted)] transition hover:bg-[var(--surface-2)]"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius)] text-[var(--text-muted)] transition hover:bg-[var(--surface-2)]"
         >
           ↻
         </button>
@@ -66,7 +66,7 @@ export default function CctvCard({ cctv, onClose }: { cctv: Cctv; onClose: () =>
           type="button"
           onClick={onClose}
           aria-label="닫기"
-          className="grid h-9 w-9 shrink-0 place-items-center rounded-[var(--radius)] text-[var(--text-muted)] transition hover:bg-[var(--surface-2)]"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius)] text-[var(--text-muted)] transition hover:bg-[var(--surface-2)]"
         >
           ✕
         </button>

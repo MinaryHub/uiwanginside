@@ -103,10 +103,14 @@ function Bars({ data, empty }: { data: Bucket[]; empty: string }) {
               background: "var(--brand)",
             }}
           />
-          {/* 눈금이 빽빽하면 못 읽는다. 일정 간격으로만 적는다. */}
-          <span className="mt-1 truncate text-center text-[9px] text-[var(--text-faint)]">
-            {data.length <= 12 || data.indexOf(d) % Math.ceil(data.length / 8) === 0
-              ? d.label.slice(-5)
+          {/*
+            눈금이 빽빽하면 못 읽는다. 일정 간격으로만, 그것도 뒤쪽만
+            적는다 ("08/15 16시" → "16시"). 타이포 스케일 밖의 크기를
+            쓰지 않으려면 글자를 줄이는 대신 개수를 줄여야 한다.
+          */}
+          <span className="mt-1 truncate text-center text-[var(--text-2xs)] text-[var(--text-faint)]">
+            {data.indexOf(d) % Math.max(1, Math.ceil(data.length / 6)) === 0
+              ? d.label.split(" ").pop()
               : ""}
           </span>
         </div>

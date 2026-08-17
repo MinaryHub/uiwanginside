@@ -48,7 +48,7 @@ export default function PlaceDetailCard({
   )},${place.lat},${place.lng}`;
 
   return (
-    <div className="fade-up pointer-events-auto absolute inset-x-3 bottom-3 z-20 mx-auto max-w-[440px] overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)]">
+    <div className="pointer-events-auto fade-up absolute inset-x-3 bottom-3 z-30 mx-auto max-w-[440px] overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)]">
       <div className="p-3.5">
         <div className="flex items-start gap-2">
           <span

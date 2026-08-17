@@ -24,7 +24,7 @@ export default function MapCard({
 }) {
   return (
     <div
-      className="fade-up absolute inset-x-3 bottom-3 z-30 mx-auto max-w-[420px] overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)] sm:left-auto sm:right-3"
+      className="fade-up absolute inset-x-3 bottom-3 z-30 mx-auto max-w-[440px] overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)]"
       style={accent ? { borderLeft: `3px solid ${accent}` } : undefined}
     >
       <div className="max-h-[52vh] overflow-y-auto p-4 thin-scroll">
@@ -41,7 +41,7 @@ export default function MapCard({
             type="button"
             onClick={onClose}
             aria-label="닫기"
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-[var(--radius)] text-[var(--text-base)] text-[var(--text-muted)] transition hover:bg-[var(--surface-2)]"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius)] text-[var(--text-base)] text-[var(--text-muted)] transition hover:bg-[var(--surface-2)]"
           >
             ✕
           </button>
