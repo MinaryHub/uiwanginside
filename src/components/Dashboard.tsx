@@ -826,6 +826,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
       {/* 시트 — 좌우 두 패널을 하나로 합쳤다 */}
       {def && (
         <aside
+          aria-label={`${def.label} 목록`}
           /*
            * 상단 바(64px) 와 모드 알약(그 아래 44px) 밑에서 시작한다.
            * 화면을 통째로 덮으면 지금 날씨가 어떤지, 어느 모드를 보고
@@ -835,10 +836,18 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             sheetOpen ? "translate-x-0" : "-translate-x-full"
           }`}
         >
-          <header className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-3">
+          {/*
+            모드 이름은 바로 위 알약에 이미 켜져 있다. 4px 떨어진 자리에
+            같은 낱말을 한 번 더 크게 쓰면 자리만 먹고 읽히지도 않는다.
+            알약이 곧 탭이고 이 시트가 그 내용이다.
+            눈에는 안 보이지만 제목은 남긴다 — 화면 낭독기는 이 패널이
+            무엇인지 알아야 하고, 아래 패널들의 소제목이 매달릴 자리도
+            있어야 한다.
+          */}
+          <header className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-1.5">
             <div className="min-w-0 flex-1">
-              <h1 className="text-[var(--text-base)] font-extrabold">{def.label}</h1>
-              <p className="truncate text-[var(--text-2xs)] text-[var(--text-faint)]">
+              <h1 className="sr-only">{def.label}</h1>
+              <p className="truncate text-[var(--text-xs)] text-[var(--text-muted)]">
                 {def.hint}
               </p>
             </div>
