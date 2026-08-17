@@ -69,6 +69,17 @@ interface RawItem {
   [k: string]: string | undefined;
 }
 
+/** 한 번에 받을 수 있는 양. 의왕시 병·의원이 171곳이라 한 장으로 안 끝난다. */
+const PAGE = 100;
+/** 안전장치 — 응답이 이상해도 무한히 돌지 않는다 */
+const MAX_PAGES = 5;
+
+/**
+ * 목록을 끝까지 받는다.
+ *
+ * 처음에는 100곳만 받고 있었다. 의왕시 병·의원은 171곳이라 71곳이 빠졌고,
+ * 그만큼 지도에서 병원을 눌러도 진료시간이 붙지 않았다 (25곳 중 9곳).
+ */
 async function fetchList(
   url: string,
   key: string,
@@ -76,9 +87,26 @@ async function fetchList(
   day: number,
   hhmm: number,
 ): Promise<MedicalPlace[]> {
+  const out: MedicalPlace[] = [];
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const { places, total } = await fetchPage(url, key, kind, day, hhmm, page);
+    out.push(...places);
+    if (out.length >= total || places.length === 0) break;
+  }
+  return out;
+}
+
+async function fetchPage(
+  url: string,
+  key: string,
+  kind: MedicalPlace["kind"],
+  day: number,
+  hhmm: number,
+  page: number,
+): Promise<{ places: MedicalPlace[]; total: number }> {
   const qs =
     `?serviceKey=${key}&Q0=${encodeURIComponent("경기도")}` +
-    `&Q1=${encodeURIComponent("의왕시")}&numOfRows=100&pageNo=1`;
+    `&Q1=${encodeURIComponent("의왕시")}&numOfRows=${PAGE}&pageNo=${page}`;
   const res = await timedFetch(`${url}${qs}`, {}, 15_000);
   const text = await res.text();
 
@@ -95,9 +123,10 @@ async function fetchList(
     throw new Error(`${header.resultCode}: ${header.resultMsg}`);
   }
 
+  const total = Number(json?.response?.body?.totalCount ?? 0);
   const items = asArray<RawItem>(json?.response?.body?.items?.item);
 
-  return items.map((it) => {
+  const places = items.map((it) => {
     // dutyTime{1..8}s / {1..8}c = 요일별 시작/종료. 8은 공휴일.
     const start = it[`dutyTime${day}s`];
     const close = it[`dutyTime${day}c`];
@@ -115,6 +144,7 @@ async function fetchList(
       openNow: isOpenNow(start, close, hhmm),
     };
   });
+  return { places, total: Number.isFinite(total) ? total : places.length };
 }
 
 /** 데이터를 못 가져왔을 때 내보내는 빈 응답.
@@ -150,26 +180,40 @@ export async function GET() {
     return ok({ ...cached, places, updatedAt: nowISO() }, undefined, 60);
   }
 
-  try {
-    const [hospitals, pharmacies] = await Promise.all([
-      fetchList(HOSPITAL, key, "hospital", day, hhmm),
-      fetchList(PHARMACY, key, "pharmacy", day, hhmm),
-    ]);
-    const places = [...hospitals, ...pharmacies].filter((p) => p.name);
-    if (places.length === 0) {
-      return fail(EMPTY, "의왕시 조회 결과가 없습니다.");
-    }
-    const payload: MedicalPayload = {
-      places,
-      day,
-      source: "nmc",
-      updatedAt: nowISO(),
-    };
-    cache.set(cacheKey, payload);
-    return ok(payload, undefined, CACHE_SEC);
-  } catch (e) {
-    console.error("[medical]", e);
-    const reason = e instanceof Error ? e.message : String(e);
-    return fail(EMPTY, `응급의료 API: ${reason}`);
+  /*
+   * 병·의원과 약국은 data.go.kr 에서 서로 다른 서비스다. 활용신청도 따로
+   * 받아야 해서 한쪽만 승인된 기간이 생긴다. 실제로 그랬다 — 병·의원은
+   * 열렸는데 약국이 아직이라, 함께 묶어 던지는 바람에 둘 다 사라졌다.
+   * 따로 받아 되는 쪽은 보여주고, 안 되는 쪽만 이유를 적는다.
+   */
+  const [hos, pha] = await Promise.allSettled([
+    fetchList(HOSPITAL, key, "hospital", day, hhmm),
+    fetchList(PHARMACY, key, "pharmacy", day, hhmm),
+  ]);
+
+  const places = [
+    ...(hos.status === "fulfilled" ? hos.value : []),
+    ...(pha.status === "fulfilled" ? pha.value : []),
+  ].filter((p) => p.name);
+
+  const failed: string[] = [];
+  if (hos.status === "rejected") failed.push(`병·의원: ${reasonOf(hos.reason)}`);
+  if (pha.status === "rejected") failed.push(`약국: ${reasonOf(pha.reason)}`);
+
+  if (places.length === 0) {
+    console.error("[medical]", failed.join(" / "));
+    return fail(
+      EMPTY,
+      failed.length ? `응급의료 API — ${failed.join(" / ")}` : "의왕시 조회 결과가 없습니다.",
+    );
   }
+
+  const payload: MedicalPayload = { places, day, source: "nmc", updatedAt: nowISO() };
+  cache.set(cacheKey, payload);
+  // 한쪽만 되는 동안에도 무엇이 빠졌는지 화면에 남긴다
+  return ok(payload, failed.length ? `일부 미연동 — ${failed.join(" / ")}` : undefined, CACHE_SEC);
+}
+
+function reasonOf(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
 }
