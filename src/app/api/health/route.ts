@@ -1,5 +1,6 @@
 import { timedFetch } from "@/lib/fetcher";
 import { UIWANG } from "@/lib/uiwang";
+import { fetchAlerts } from "@/lib/alerts";
 
 export const dynamic = "force-dynamic";
 
@@ -125,9 +126,25 @@ async function checkKma(): Promise<Partial<HealthCheck>> {
   if (text.trimStart().startsWith("<"))
     return { status: "error", detail: "XML 오류 응답 (키 무효 가능)", latencyMs };
   const h = JSON.parse(text)?.response?.header;
-  return h?.resultCode === "00"
-    ? { status: "live", detail: `정상 · ${h.resultMsg}`, latencyMs }
-    : { status: "error", detail: `${h?.resultCode}: ${h?.resultMsg}`, latencyMs };
+  if (h?.resultCode !== "00") {
+    return { status: "error", detail: `${h?.resultCode}: ${h?.resultMsg}`, latencyMs };
+  }
+  // 특보는 실황과 다른 서비스다. 하나만 되고 다른 하나가 막힐 수 있다.
+  try {
+    const alerts = await fetchAlerts();
+    return {
+      status: "live",
+      detail: `정상 · 실황 + 특보 (지금 발효 ${alerts.length}건)`,
+      latencyMs,
+    };
+  } catch (e) {
+    return {
+      status: "fallback",
+      detail: `실황은 정상, 특보 조회 실패: ${msg(e)}`,
+      fallback: "특보 없이 동작",
+      latencyMs,
+    };
+  }
 }
 
 async function checkNaver(): Promise<Partial<HealthCheck>> {
@@ -450,7 +467,7 @@ const SPECS: Omit<HealthCheck, "status" | "detail" | "configured">[] = [
   },
   {
     id: "kma",
-    label: "기상청 (날씨)",
+    label: "기상청 (날씨·특보)",
     envVars: ["KMA_SERVICE_KEY"],
     howTo: "data.go.kr → 기상청_단기예보 조회서비스 → 일반 인증키(Decoding)",
   },

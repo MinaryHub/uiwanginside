@@ -1,5 +1,6 @@
 import { timedFetch, ok, fail, nowISO } from "@/lib/fetcher";
 import { UIWANG } from "@/lib/uiwang";
+import { fetchAlerts } from "@/lib/alerts";
 import type { WeatherPayload, WeatherForecastItem } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -97,6 +98,7 @@ async function callKma(path: string, params: Record<string, string>, key: string
 const EMPTY: WeatherPayload = {
   now: null,
   forecast: [],
+  alerts: [],
   source: "kma",
   updatedAt: "",
 };
@@ -111,9 +113,18 @@ export async function GET() {
     const nb = ncstBaseTime();
     const vb = vilageBase();
 
-    const [ncst, fcst] = await Promise.all([
+    /*
+     * 특보는 실황·예보와 다른 서비스지만 같은 키를 쓰고 같은 화면에 나온다.
+     * 별도 경로를 두면 폴링이 하나 더 늘어나므로 여기에 함께 담는다.
+     * 특보를 못 받아도 날씨는 보여준다 — 하나가 죽어 둘 다 사라지면 안 된다.
+     */
+    const [ncst, fcst, alerts] = await Promise.all([
       callKma("getUltraSrtNcst", { base_date: nb.date, base_time: `${nb.hour}00` }, key),
       callKma("getVilageFcst", { base_date: vb.date, base_time: vb.time }, key),
+      fetchAlerts().catch((e) => {
+        console.error("[weather:alerts]", e);
+        return [];
+      }),
     ]);
 
     const pick = (cat: string) =>
@@ -156,6 +167,7 @@ export async function GET() {
         observedAt: nowISO(),
       },
       forecast,
+      alerts,
       source: "kma",
       updatedAt: nowISO(),
     };

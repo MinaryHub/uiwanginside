@@ -1,4 +1,5 @@
 import type { CategoryKey } from "./uiwang";
+import type { WeatherAlert } from "./alerts";
 
 export interface Place {
   id: string;
@@ -50,9 +51,13 @@ export interface WeatherForecastItem {
 export interface WeatherPayload {
   now: WeatherNow | null;
   forecast: WeatherForecastItem[];
+  /** 지금 의왕에 발효 중인 기상특보 */
+  alerts: WeatherAlert[];
   source: "kma";
   updatedAt: string;
 }
+
+export type { WeatherAlert };
 
 export interface NewsItem {
   title: string;

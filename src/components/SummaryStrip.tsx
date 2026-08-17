@@ -79,8 +79,33 @@ export default function SummaryStrip({
       ? (PTY_ICON[now.precipitation] ?? "🌧️")
       : (SKY_ICON[now?.sky ?? ""] ?? "🌤️");
 
+  const alerts = weather?.data.alerts ?? [];
+
   return (
     <div className="thin-scroll flex items-center gap-0.5 overflow-x-auto">
+      {/*
+        기상특보는 이 줄에서 가장 급한 정보다. 발효 중일 때만 나오고
+        그때는 맨 앞에 온다. 경보는 주의보보다 위급해 더 진하게 칠한다.
+        해제된 특보는 여기 오지 않는다 — 발표와 해제를 짝지어 걸러낸다.
+      */}
+      {alerts.map((a) => (
+        <Item
+          key={a.kind}
+          onClick={() => onOpen("life")}
+          title={`${new Date(a.since).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })} 발효 · 기상청`}
+        >
+          <span
+            className="rounded-[var(--radius)] px-1.5 py-0.5 text-[var(--text-xs)] font-extrabold"
+            style={{
+              background: a.level === "warning" ? "var(--danger)" : "var(--warn)",
+              color: "#fff",
+            }}
+          >
+            ⚠ {a.kind}
+          </span>
+        </Item>
+      ))}
+
       {/* 값을 못 가져온 항목은 아예 표시하지 않는다 — 빈칸이 기본값처럼 보이면 안 된다 */}
       {now?.temp != null && (
         <Item onClick={() => onOpen("life")} title="날씨 상세 보기">
