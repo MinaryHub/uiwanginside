@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import Dashboard from "@/components/Dashboard";
+import { auth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -13,11 +14,18 @@ function Loading() {
   );
 }
 
-export default function Home() {
+export default async function Home() {
+  // 로그인 상태는 서버가 이미 안다. 클라이언트에서 /api/auth/session 을
+  // 한 번 더 물어보는 대신 그대로 내려보낸다.
+  const session = await auth();
+  const user = session?.user
+    ? { name: session.user.name ?? null, image: session.user.image ?? null }
+    : null;
+
   return (
     // Dashboard 가 useSearchParams 로 URL 상태를 복원하므로 Suspense 가 필요하다
     <Suspense fallback={<Loading />}>
-      <Dashboard appKey={process.env.NEXT_PUBLIC_KAKAO_JS_KEY} />
+      <Dashboard appKey={process.env.NEXT_PUBLIC_KAKAO_JS_KEY} user={user} />
     </Suspense>
   );
 }

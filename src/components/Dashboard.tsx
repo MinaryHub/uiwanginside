@@ -12,6 +12,7 @@ import { UIWANG_BBOX } from "@/lib/uiwang-boundary";
 import { DONG_BBOX, type LatLngBox } from "@/lib/dong-boundaries";
 import { MODES, MODE_MAP, type ModeId, type CardId } from "@/lib/modes";
 import { getDeviceId } from "@/lib/deviceId";
+import { useMyLocation } from "@/lib/useMyLocation";
 import {
   buildSegments,
   LEVEL_COLOR,
@@ -43,6 +44,8 @@ import SummaryStrip from "@/components/SummaryStrip";
 import PlaceDetailCard from "@/components/PlaceDetailCard";
 import StopCard from "@/components/StopCard";
 import CctvCard from "@/components/CctvCard";
+import SearchOverlay from "@/components/SearchOverlay";
+import AccountMenu, { type HeaderUser } from "@/components/AccountMenu";
 import MapCard from "@/components/MapCard";
 import PlacesPanel from "@/components/panels/PlacesPanel";
 import WeatherPanel from "@/components/panels/WeatherPanel";
@@ -90,14 +93,20 @@ const POLL = {
  * 남짓이었다. 지도 중심 포털에서 지도를 양쪽에서 누르고 있었던 셈이다.
  * 지금은 지도가 전면이고 상단 바·모드 알약·시트가 그 위에 떠 있다.
  */
-export default function Dashboard({ appKey }: { appKey?: string }) {
+export default function Dashboard({
+  appKey,
+  user,
+}: {
+  appKey?: string;
+  /** 서버에서 넘겨받은 로그인 상태. 클라이언트에서 다시 물어볼 이유가 없다. */
+  user: HeaderUser | null;
+}) {
   const initial = parseUrlState(useSearchParams());
 
   /** null = 둘러보기. 지도만 보이는 기본 상태다. */
   const [mode, setMode] = useState<ModeId | null>(initial.mode);
   const [center, setCenter] = useState({ lat: initial.lat, lng: initial.lng });
   const [level, setLevel] = useState(initial.level);
-  const [radius, setRadius] = useState<number>(initial.radius);
   const [fitBounds, setFitBounds] = useState<LatLngBox | null>(null);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   /**
@@ -115,6 +124,9 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
   const [newsQuery, setNewsQuery] = useState("의왕시");
   const [sheetOpen, setSheetOpen] = useState(!!initial.mode);
   const [dongMenu, setDongMenu] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  /** 검색으로 고른 곳 — 지금 목록에 없어도 지도와 카드에 남는다 */
+  const [pinned, setPinned] = useState<Place | null>(null);
   const [copied, setCopied] = useState(false);
 
   const def = mode ? MODE_MAP[mode] : null;
@@ -136,12 +148,16 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     lng: number;
   } | null>(null);
   const areaRef = useRef<{ rect: string; level: number } | null>(null);
+  /** 마지막으로 지도가 알려준 화면 범위. 갱신 여부와 무관하게 늘 최신이다. */
+  const lastViewRef = useRef<{ rect: string; lat: number; lng: number } | null>(null);
 
   const onBoundsChanged = useCallback(
     (rect: string, c: { lat: number; lng: number }, lv: number) => {
       // 손가락으로 벌려 확대하면 지도만 바뀌고 상태는 그대로였다.
       // 이름표를 붙일지 정하는 기준과 주소창이 옛 값을 보고 있었다.
       setLevel(lv);
+
+      lastViewRef.current = { rect, lat: c.lat, lng: c.lng };
 
       const prev = areaRef.current;
       let refresh = !prev || prev.level !== lv;
@@ -165,9 +181,18 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     [],
   );
 
+  /** 조금만 움직였을 때 스스로 갱신하지 않으므로, 직접 누를 수 있게 한다 */
+  const searchHere = useCallback(() => {
+    const v = lastViewRef.current;
+    if (!v) return;
+    areaRef.current = { rect: v.rect, level };
+    setSearchArea({ rect: v.rect, lat: v.lat, lng: v.lng });
+  }, [level]);
+
   const urlState = useMemo(
-    () => ({ mode, lat: center.lat, lng: center.lng, level, radius }),
-    [mode, center.lat, center.lng, level, radius],
+    // radius 는 조회에 쓰이지 않으므로 주소에도 싣지 않는다
+    () => ({ mode, lat: center.lat, lng: center.lng, level, radius: initial.radius }),
+    [mode, center.lat, center.lng, level, initial.radius],
   );
   useSyncUrl(urlState);
 
@@ -292,6 +317,52 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
    * 목록에서 무엇을 고르면 상세 카드가 시트 뒤에 깔려 보이지 않았다.
    * 고르는 순간 시트를 접어 지도와 카드를 드러낸다 — 손잡이로 다시 연다.
    */
+  /**
+   * 내 위치로.
+   *
+   * 의왕 밖이면 지도를 옮기지 않는다 — 의왕 포털에서 화면이 수원이나
+   * 서울로 날아가면 돌아올 길을 스스로 찾아야 한다. 대신 그 사실을
+   * 알리고 시청을 보여준다.
+   */
+  const myLocation = useMyLocation();
+  const [locNotice, setLocNotice] = useState<string | null>(null);
+
+  const goToMe = useCallback(() => {
+    setLocNotice(null);
+    myLocation.request((s) => {
+      if (s.status !== "ok") {
+        setLocNotice(s.status === "asking" ? null : (s as { message?: string }).message ?? null);
+        return;
+      }
+      if (s.inUiwang) {
+        setFitBounds(null);
+        setCenter({ lat: s.lat, lng: s.lng });
+        setLevel((lv) => Math.min(lv, 4));
+      } else {
+        setLocNotice("의왕시 밖에 계십니다. 의왕 전체를 보여드립니다.");
+        setFitBounds({ ...UIWANG_BBOX });
+      }
+    });
+  }, [myLocation]);
+
+  const me = myLocation.state.status === "ok" ? myLocation.state : null;
+
+  /**
+   * 검색에서 고른 곳.
+   *
+   * 그 장소는 지금 보고 있는 목록에 없을 수 있다 (다른 모드이거나 화면
+   * 밖이거나). 따로 들고 있다가 지도와 상세 카드에 얹는다.
+   */
+  const pickSearched = useCallback((p: Place) => {
+    setPinned(p);
+    setMarker(null);
+    setSelectedPlaceId(p.id);
+    setFitBounds(null);
+    setCenter({ lat: p.lat, lng: p.lng });
+    setLevel((lv) => Math.min(lv, 3));
+    setSheetOpen(false);
+  }, []);
+
   const revealMap = useCallback(() => {
     if (typeof window !== "undefined" && window.innerWidth < 640) setSheetOpen(false);
   }, []);
@@ -372,14 +443,23 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           : null;
 
   const selectedPlace = useMemo(
-    () => placeList.find((p) => p.id === selectedPlaceId) ?? null,
-    [placeList, selectedPlaceId],
+    () =>
+      placeList.find((p) => p.id === selectedPlaceId) ??
+      (pinned?.id === selectedPlaceId ? pinned : null),
+    [placeList, selectedPlaceId, pinned],
   );
 
   /** 화면 아래에 카드가 떠 있는가 — 범례를 비켜 주는 판단에 쓴다 */
   const bottomCard = !!(selectedPlaceId || marker || photo);
 
-  const mapPlaces = def?.layers.places ? placeList : NO_PLACES;
+  const basePlaces = def?.layers.places ? placeList : NO_PLACES;
+  const mapPlaces = useMemo(
+    () =>
+      pinned && !basePlaces.some((p) => p.id === pinned.id)
+        ? [...basePlaces, pinned]
+        : basePlaces,
+    [basePlaces, pinned],
+  );
   const mapIncidents = def?.layers.incidents
     ? (traffic.data?.data.incidents ?? NO_INCIDENTS)
     : NO_INCIDENTS;
@@ -528,6 +608,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           showBoundary
           activeDong={activeDong}
           trafficSegments={trafficSegments}
+          me={me && me.inUiwang ? { lat: me.lat, lng: me.lng } : null}
           cctvs={mapCctvs}
           onSelectCctv={selectCctv}
           fitBounds={fitBounds}
@@ -585,22 +666,16 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           </div>
         </div>
 
-        <Link
-          href="/lists"
-          title="내 리스트"
-          aria-label="내 리스트"
+        <button
+          type="button"
+          onClick={() => setSearchOpen(true)}
+          title="이름으로 찾기"
+          aria-label="이름으로 찾기"
           className={`pointer-events-auto ${mapBtn}`}
         >
-          ☰
-        </Link>
-        <Link
-          href="/gallery"
-          title="내 사진"
-          aria-label="내 사진"
-          className={`pointer-events-auto ${mapBtn}`}
-        >
-          ▣
-        </Link>
+          🔍
+        </button>
+        <AccountMenu user={user} className={mapBtn} />
         <button
           type="button"
           onClick={share}
@@ -694,17 +769,39 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
               >
                 의왕시 전체
               </button>
+              {/* ⌖ 자리를 내 위치에 내주고 시청은 이리로 왔다 */}
+              <button
+                type="button"
+                onClick={() => {
+                  focus(UIWANG.center.lat, UIWANG.center.lng, 5);
+                  setDongMenu(false);
+                }}
+                className="block min-h-[40px] w-full border-t border-[var(--border)] px-3 text-left text-[var(--text-sm)] font-semibold text-[var(--text-muted)] transition hover:bg-[var(--surface-2)]"
+              >
+                의왕시청
+              </button>
             </div>
           )}
         </div>
+        {/*
+          내 위치.
+          위치는 방문 즉시 묻지 않는다 — 그때 뜨는 권한 팝업은 대부분
+          거부되고, 한 번 거부되면 다시 묻기 어렵다. 누를 때만 묻는다.
+        */}
         <button
           type="button"
-          onClick={() => focus(UIWANG.center.lat, UIWANG.center.lng, 5)}
-          title="의왕시청으로"
-          aria-label="의왕시청으로"
+          onClick={goToMe}
+          disabled={myLocation.state.status === "asking"}
+          title="내 위치로"
+          aria-label="내 위치로"
           className={mapBtn}
+          style={
+            myLocation.state.status === "ok"
+              ? { color: "var(--brand)", borderColor: "var(--brand)" }
+              : undefined
+          }
         >
-          ⌖
+          {myLocation.state.status === "asking" ? "…" : "⌖"}
         </button>
         <button
           type="button"
@@ -723,6 +820,22 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           −
         </button>
       </div>
+
+      {/*
+        위치 안내. 권한 거부나 '의왕 밖' 같은 것은 눌러본 사람만 알면
+        되는 이야기라 잠깐 떴다 사라지는 자리에 둔다.
+      */}
+      {locNotice && (
+        <div className="pointer-events-none absolute inset-x-0 top-[116px] z-40 flex justify-center px-3">
+          <button
+            type="button"
+            onClick={() => setLocNotice(null)}
+            className="pointer-events-auto max-w-[420px] rounded-[var(--radius-full)] border border-[var(--border)] bg-[var(--surface)]/95 px-3.5 py-2 text-[var(--text-xs)] font-semibold shadow-[var(--shadow-md)] backdrop-blur"
+          >
+            {locNotice} <span className="text-[var(--text-faint)]">✕</span>
+          </button>
+        </div>
+      )}
 
       {/* 색만 칠해두고 뜻을 안 알려주면 읽을 수 없다 */}
       {trafficSegments.length > 0 && !bottomCard && (
@@ -823,6 +936,14 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
         />
       )}
 
+      {searchOpen && (
+        <SearchOverlay
+          center={center}
+          onPick={pickSearched}
+          onClose={() => setSearchOpen(false)}
+        />
+      )}
+
       {/* 시트 — 좌우 두 패널을 하나로 합쳤다 */}
       {def && (
         <aside
@@ -867,8 +988,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
                 res={places.data}
                 isLoading={places.isLoading}
                 categories={def.categories}
-                radius={radius}
-                onRadiusChange={setRadius}
+                onSearchHere={searchHere}
                 selectedPlaceId={selectedPlaceId}
                 onSelectPlace={handleSelectPlace}
               />

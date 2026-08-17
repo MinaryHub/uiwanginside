@@ -18,8 +18,7 @@ export default function PlacesPanel({
   res,
   isLoading,
   categories,
-  radius,
-  onRadiusChange,
+  onSearchHere,
   selectedPlaceId,
   onSelectPlace,
 }: {
@@ -27,8 +26,8 @@ export default function PlacesPanel({
   isLoading: boolean;
   /** 모드가 정한 카테고리 — 사용자가 개별 토글하지 않는다 */
   categories: CategoryKey[];
-  radius: number;
-  onRadiusChange: (r: number) => void;
+  /** 지금 화면 범위로 다시 조회한다 */
+  onSearchHere: () => void;
   selectedPlaceId: string | null;
   onSelectPlace: (p: Place) => void;
 }) {
@@ -103,23 +102,22 @@ export default function PlacesPanel({
           className="mb-2 w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-1.5 text-[var(--text-sm)] outline-none focus:border-[var(--brand)]"
         />
 
-        <div className="flex items-center gap-2">
-          <span className="shrink-0 text-[var(--text-2xs)] font-semibold text-[var(--text-muted)]">
-            반경
-          </span>
-          <input
-            type="range"
-            min={500}
-            max={10000}
-            step={500}
-            value={radius}
-            onChange={(e) => onRadiusChange(Number(e.target.value))}
-            className="h-1 flex-1 accent-[var(--brand)]"
-          />
-          <span className="w-11 shrink-0 text-right text-[var(--text-xs)] font-bold tabular-nums">
-            {(radius / 1000).toFixed(1)}km
-          </span>
-        </div>
+        {/*
+          여기 반경 슬라이더가 있었다. 조회는 화면 범위(rect)로 하는데
+          radius 는 요청에 들어가지도 않아, 끌어도 결과가 그대로였다.
+          조절했다고 믿게 만드는 눈금이라 없앴다.
+
+          대신 지금 화면에서 다시 찾는 버튼을 둔다. 지도를 조금 옮겼을
+          때는 자동으로 갱신하지 않는데(마커가 계속 바뀌면 눈이 따라가지
+          못한다), 그럴 때 직접 누를 수 있어야 한다.
+        */}
+        <button
+          type="button"
+          onClick={onSearchHere}
+          className="min-h-[40px] w-full rounded-[var(--radius)] border border-[var(--border-strong)] text-[var(--text-xs)] font-bold transition hover:border-[var(--brand)] hover:text-[var(--brand)]"
+        >
+          이 화면에서 다시 찾기
+        </button>
       </div>
 
       <div className="px-4 py-3.5">
@@ -154,7 +152,7 @@ export default function PlacesPanel({
             </div>
 
             {filtered.length === 0 ? (
-              <Empty>표시할 곳이 없습니다. 반경을 넓혀 보세요.</Empty>
+              <Empty>표시할 곳이 없습니다. 지도를 옮기거나 넓혀 보세요.</Empty>
             ) : (
               <ul className="space-y-0.5">
                 {filtered.slice(0, 150).map((p) => {

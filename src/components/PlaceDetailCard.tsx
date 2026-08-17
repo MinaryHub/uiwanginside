@@ -167,7 +167,7 @@ export default function PlaceDetailCard({
             ) : state.status === "idle" ? (
               <button
                 type="button"
-                onClick={request}
+                onClick={() => request()}
                 className="inline-flex min-h-[44px] w-full items-center justify-center rounded-[var(--radius)] bg-[var(--surface-2)] text-[var(--text-sm)] font-bold text-[var(--text)]"
               >
                 📍 위치 확인하고 별점 매기기
@@ -189,7 +189,7 @@ export default function PlaceDetailCard({
                 </p>
                 <button
                   type="button"
-                  onClick={request}
+                  onClick={() => request()}
                   className="inline-flex min-h-[40px] items-center rounded-[var(--radius)] border border-[var(--border-strong)] px-3 text-[var(--text-xs)] font-bold"
                 >
                   다시 시도

@@ -15,8 +15,13 @@ const ENDPOINTS = [
   "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
 ];
 
-/** 카테고리 → OSM 태그 필터 (node/way 공통으로 적용) */
+/**
+ * 카테고리 → OSM 태그 필터 (node/way 공통으로 적용).
+ * ETC 는 "분류 없음" 이라 대응할 태그가 없다. 검색 결과에만 쓰이고
+ * 이 폴백에서는 찾을 일이 없어 빈 배열로 둔다.
+ */
 const OSM_FILTERS: Record<CategoryKey, string[]> = {
+  ETC: [],
   FD6: ['["amenity"~"^(restaurant|fast_food)$"]'],
   CE7: ['["amenity"~"^(cafe|dessert)$"]'],
   SC4: ['["amenity"~"^(school|college|university|kindergarten)$"]'],

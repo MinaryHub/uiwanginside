@@ -168,6 +168,21 @@ function spread(
   return out;
 }
 
+/**
+ * 내 위치.
+ * 다른 마커와 성격이 달라 (내가 어디 있는지) 이름표 없이 점 하나로 둔다.
+ * 바깥 테두리는 위치 오차가 아니라 눈에 띄게 하려는 것이다 — 오차를
+ * 원으로 그리면 그 크기가 곧 정확도로 읽히는데, 그렇게까지 정확하지 않다.
+ */
+function meEl() {
+  const el = document.createElement("div");
+  el.title = "내 위치";
+  el.style.cssText = `
+    width:18px;height:18px;border-radius:999px;background:#1a5fb4;
+    border:3px solid #fff;box-shadow:0 0 0 3px rgba(26,95,180,.28),0 2px 6px rgba(16,32,43,.35);`;
+  return el;
+}
+
 /** 운행 중인 버스 — 움직이는 대상이라 다른 마커와 확실히 구분되게 진하게 */
 function busEl(routeName: string, b: BusPositionsPayload["positions"][number]) {
   // 혼잡할수록 붉게. 색만으로 판단하지 않도록 라벨도 함께 붙인다.
@@ -213,6 +228,8 @@ export interface KakaoMapProps {
   landmarks: { name: string; lat: number; lng: number; desc: string }[];
   /** 도로 소통상태 — 도로 형상에 ITS 속도를 입힌 조각들 */
   trafficSegments: TrafficSegment[];
+  /** 내 위치 — 알아냈을 때만 */
+  me: { lat: number; lng: number } | null;
   /** 도로 CCTV */
   cctvs: Cctv[];
   onSelectCctv: (c: Cctv) => void;
@@ -255,6 +272,7 @@ export default function KakaoMap({
   busPositions,
   landmarks,
   trafficSegments,
+  me,
   cctvs,
   onSelectCctv,
   showBoundary,
@@ -288,6 +306,7 @@ export default function KakaoMap({
   const transitOv = useRef<kakao.maps.CustomOverlay[]>([]);
   const busOv = useRef<kakao.maps.CustomOverlay[]>([]);
   const photoOv = useRef<kakao.maps.CustomOverlay[]>([]);
+  const meRef = useRef<kakao.maps.CustomOverlay | null>(null);
   const boundaryRef = useRef<kakao.maps.Polygon[]>([]);
   const dongRef = useRef<kakao.maps.Polygon[]>([]);
   /** 소통정보 선. 45초마다 색만 바뀌므로 마커와 같은 방식으로 재사용한다. */
@@ -673,6 +692,29 @@ export default function KakaoMap({
     selectedPlaceId,
     onSelectPlace,
   ]);
+
+  /** 내 위치 — 다른 무엇이 바뀌든 이것 때문에 다시 그리지 않는다 */
+  useEffect(() => {
+    if (!ready || !mapRef.current) return;
+    if (!me) {
+      meRef.current?.setMap(null);
+      meRef.current = null;
+      return;
+    }
+    const pos = new window.kakao.maps.LatLng(me.lat, me.lng);
+    if (meRef.current) {
+      meRef.current.setPosition(pos);
+      return;
+    }
+    const ov = new window.kakao.maps.CustomOverlay({
+      position: pos,
+      content: meEl(),
+      yAnchor: 0.5,
+      zIndex: 95,
+    });
+    ov.setMap(mapRef.current);
+    meRef.current = ov;
+  }, [ready, me]);
 
   /** 정류소·사고·구간속도 — 갱신 주기가 장소와 달라 따로 그린다 */
   useEffect(() => {

@@ -50,7 +50,9 @@ export type CategoryKey =
   | "OL7"
   | "SW8"
   | "PO3"
-  | "CT1";
+  | "CT1"
+  /** 분류가 없는 곳 — 호수·공원처럼 카카오 카테고리에 안 잡히는 것들 */
+  | "ETC";
 
 export interface CategoryDef {
   code: CategoryKey;
@@ -74,6 +76,7 @@ export const CATEGORIES: CategoryDef[] = [
   { code: "SW8", label: "지하철역", emoji: "🚇", color: "#0d9488" },
   { code: "PO3", label: "공공기관", emoji: "🏛️", color: "#4f46e5" },
   { code: "CT1", label: "문화시설", emoji: "🎭", color: "#db2777" },
+  { code: "ETC", label: "장소", emoji: "📍", color: "#475569" },
 ];
 
 export const CATEGORY_MAP = Object.fromEntries(
