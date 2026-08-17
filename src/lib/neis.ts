@@ -3,9 +3,10 @@ import { timedFetch, createTtlCache } from "./fetcher";
 /**
  * 나이스 교육정보 개방 포털.
  *
- * 인증키 없이도 응답한다 — 다만 요청당 5행까지만 준다 (2,667건 중 5건).
- * 그래서 한 학교를 짚어 보는 데는 쓸 수 있고, 목록을 받아오는 데는 쓸
- * 수 없다. 무료 키를 발급하면 이 제한이 풀린다.
+ * 인증키 없이도 응답하지만 요청당 5행까지만 준다 (2,667건 중 5건).
+ * NEIS_API_KEY 를 넣으면 그 제한이 풀린다 — 실측으로 pSize=100 이
+ * 100행을 돌려준다. 학급수를 세려면 학급 행을 다 받아야 하므로 키가
+ * 있어야 한다.
  *
  * 학생수·진학률은 여기 없다. 그쪽은 학교알리미(EDSS) 소관이다.
  */
@@ -48,6 +49,10 @@ export interface SchoolFacts {
   /** 고등학교만: 일반계 / 특성화 … */
   highKind: string | null;
   meal: SchoolMeal | null;
+  /** 학년별 학급 수. 키가 없으면 셀 수 없어 null 이다. */
+  classes: { grade: number; count: number }[] | null;
+  /** 전체 학급 수 */
+  classTotal: number | null;
 }
 
 export interface SchoolMeal {
@@ -64,11 +69,15 @@ function pick<T>(json: unknown, service: string): T[] {
   return j[service]?.[1]?.row ?? [];
 }
 
-async function neis<T>(service: string, params: Record<string, string>): Promise<T[]> {
+async function neis<T>(
+  service: string,
+  params: Record<string, string>,
+  pSize = 5,
+): Promise<T[]> {
   const q = new URLSearchParams({
     Type: "json",
     pIndex: "1",
-    pSize: "5",
+    pSize: String(pSize),
     ATPT_OFCDC_SC_CODE: OFFICE,
     ...params,
   });
@@ -131,6 +140,52 @@ async function fetchMeal(code: string): Promise<SchoolMeal | null> {
   };
 }
 
+interface NeisClass {
+  GRADE: string;
+}
+
+/**
+ * 학년별 학급 수.
+ *
+ * 나이스는 학급 하나를 한 행으로 준다. 학생 수는 주지 않으므로 셀 수
+ * 있는 것은 학급 수까지다. 그래도 "1학년 8반" 은 학교 규모를 가늠하는
+ * 데 쓸 만하다.
+ *
+ * 키가 없으면 5행까지만 와서 24학급이 5학급으로 보인다. 그럴 때는
+ * 틀린 수를 보여주는 대신 아무것도 내보내지 않는다.
+ */
+async function fetchClasses(
+  code: string,
+): Promise<{ classes: { grade: number; count: number }[]; total: number } | null> {
+  if (!process.env.NEIS_API_KEY) return null;
+
+  const rows = await neis<NeisClass>(
+    "classInfo",
+    { SD_SCHUL_CODE: code, AY: schoolYear() },
+    500,
+  );
+  if (rows.length === 0) return null;
+
+  const byGrade = new Map<number, number>();
+  for (const r of rows) {
+    const g = Number(r.GRADE);
+    if (!Number.isFinite(g)) continue;
+    byGrade.set(g, (byGrade.get(g) ?? 0) + 1);
+  }
+  return {
+    classes: [...byGrade.entries()].sort((a, b) => a[0] - b[0]).map(([grade, count]) => ({ grade, count })),
+    total: rows.length,
+  };
+}
+
+/**
+ * 학년도. 3월에 바뀐다 — 1·2월에 올해를 물으면 아직 편성되지 않아 빈다.
+ */
+function schoolYear(): string {
+  const kst = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
+  return String(kst.getMonth() + 1 >= 3 ? kst.getFullYear() : kst.getFullYear() - 1);
+}
+
 const cache = createTtlCache<SchoolFacts | null>(TTL_MS);
 const mealCache = createTtlCache<SchoolMeal | null>(MEAL_TTL_MS);
 
@@ -149,7 +204,8 @@ export async function fetchSchool(name: string): Promise<SchoolFacts | null> {
 
   const hit = cache.get(trimmed);
   if (hit !== undefined) {
-    return hit && { ...hit, meal: mealCache.get(hit.code) ?? (await withMeal(hit)) };
+    // 학교 정보는 반년을 두고, 급식만 다시 본다
+    return hit && { ...hit, meal: await withMeal(hit) };
   }
 
   const rows = await neis<NeisSchool>("schoolInfo", { SCHUL_NM: trimmed });
@@ -171,9 +227,22 @@ export async function fetchSchool(name: string): Promise<SchoolFacts | null> {
     // 초·중학교에는 없는 값이다
     highKind: found.HS_SC_NM?.trim() || null,
     meal: null,
+    classes: null,
+    classTotal: null,
   };
-  cache.set(trimmed, facts);
-  return { ...facts, meal: await withMeal(facts) };
+
+  // 급식과 학급은 서로 무관하니 함께 받는다
+  const [meal, cls] = await Promise.all([
+    withMeal(facts),
+    fetchClasses(facts.code).catch(() => null),
+  ]);
+  const full: SchoolFacts = {
+    ...facts,
+    classes: cls?.classes ?? null,
+    classTotal: cls?.total ?? null,
+  };
+  cache.set(trimmed, full);
+  return { ...full, meal };
 }
 
 async function withMeal(facts: SchoolFacts): Promise<SchoolMeal | null> {

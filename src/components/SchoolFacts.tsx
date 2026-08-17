@@ -48,8 +48,26 @@ export default function SchoolFacts({ name }: { name: string }) {
         ))}
       </div>
 
+      {s.classes && s.classes.length > 0 && (
+        <div className="mt-2">
+          <p className="text-[var(--text-2xs)] font-bold text-[var(--text-muted)]">
+            학급 {s.classTotal}개
+          </p>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {s.classes.map((c) => (
+              <span
+                key={c.grade}
+                className="rounded-[var(--radius)] bg-[var(--surface-2)] px-2 py-1 text-[var(--text-2xs)] font-semibold tabular-nums"
+              >
+                {c.grade}학년 <b>{c.count}</b>반
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {s.foundedAt && (
-        <p className="mt-1.5 text-[var(--text-2xs)] text-[var(--text-faint)]">
+        <p className="mt-2 text-[var(--text-2xs)] text-[var(--text-faint)]">
           {s.foundedAt} 개교
           {s.officialName !== name && ` · 정식 명칭 ${s.officialName}`}
         </p>
@@ -89,7 +107,7 @@ export default function SchoolFacts({ name }: { name: string }) {
           rel="noreferrer noopener"
           className="inline-flex min-h-[36px] items-center rounded-[var(--radius)] border border-[var(--border)] px-2.5 text-[var(--text-2xs)] font-semibold"
         >
-          학생수·진학률 (학교알리미) ↗
+          학생수·진학률 ↗
         </a>
       </div>
     </div>
