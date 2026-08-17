@@ -45,6 +45,7 @@ import PlaceDetailCard from "@/components/PlaceDetailCard";
 import StopCard from "@/components/StopCard";
 import CctvCard from "@/components/CctvCard";
 import SearchOverlay from "@/components/SearchOverlay";
+import DongCard from "@/components/DongCard";
 import AccountMenu, { type HeaderUser } from "@/components/AccountMenu";
 import MapCard from "@/components/MapCard";
 import PlacesPanel from "@/components/panels/PlacesPanel";
@@ -933,6 +934,26 @@ export default function Dashboard({
           showRating={mode === "food"}
           onClose={() => setSelectedPlaceId(null)}
           onRated={applyRating}
+        />
+      )}
+
+      {/*
+        동을 고르면 그 동 이야기를 지도 위에 띄운다.
+        다른 카드가 떠 있으면 비켜 준다 — 바닥에 카드 둘이 겹치면
+        어느 것을 보고 있는지 알 수 없다.
+      */}
+      {activeDong && !bottomCard && (
+        <DongCard
+          key={activeDong}
+          name={activeDong}
+          onClose={() => {
+            setActiveDong(null);
+            setFitBounds(null);
+          }}
+          onOpenWaste={() => {
+            setMode("life");
+            setSheetOpen(true);
+          }}
         />
       )}
 
