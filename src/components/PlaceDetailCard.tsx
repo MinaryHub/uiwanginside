@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Stars, StarInput } from "@/components/StarRating";
 import { useRating } from "@/lib/useRating";
 import SaveToList from "@/components/SaveToList";
+import SchoolFacts from "@/components/SchoolFacts";
 import { CATEGORY_MAP } from "@/lib/uiwang";
 import type { Place, PlaceRating } from "@/lib/types";
 
@@ -139,6 +140,9 @@ export default function PlaceDetailCard({
             </a>
           )}
         </div>
+
+        {/* 학교는 이름·주소만으로는 부족하다 — 학부모가 볼 것을 덧붙인다 */}
+        {place.category === "SC4" && <SchoolFacts name={place.name} />}
 
         <SaveToList place={place} />
 
