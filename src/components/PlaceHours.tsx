@@ -101,6 +101,32 @@ export default function PlaceHours({
     );
   }
 
-  // 아는 것이 없으면 말하지 않는다
-  return null;
+  /*
+   * 아는 것이 없을 때.
+   *
+   * "정보 없음" 을 띄우면 그것만 눈에 남는다. 그렇다고 아무것도 두지
+   * 않으면 영업시간을 찾으러 온 사람이 어디를 봐야 할지 모른다.
+   * 카카오맵 상세 페이지에는 대개 적혀 있으니 그리로 보낸다 — 이미
+   * 아래 행동 줄에 화살표 버튼이 있지만, 그것이 영업시간으로 가는
+   * 길이라는 것은 눌러 봐야 안다.
+   *
+   * 학교는 빼둔다. 아래에 학교 홈페이지를 따로 붙이고 있다.
+   */
+  if (!place.url || place.category === "SC4") return null;
+
+  return (
+    <a
+      href={place.url}
+      target="_blank"
+      rel="noreferrer noopener"
+      className="mt-2 flex items-baseline gap-2"
+    >
+      <span className="shrink-0 text-[var(--text-2xs)] font-bold text-[var(--text-muted)]">
+        영업시간
+      </span>
+      <span className="text-[var(--text-xs)] font-semibold text-[var(--brand)] underline underline-offset-2">
+        카카오맵에서 보기 ↗
+      </span>
+    </a>
+  );
 }
