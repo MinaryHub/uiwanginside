@@ -14,12 +14,23 @@ import { isInsideUiwang } from "./geo";
  *   - 어떤 선을 칠하는가 : 도로 형상은 OpenStreetMap 에서 가져온다.
  *                       의왕 주요도로 78개 중 60개가 ITS 도로명과 일치한다.
  *
- * 칸 하나가 2.6km 이므로 "이 도로의 이 언저리" 까지가 한계다. 링크 하나하나의
+ * 칸 하나가 3.4km 이므로 "이 도로의 이 언저리" 까지가 한계다. 링크 하나하나의
  * 위치는 알 수 없다. 도로 전체를 한 색으로 칠하지 않는 이유는, 같은 시내에서도
  * 경수대로가 6~74km/h 로 갈리기 때문이다.
  */
 
-export const TRAFFIC_GRID = { nx: 4, ny: 5 } as const;
+/*
+ * 격자를 4×5 에서 3×4 로 줄였다.
+ *
+ * 칸마다 ITS 를 한 번씩 두드린다. 시 경계에 걸치는 칸이 15개에서 10개로
+ * 줄고, 갱신 주기까지 90초에서 5분으로 늘려 호출이 시간당 440번에서
+ * 132번으로 준다. ITS 가 Vercel 에서 통째로 막히는 일이
+ * 반복되는데, 우리 호출량이 원인일 가능성이 커서 먼저 줄여 본다.
+ *
+ * 대신 칸이 2.6km 에서 3.4km 로 커진다 — 도로를 끊는 단위가 그만큼
+ * 굵어진다. 실측했을 때 잡히는 도로 수는 거의 같았다 (293 → 316).
+ */
+export const TRAFFIC_GRID = { nx: 3, ny: 4 } as const;
 
 const W = (UIWANG_BBOX.maxLng - UIWANG_BBOX.minLng) / TRAFFIC_GRID.nx;
 const H = (UIWANG_BBOX.maxLat - UIWANG_BBOX.minLat) / TRAFFIC_GRID.ny;
@@ -47,7 +58,7 @@ export interface TrafficTile {
 
 /**
  * 시 경계에 걸치는 칸만 돌려준다.
- * 스무 칸 중 다섯은 통째로 이웃 도시라 부를 이유가 없다.
+ * 열두 칸 중 둘은 통째로 이웃 도시라 부를 이유가 없다 (10칸만 조회).
  */
 export function cityTiles(): TrafficTile[] {
   const out: TrafficTile[] = [];
