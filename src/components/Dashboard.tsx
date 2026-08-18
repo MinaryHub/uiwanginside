@@ -242,8 +242,13 @@ export default function Dashboard({
     swrFetcher,
     { refreshInterval: POLL.transit, keepPreviousData: true },
   );
+  /*
+   * 뉴스는 모드와 무관하게 받는다. 상단 요약줄에 최신 제목을 띄우기
+   * 때문이다. 예전에는 생활 모드에서만 받았고, 그 카드가 장소 목록
+   * 아래에 있어 사실상 아무도 보지 못했다.
+   */
   const news = useSWR<ApiEnvelope<NewsPayload>>(
-    needs("news") ? `/api/news?q=${encodeURIComponent(newsQuery)}` : null,
+    `/api/news?q=${encodeURIComponent(newsQuery)}`,
     swrFetcher,
     { refreshInterval: POLL.news, keepPreviousData: true },
   );
@@ -679,6 +684,7 @@ export default function Dashboard({
               air={air.data}
               traffic={traffic.data}
               medical={medical.data}
+              news={news.data}
               onOpen={(m) => {
                 setMode(m);
                 setSheetOpen(true);
@@ -729,6 +735,7 @@ export default function Dashboard({
             air={air.data}
             traffic={traffic.data}
             medical={medical.data}
+            news={news.data}
             onOpen={(m) => {
               setMode(m);
               setSheetOpen(true);

@@ -6,6 +6,7 @@ import type {
   AirPayload,
   TrafficPayload,
   MedicalPayload,
+  NewsPayload,
   AirGrade,
 } from "@/lib/types";
 
@@ -56,12 +57,14 @@ export default function SummaryStrip({
   air,
   traffic,
   medical,
+  news,
   onOpen,
 }: {
   weather?: ApiEnvelope<WeatherPayload>;
   air?: ApiEnvelope<AirPayload>;
   traffic?: ApiEnvelope<TrafficPayload>;
   medical?: ApiEnvelope<MedicalPayload>;
+  news?: ApiEnvelope<NewsPayload>;
   onOpen: (mode: "medical" | "transit" | "life") => void;
 }) {
   const now = weather?.data.now;
@@ -80,6 +83,12 @@ export default function SummaryStrip({
       : (SKY_ICON[now?.sky ?? ""] ?? "🌤️");
 
   const alerts = weather?.data.alerts ?? [];
+  /*
+   * 최신 기사 하나만 띄운다. 건수("뉴스 20")는 알려주는 것이 없고,
+   * 제목은 그 자체로 "지금 의왕에 무슨 일이 있나" 에 답한다.
+   * 줄이 좁으니 제목은 잘라 두고, 눌러 목록으로 넘긴다.
+   */
+  const headline = news?.ok ? news.data.items[0] : null;
 
   return (
     <div className="thin-scroll flex items-center gap-0.5 overflow-x-auto">
@@ -106,12 +115,30 @@ export default function SummaryStrip({
         </Item>
       ))}
 
+      {/*
+        뉴스는 특보 바로 다음, 날씨보다 앞에 둔다.
+        좁은 화면에서 요약줄에 남는 폭이 354px 이라 끝에 두면 화면 밖으로
+        밀린다 — 안 보여서 올려달라고 한 것을 또 안 보이게 두는 셈이다.
+        목숨이 걸린 특보만 앞세우고 그다음 자리를 준다.
+      */}
+      {headline && (
+        <Item onClick={() => onOpen("life")} title={headline.title}>
+          <span className="text-[1.05rem]">📰</span>
+          <span className="max-w-[110px] truncate font-semibold text-[var(--text-muted)] sm:max-w-[220px]">
+            {headline.title}
+          </span>
+        </Item>
+      )}
+
       {/* 값을 못 가져온 항목은 아예 표시하지 않는다 — 빈칸이 기본값처럼 보이면 안 된다 */}
       {now?.temp != null && (
-        <Item onClick={() => onOpen("life")} title="날씨 상세 보기">
-          <span className="text-[1.05rem]">{icon}</span>
-          <span className="tabular-nums">{now.temp}°</span>
-        </Item>
+        <>
+          {headline && <span className="h-4 w-px shrink-0 bg-[var(--border)]" />}
+          <Item onClick={() => onOpen("life")} title="날씨 상세 보기">
+            <span className="text-[1.05rem]">{icon}</span>
+            <span className="tabular-nums">{now.temp}°</span>
+          </Item>
+        </>
       )}
 
       {grade && (
