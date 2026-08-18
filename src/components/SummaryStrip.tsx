@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
 import type {
   ApiEnvelope,
   WeatherPayload,
@@ -84,11 +86,26 @@ export default function SummaryStrip({
 
   const alerts = weather?.data.alerts ?? [];
   /*
-   * 최신 기사 하나만 띄운다. 건수("뉴스 20")는 알려주는 것이 없고,
-   * 제목은 그 자체로 "지금 의왕에 무슨 일이 있나" 에 답한다.
-   * 줄이 좁으니 제목은 잘라 두고, 눌러 목록으로 넘긴다.
+   * 최근 기사 셋을 돌아가며 보여준다.
+   *
+   * 건수("뉴스 20")는 알려주는 것이 없고, 제목은 그 자체로 "지금 의왕에
+   * 무슨 일이 있나" 에 답한다. 한 줄에 셋을 나란히 놓을 자리는 없으니
+   * 차례로 바꾼다.
+   *
+   * 5초는 짧은 제목을 읽기에 충분하고, 눈이 따라가기 힘들 만큼 잦지도
+   * 않다. 하나뿐이면 바꿀 것이 없으니 타이머를 걸지 않는다.
    */
-  const headline = news?.ok ? news.data.items[0] : null;
+  const top = news?.ok ? news.data.items.slice(0, 3) : [];
+  const [turn, setTurn] = useState(0);
+
+  useEffect(() => {
+    if (top.length < 2) return;
+    const t = setInterval(() => setTurn((i) => i + 1), 5000);
+    return () => clearInterval(t);
+  }, [top.length]);
+
+  // 기사 수가 줄어도 범위를 벗어나지 않게 나머지로 접는다
+  const headline = top.length ? top[turn % top.length] : null;
 
   return (
     <div className="thin-scroll flex items-center gap-0.5 overflow-x-auto">
@@ -124,9 +141,18 @@ export default function SummaryStrip({
       {headline && (
         <Item onClick={() => onOpen("life")} title={headline.title}>
           <span className="text-[1.05rem]">📰</span>
-          <span className="max-w-[110px] truncate font-semibold text-[var(--text-muted)] sm:max-w-[220px]">
+          {/* key 를 바꿔 제목이 갈릴 때마다 살짝 떠오르게 한다 */}
+          <span
+            key={headline.link}
+            className="fade-up max-w-[110px] truncate font-semibold text-[var(--text-muted)] sm:max-w-[220px]"
+          >
             {headline.title}
           </span>
+          {top.length > 1 && (
+            <span className="shrink-0 text-[var(--text-2xs)] tabular-nums text-[var(--text-faint)]">
+              {(turn % top.length) + 1}/{top.length}
+            </span>
+          )}
         </Item>
       )}
 

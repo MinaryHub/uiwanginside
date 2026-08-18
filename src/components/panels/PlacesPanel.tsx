@@ -19,6 +19,8 @@ export default function PlacesPanel({
   isLoading,
   categories,
   onSearchHere,
+  only,
+  onOnlyChange,
   selectedPlaceId,
   onSelectPlace,
 }: {
@@ -28,6 +30,13 @@ export default function PlacesPanel({
   categories: CategoryKey[];
   /** 지금 화면 범위로 다시 조회한다 */
   onSearchHere: () => void;
+  /**
+   * 좁히기 — 한 종류만 보고 싶을 때. Dashboard 가 들고 있다.
+   * 목록만 좁히고 지도는 그대로 두면, 화장실만 보려 눌러도 지도에는
+   * 297개가 그대로 남아 아무 소용이 없었다.
+   */
+  only: CategoryKey | null;
+  onOnlyChange: (c: CategoryKey | null) => void;
   selectedPlaceId: string | null;
   onSelectPlace: (p: Place) => void;
 }) {
@@ -41,8 +50,6 @@ export default function PlacesPanel({
    * 같았다. 접어 두고 필요할 때 펼친다.
    */
   const [limit, setLimit] = useState(20);
-  /** 모드 안에서 한 종류만 보고 싶을 때 쓰는 좁히기 필터 */
-  const [only, setOnly] = useState<CategoryKey | null>(null);
 
   const places = useMemo(() => res?.data.places ?? [], [res]);
 
@@ -78,7 +85,7 @@ export default function PlacesPanel({
           <button
             type="button"
             onClick={() => {
-              setOnly(null);
+              onOnlyChange(null);
               setLimit(20);
             }}
             className="rounded-full px-2 py-1 text-[var(--text-xs)] font-bold transition"
@@ -98,7 +105,7 @@ export default function PlacesPanel({
                 key={c}
                 type="button"
                 onClick={() => {
-                  setOnly(on ? null : c);
+                  onOnlyChange(on ? null : c);
                   setLimit(20);
                 }}
                 className="flex items-center gap-1 rounded-full px-2 py-1 text-[var(--text-xs)] font-bold transition"

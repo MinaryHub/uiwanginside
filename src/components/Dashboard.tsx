@@ -11,6 +11,7 @@ import { UIWANG, DONGS, LANDMARKS } from "@/lib/uiwang";
 import { UIWANG_BBOX } from "@/lib/uiwang-boundary";
 import { DONG_BBOX, type LatLngBox } from "@/lib/dong-boundaries";
 import { MODES, MODE_MAP, type ModeId, type CardId } from "@/lib/modes";
+import type { CategoryKey } from "@/lib/uiwang";
 import { getDeviceId } from "@/lib/deviceId";
 import { useMyLocation } from "@/lib/useMyLocation";
 import {
@@ -125,6 +126,11 @@ export default function Dashboard({
   const [newsQuery, setNewsQuery] = useState("의왕시");
   const [sheetOpen, setSheetOpen] = useState(!!initial.mode);
   const [dongMenu, setDongMenu] = useState(false);
+  /**
+   * 좁히기 — 모드 안에서 한 종류만 볼 때.
+   * 지도와 목록이 함께 좁혀져야 해서 여기서 들고 있는다.
+   */
+  const [only, setOnly] = useState<CategoryKey | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   /** 검색으로 고른 곳 — 지금 목록에 없어도 지도와 카드에 남는다 */
   const [pinned, setPinned] = useState<Place | null>(null);
@@ -321,6 +327,8 @@ export default function Dashboard({
       setSheetOpen(!off);
       setSelectedPlaceId(null);
       setTracked(null);
+      // 모드가 바뀌면 좁히기를 푼다 — 이전 모드의 종류는 여기 없다
+      setOnly(null);
       return off ? null : next;
     });
   }, []);
@@ -473,13 +481,14 @@ export default function Dashboard({
   const bottomCard = !!(selectedPlaceId || marker || photo);
 
   const basePlaces = def?.layers.places ? placeList : NO_PLACES;
-  const mapPlaces = useMemo(
-    () =>
-      pinned && !basePlaces.some((p) => p.id === pinned.id)
-        ? [...basePlaces, pinned]
-        : basePlaces,
-    [basePlaces, pinned],
-  );
+  const mapPlaces = useMemo(() => {
+    // 한 종류만 고르면 지도도 그것만 남긴다
+    const narrowed = only ? basePlaces.filter((p) => p.category === only) : basePlaces;
+    // 검색으로 고른 곳은 좁히기와 무관하게 남긴다 — 방금 찾은 것이 사라지면 당황한다
+    return pinned && !narrowed.some((p) => p.id === pinned.id)
+      ? [...narrowed, pinned]
+      : narrowed;
+  }, [basePlaces, pinned, only]);
   const mapIncidents = def?.layers.incidents
     ? (traffic.data?.data.incidents ?? NO_INCIDENTS)
     : NO_INCIDENTS;
@@ -1059,6 +1068,8 @@ export default function Dashboard({
                 isLoading={places.isLoading}
                 categories={def.categories}
                 onSearchHere={searchHere}
+                only={only}
+                onOnlyChange={setOnly}
                 selectedPlaceId={selectedPlaceId}
                 onSelectPlace={handleSelectPlace}
               />
