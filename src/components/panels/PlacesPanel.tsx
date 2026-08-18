@@ -32,6 +32,15 @@ export default function PlacesPanel({
   onSelectPlace: (p: Place) => void;
 }) {
   const [keyword, setKeyword] = useState("");
+  /**
+   * 처음에 보여줄 줄 수.
+   *
+   * 예전에는 150줄을 한꺼번에 그렸다. 생활 모드에 공원·화장실이 들어와
+   * 297곳이 되자 목록이 6,600px 이 되어, 그 아래 있는 쓰레기·날씨·인구·
+   * 뉴스 카드까지 폰에서 아홉 화면을 내려야 닿았다. 사실상 못 보는 것과
+   * 같았다. 접어 두고 필요할 때 펼친다.
+   */
+  const [limit, setLimit] = useState(20);
   /** 모드 안에서 한 종류만 보고 싶을 때 쓰는 좁히기 필터 */
   const [only, setOnly] = useState<CategoryKey | null>(null);
 
@@ -43,7 +52,8 @@ export default function PlacesPanel({
     return m;
   }, [places]);
 
-  const filtered = useMemo(() => {
+  // 좁히기·검색을 바꾸면 다시 접는다 — 펼친 상태가 남으면 또 길어진다
+  const narrowed = useMemo(() => {
     const k = keyword.trim();
     return places.filter((p) => {
       if (only && p.category !== only) return false;
@@ -51,6 +61,10 @@ export default function PlacesPanel({
       return p.name.includes(k) || p.roadAddress.includes(k) || p.address.includes(k);
     });
   }, [places, keyword, only]);
+
+  const filtered = narrowed;
+  const shown = filtered.slice(0, limit);
+  const more = filtered.length - shown.length;
 
   const source = res?.data.source;
   const total = res?.data.total ?? 0;
@@ -63,7 +77,10 @@ export default function PlacesPanel({
         <div className="mb-2 flex flex-wrap gap-1">
           <button
             type="button"
-            onClick={() => setOnly(null)}
+            onClick={() => {
+              setOnly(null);
+              setLimit(20);
+            }}
             className="rounded-full px-2 py-1 text-[var(--text-xs)] font-bold transition"
             style={
               only === null
@@ -80,7 +97,10 @@ export default function PlacesPanel({
               <button
                 key={c}
                 type="button"
-                onClick={() => setOnly(on ? null : c)}
+                onClick={() => {
+                  setOnly(on ? null : c);
+                  setLimit(20);
+                }}
                 className="flex items-center gap-1 rounded-full px-2 py-1 text-[var(--text-xs)] font-bold transition"
                 style={
                   on
@@ -97,7 +117,10 @@ export default function PlacesPanel({
 
         <input
           value={keyword}
-          onChange={(e) => setKeyword(e.target.value)}
+          onChange={(e) => {
+            setKeyword(e.target.value);
+            setLimit(20);
+          }}
           placeholder="이름·주소로 찾기"
           className="mb-2 w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-1.5 text-[var(--text-sm)] outline-none focus:border-[var(--brand)]"
         />
@@ -155,7 +178,7 @@ export default function PlacesPanel({
               <Empty>표시할 곳이 없습니다. 지도를 옮기거나 넓혀 보세요.</Empty>
             ) : (
               <ul className="space-y-0.5">
-                {filtered.slice(0, 150).map((p) => {
+                {shown.map((p) => {
                   const def = CATEGORY_MAP[p.category];
                   const active = selectedPlaceId === p.id;
                   return (
@@ -224,6 +247,16 @@ export default function PlacesPanel({
                   );
                 })}
               </ul>
+            )}
+
+            {more > 0 && (
+              <button
+                type="button"
+                onClick={() => setLimit((n) => n + 40)}
+                className="mt-2 min-h-[40px] w-full rounded-[var(--radius)] border border-[var(--border-strong)] text-[var(--text-xs)] font-bold transition hover:border-[var(--brand)] hover:text-[var(--brand)]"
+              >
+                {more}곳 더 보기
+              </button>
             )}
           </>
         )}
