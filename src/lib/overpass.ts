@@ -21,7 +21,11 @@ const ENDPOINTS = [
  * 이 폴백에서는 찾을 일이 없어 빈 배열로 둔다.
  */
 const OSM_FILTERS: Record<CategoryKey, string[]> = {
+  // 아래 넷은 카카오·OSM 이 아니라 표준데이터에서 온다 — 여기서 찾을 일이 없다
   ETC: [],
+  PARK: [],
+  PKG: [],
+  WC: [],
   FD6: ['["amenity"~"^(restaurant|fast_food)$"]'],
   CE7: ['["amenity"~"^(cafe|dessert)$"]'],
   SC4: ['["amenity"~"^(school|college|university|kindergarten)$"]'],

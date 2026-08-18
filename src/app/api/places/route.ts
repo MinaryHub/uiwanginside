@@ -4,6 +4,7 @@ import { haversine } from "@/lib/busStations";
 import { UIWANG, CATEGORY_MAP, type CategoryKey } from "@/lib/uiwang";
 import { UIWANG_BBOX } from "@/lib/uiwang-boundary";
 import { isInsideUiwang } from "@/lib/geo";
+import { facilityPlaces, type FacilityKind } from "@/lib/facilities";
 import type { Place } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -207,9 +208,18 @@ const CACHE_TTL_SEC = 300;
 
 export async function GET(req: Request) {
   const sp = new URL(req.url).searchParams;
-  const codes = (sp.get("categories") ?? "SC4,HP8,MT1,CS2")
+  const wanted = (sp.get("categories") ?? "SC4,HP8,MT1,CS2")
     .split(",")
     .filter((c): c is CategoryKey => c in CATEGORY_MAP);
+
+  /*
+   * 표준데이터에서 온 종류는 카카오에 없는 코드다. 그대로 넘기면
+   * category_group_code=PARK 같은 요청이 되어 조회 전체가 깨진다.
+   * 갈라서 카카오에는 카카오 코드만 보내고, 나머지는 굳혀둔 자료로 채운다.
+   */
+  const FACILITY: readonly string[] = ["PARK", "PKG", "WC"];
+  const facilityKinds = wanted.filter((c): c is FacilityKind => FACILITY.includes(c));
+  const codes = wanted.filter((c) => !FACILITY.includes(c));
   const lat = Number(sp.get("lat") ?? UIWANG.center.lat);
   const lng = Number(sp.get("lng") ?? UIWANG.center.lng);
   const radius = Math.min(Number(sp.get("radius") ?? UIWANG.defaultRadius), 20000);
@@ -230,11 +240,24 @@ export async function GET(req: Request) {
   // 의왕 밖은 애초에 찾지 않는다
   const rect = clipToCity(asked);
 
+  /*
+   * 시설은 화면 범위를 따지지 않고 다 준다. 의왕 전체를 합쳐 243곳뿐이고
+   * 이미 소스에 있어 조회 비용이 없다. 화면 밖이라고 감추면 지도를 옮길
+   * 때마다 화장실이 나타났다 사라진다.
+   */
+  const facilities = facilityKinds.length
+    ? facilityPlaces(facilityKinds, { lat, lng })
+    : [];
+
   if (codes.length === 0 || !rect) {
-    return ok({ places: [], source: "kakao" as const, total: 0 }, undefined, CACHE_TTL_SEC);
+    return ok(
+      { places: facilities, source: "kakao" as const, total: facilities.length },
+      undefined,
+      CACHE_TTL_SEC,
+    );
   }
 
-  const cacheKey = `${codes.slice().sort().join(",")}|${rect}`;
+  const cacheKey = `${wanted.slice().sort().join(",")}|${rect}`;
   const cached = cache.get(cacheKey);
   if (cached) return ok(cached, undefined, CACHE_TTL_SEC);
 
@@ -246,12 +269,12 @@ export async function GET(req: Request) {
       const results = await Promise.all(
         codes.map((c) => searchCategory(key, c, rect, { lat, lng })),
       );
-      const places = results.flatMap((r) => r.places);
+      const places = [...results.flatMap((r) => r.places), ...facilities];
       places.sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
       const payload = {
         places,
         source: "kakao" as const,
-        total: results.reduce((s, r) => s + r.total, 0),
+        total: results.reduce((s, r) => s + r.total, 0) + facilities.length,
       };
       cache.set(cacheKey, payload);
       return ok(payload, undefined, CACHE_TTL_SEC);
@@ -264,9 +287,12 @@ export async function GET(req: Request) {
   // 2순위: OpenStreetMap — 무인증이지만 샘플이 아닌 실제 데이터
   try {
     // OSM 도 사각형으로 찾으므로 실제 경계로 걸러야 한다
-    const places = (await fetchOverpassPlaces(codes, rect, { lat, lng })).filter((p) =>
-      isInsideUiwang(p.lat, p.lng),
-    );
+    const places = [
+      ...(await fetchOverpassPlaces(codes, rect, { lat, lng })).filter((p) =>
+        isInsideUiwang(p.lat, p.lng),
+      ),
+      ...facilities,
+    ];
     // OSM 은 범위 안의 것을 모두 주므로 걸러낸 수가 곧 총 개수다
     cache.set(cacheKey, { places, source: "osm" as const, total: places.length });
     return ok(

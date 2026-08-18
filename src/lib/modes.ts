@@ -66,8 +66,8 @@ export const MODES: ModeDef[] = [
   {
     id: "life",
     label: "생활",
-    hint: "마트·편의점·은행·학교·공공기관",
-    categories: ["MT1", "CS2", "BK9", "OL7", "SC4", "PO3", "CT1"],
+    hint: "마트·편의점·은행·학교·공원·화장실",
+    categories: ["MT1", "CS2", "BK9", "OL7", "SC4", "PO3", "CT1", "PARK", "WC"],
     layers: { ...NO_LAYERS, places: true },
     cards: ["waste", "weather", "population", "news"],
   },
@@ -82,8 +82,9 @@ export const MODES: ModeDef[] = [
   {
     id: "transit",
     label: "교통",
-    hint: "버스 도착·실시간 위치·정체·CCTV",
-    categories: ["SW8", "PK6"],
+    hint: "버스·정체·CCTV·주차장",
+    // 주차장은 카카오(PK6) 대신 표준데이터(PKG)를 쓴다 — 요금과 운영시간이 있다
+    categories: ["SW8", "PKG"],
     layers: { places: true, bus: true, incidents: true, traffic: true, cctv: true },
     cards: ["transit", "traffic", "cctv"],
   },

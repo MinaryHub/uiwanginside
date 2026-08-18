@@ -51,6 +51,13 @@ export type CategoryKey =
   | "SW8"
   | "PO3"
   | "CT1"
+  /**
+   * 행정안전부 표준데이터에서 온 것들. 카카오에는 없거나 있어도
+   * 요금·개방시간이 빠져 있어 따로 둔다.
+   */
+  | "PARK"
+  | "PKG"
+  | "WC"
   /** 분류가 없는 곳 — 호수·공원처럼 카카오 카테고리에 안 잡히는 것들 */
   | "ETC";
 
@@ -76,6 +83,9 @@ export const CATEGORIES: CategoryDef[] = [
   { code: "SW8", label: "지하철역", emoji: "🚇", color: "#0d9488" },
   { code: "PO3", label: "공공기관", emoji: "🏛️", color: "#4f46e5" },
   { code: "CT1", label: "문화시설", emoji: "🎭", color: "#db2777" },
+  { code: "PARK", label: "공원", emoji: "🌳", color: "#15803d" },
+  { code: "PKG", label: "주차장", emoji: "🅿️", color: "#334155" },
+  { code: "WC", label: "화장실", emoji: "🚻", color: "#0369a1" },
   { code: "ETC", label: "장소", emoji: "📍", color: "#475569" },
 ];
 
