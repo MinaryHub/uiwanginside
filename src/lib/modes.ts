@@ -69,8 +69,12 @@ export const MODES: ModeDef[] = [
     hint: "마트·편의점·은행·학교·공원·화장실",
     categories: ["MT1", "CS2", "BK9", "OL7", "SC4", "PO3", "CT1", "PARK", "WC"],
     layers: { ...NO_LAYERS, places: true },
-    // 뉴스는 상단 요약줄에서 바로 열린다 — 여기 두면 또 목록 아래에 묻힌다
-    cards: ["waste", "weather", "population"],
+    /*
+     * 지도와 무관한 정보(뉴스·날씨·미세먼지·쓰레기·인구)는 모두 상단
+     * 요약줄에서 펼친다. 여기 두면 장소 목록 아래에 묻힌다 — 뉴스가
+     * 그랬다. 시트는 지도에 찍히는 것만 다룬다.
+     */
+    cards: [],
   },
   {
     id: "medical",
@@ -78,7 +82,7 @@ export const MODES: ModeDef[] = [
     hint: "지금 진료 중인 병원·약국",
     categories: ["HP8", "PM9"],
     layers: { ...NO_LAYERS, places: true },
-    cards: ["medical", "air"],
+    cards: ["medical"],
   },
   {
     id: "transit",

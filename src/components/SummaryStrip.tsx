@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { InfoTab } from "@/components/InfoOverlay";
 
 import type {
   ApiEnvelope,
@@ -61,7 +62,7 @@ export default function SummaryStrip({
   medical,
   news,
   onOpen,
-  onOpenNews,
+  onOpenInfo,
 }: {
   weather?: ApiEnvelope<WeatherPayload>;
   air?: ApiEnvelope<AirPayload>;
@@ -69,8 +70,11 @@ export default function SummaryStrip({
   medical?: ApiEnvelope<MedicalPayload>;
   news?: ApiEnvelope<NewsPayload>;
   onOpen: (mode: "medical" | "transit" | "life") => void;
-  /** 뉴스는 모드가 아니라 상단에서 바로 펼친다 */
-  onOpenNews: () => void;
+  /**
+   * 지도와 무관한 정보는 모드로 넘기지 않고 그 자리에서 펼친다.
+   * 요약줄의 한 줄을 누르면 같은 주제의 상세가 열려야 한다.
+   */
+  onOpenInfo: (tab: InfoTab) => void;
 }) {
   const now = weather?.data.now;
   const station = air?.data.stations[0];
@@ -120,7 +124,7 @@ export default function SummaryStrip({
       {alerts.map((a) => (
         <Item
           key={a.kind}
-          onClick={() => onOpen("life")}
+          onClick={() => onOpenInfo("weather")}
           title={`${new Date(a.since).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })} 발효 · 기상청`}
         >
           <span
@@ -142,7 +146,7 @@ export default function SummaryStrip({
         목숨이 걸린 특보만 앞세우고 그다음 자리를 준다.
       */}
       {headline && (
-        <Item onClick={onOpenNews} title={headline.title}>
+        <Item onClick={() => onOpenInfo("news")} title={headline.title}>
           <span className="text-[1.05rem]">📰</span>
           {/* key 를 바꿔 제목이 갈릴 때마다 살짝 떠오르게 한다 */}
           <span
@@ -163,7 +167,7 @@ export default function SummaryStrip({
       {now?.temp != null && (
         <>
           {headline && <span className="h-4 w-px shrink-0 bg-[var(--border)]" />}
-          <Item onClick={() => onOpen("life")} title="날씨 상세 보기">
+          <Item onClick={() => onOpenInfo("weather")} title="날씨 상세 보기">
             <span className="text-[1.05rem]">{icon}</span>
             <span className="tabular-nums">{now.temp}°</span>
           </Item>
@@ -173,7 +177,7 @@ export default function SummaryStrip({
       {grade && (
         <>
           <span className="h-4 w-px shrink-0 bg-[var(--border)]" />
-          <Item onClick={() => onOpen("medical")} title="대기질 상세 보기">
+          <Item onClick={() => onOpenInfo("air")} title="미세먼지 상세 보기">
             <span className="text-[var(--text-muted)]">미세</span>
             <span style={{ color: GRADE_COLOR[grade] }}>{grade}</span>
           </Item>

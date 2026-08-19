@@ -47,7 +47,7 @@ import PlaceDetailCard from "@/components/PlaceDetailCard";
 import StopCard from "@/components/StopCard";
 import CctvCard from "@/components/CctvCard";
 import SearchOverlay from "@/components/SearchOverlay";
-import NewsOverlay from "@/components/NewsOverlay";
+import InfoOverlay, { type InfoTab } from "@/components/InfoOverlay";
 import DongCard from "@/components/DongCard";
 import AccountMenu, { type HeaderUser } from "@/components/AccountMenu";
 import MapCard from "@/components/MapCard";
@@ -135,7 +135,11 @@ export default function Dashboard({
    */
   const [only, setOnly] = useState<CategoryKey | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [newsOpen, setNewsOpen] = useState(false);
+  /**
+   * 상단 요약줄에서 펼치는 생활 정보. 어느 탭을 열지 함께 들고 있는다 —
+   * 날씨를 눌렀는데 뉴스가 뜨면 누른 것과 다른 것이 열리는 셈이다.
+   */
+  const [infoTab, setInfoTab] = useState<InfoTab | null>(null);
   /** 검색으로 고른 곳 — 지금 목록에 없어도 지도와 카드에 남는다 */
   const [pinned, setPinned] = useState<Place | null>(null);
   const [copied, setCopied] = useState(false);
@@ -743,7 +747,7 @@ export default function Dashboard({
               traffic={traffic.data}
               medical={medical.data}
               news={news.data}
-              onOpenNews={() => setNewsOpen(true)}
+              onOpenInfo={setInfoTab}
               onOpen={(m) => {
                 setMode(m);
                 setSheetOpen(true);
@@ -795,7 +799,7 @@ export default function Dashboard({
             traffic={traffic.data}
             medical={medical.data}
             news={news.data}
-            onOpenNews={() => setNewsOpen(true)}
+            onOpenInfo={setInfoTab}
             onOpen={(m) => {
               setMode(m);
               setSheetOpen(true);
@@ -1066,13 +1070,18 @@ export default function Dashboard({
         />
       )}
 
-      {newsOpen && (
-        <NewsOverlay
-          res={news.data}
-          isLoading={news.isLoading}
+      {infoTab && (
+        <InfoOverlay
+          tab={infoTab}
+          onTabChange={setInfoTab}
+          news={{ res: news.data, isLoading: news.isLoading }}
+          weather={{ res: weather.data, isLoading: weather.isLoading }}
+          air={{ res: air.data, isLoading: air.isLoading }}
           query={newsQuery}
           onQueryChange={setNewsQuery}
-          onClose={() => setNewsOpen(false)}
+          activeDong={activeDong}
+          onSelectDong={toggleDong}
+          onClose={() => setInfoTab(null)}
         />
       )}
 
