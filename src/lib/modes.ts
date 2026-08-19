@@ -69,7 +69,8 @@ export const MODES: ModeDef[] = [
     hint: "마트·편의점·은행·학교·공원·화장실",
     categories: ["MT1", "CS2", "BK9", "OL7", "SC4", "PO3", "CT1", "PARK", "WC"],
     layers: { ...NO_LAYERS, places: true },
-    cards: ["waste", "weather", "population", "news"],
+    // 뉴스는 상단 요약줄에서 바로 열린다 — 여기 두면 또 목록 아래에 묻힌다
+    cards: ["waste", "weather", "population"],
   },
   {
     id: "medical",

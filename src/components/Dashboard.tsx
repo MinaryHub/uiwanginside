@@ -47,6 +47,7 @@ import PlaceDetailCard from "@/components/PlaceDetailCard";
 import StopCard from "@/components/StopCard";
 import CctvCard from "@/components/CctvCard";
 import SearchOverlay from "@/components/SearchOverlay";
+import NewsOverlay from "@/components/NewsOverlay";
 import DongCard from "@/components/DongCard";
 import AccountMenu, { type HeaderUser } from "@/components/AccountMenu";
 import MapCard from "@/components/MapCard";
@@ -134,6 +135,7 @@ export default function Dashboard({
    */
   const [only, setOnly] = useState<CategoryKey | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [newsOpen, setNewsOpen] = useState(false);
   /** 검색으로 고른 곳 — 지금 목록에 없어도 지도와 카드에 남는다 */
   const [pinned, setPinned] = useState<Place | null>(null);
   const [copied, setCopied] = useState(false);
@@ -741,6 +743,7 @@ export default function Dashboard({
               traffic={traffic.data}
               medical={medical.data}
               news={news.data}
+              onOpenNews={() => setNewsOpen(true)}
               onOpen={(m) => {
                 setMode(m);
                 setSheetOpen(true);
@@ -792,6 +795,7 @@ export default function Dashboard({
             traffic={traffic.data}
             medical={medical.data}
             news={news.data}
+            onOpenNews={() => setNewsOpen(true)}
             onOpen={(m) => {
               setMode(m);
               setSheetOpen(true);
@@ -1059,6 +1063,16 @@ export default function Dashboard({
             setMode("life");
             setSheetOpen(true);
           }}
+        />
+      )}
+
+      {newsOpen && (
+        <NewsOverlay
+          res={news.data}
+          isLoading={news.isLoading}
+          query={newsQuery}
+          onQueryChange={setNewsQuery}
+          onClose={() => setNewsOpen(false)}
         />
       )}
 

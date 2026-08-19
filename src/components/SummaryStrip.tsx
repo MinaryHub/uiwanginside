@@ -61,6 +61,7 @@ export default function SummaryStrip({
   medical,
   news,
   onOpen,
+  onOpenNews,
 }: {
   weather?: ApiEnvelope<WeatherPayload>;
   air?: ApiEnvelope<AirPayload>;
@@ -68,6 +69,8 @@ export default function SummaryStrip({
   medical?: ApiEnvelope<MedicalPayload>;
   news?: ApiEnvelope<NewsPayload>;
   onOpen: (mode: "medical" | "transit" | "life") => void;
+  /** 뉴스는 모드가 아니라 상단에서 바로 펼친다 */
+  onOpenNews: () => void;
 }) {
   const now = weather?.data.now;
   const station = air?.data.stations[0];
@@ -139,7 +142,7 @@ export default function SummaryStrip({
         목숨이 걸린 특보만 앞세우고 그다음 자리를 준다.
       */}
       {headline && (
-        <Item onClick={() => onOpen("life")} title={headline.title}>
+        <Item onClick={onOpenNews} title={headline.title}>
           <span className="text-[1.05rem]">📰</span>
           {/* key 를 바꿔 제목이 갈릴 때마다 살짝 떠오르게 한다 */}
           <span
