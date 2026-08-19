@@ -33,24 +33,67 @@ const PTY_ICON: Record<string, string> = {
   소나기: "🌦️",
 };
 
+/**
+ * 요약줄의 한 칸.
+ *
+ * 예전에는 이모지와 굵은 글씨를 칸마다 다르게 섞고 세로선으로 갈랐다.
+ * 무엇이 이름이고 무엇이 값인지 칸마다 규칙이 달라 한눈에 안 읽혔다.
+ * 이제 모든 칸이 같은 구조다 — 흐린 이름, 진한 값. 눈이 값만 훑을 수 있다.
+ *
+ * 누르면 상세가 열리는 칸은 열려 있는 동안 배경이 찬다. 한 번 더 누르면
+ * 닫히기 때문에, 지금 무엇이 열려 있는지 보이지 않으면 누르는 쪽이 헷갈린다.
+ */
 function Item({
+  label,
   onClick,
+  active = false,
+  grow = false,
   title,
   children,
 }: {
+  label?: string;
   onClick?: () => void;
+  active?: boolean;
+  /**
+   * 폭이 모자랄 때 먼저 줄어드는 칸.
+   *
+   * 좁은 화면(348px)에서 이 줄에 담기는 내용은 511px 였다. 뉴스 제목 한 칸이
+   * 189px — 절반이 넘는다 — 을 먹어 사고와 진료가 화면 밖으로 밀려 있었다.
+   * 상태 배지 넷은 합쳐도 314px 라 뉴스만 양보하면 모두 들어온다.
+   *
+   * 그래서 상태 배지는 폭을 고정하고(shrink-0) 뉴스만 남는 자리를 쓴다.
+   * 넓은 화면에서는 제목이 그만큼 길게 나오고, 좁은 화면에서는 짧아지되
+   * 아이콘은 남아 눌러서 펼칠 수 있다. 사고·진료가 안 보이는 것보다 낫다.
+   */
+  grow?: boolean;
   title?: string;
   children: React.ReactNode;
 }) {
-  const cls =
-    "flex min-h-[36px] shrink-0 items-center gap-1.5 rounded-[var(--radius)] px-2.5 text-[var(--text-sm)] font-bold transition";
+  const cls = `flex min-h-[36px] items-center gap-1.5 rounded-[var(--radius-full)] px-2.5 text-[var(--text-sm)] transition ${
+    grow ? "min-w-0 flex-1" : "shrink-0"
+  }`;
+  const body = (
+    <>
+      {label && (
+        <span className={active ? "opacity-80" : "text-[var(--text-muted)]"}>{label}</span>
+      )}
+      <span className="flex min-w-0 items-center gap-1.5 font-bold tabular-nums">{children}</span>
+    </>
+  );
   return onClick ? (
-    <button type="button" onClick={onClick} title={title} className={`${cls} hover:bg-[var(--surface-2)]`}>
-      {children}
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-pressed={active}
+      className={`${cls} ${active ? "" : "hover:bg-[var(--surface-2)]"}`}
+      style={active ? { background: "var(--brand)", color: "var(--on-brand)" } : undefined}
+    >
+      {body}
     </button>
   ) : (
     <span title={title} className={cls}>
-      {children}
+      {body}
     </span>
   );
 }
@@ -61,7 +104,7 @@ export default function SummaryStrip({
   traffic,
   medical,
   news,
-  onOpen,
+  openTab,
   onOpenInfo,
 }: {
   weather?: ApiEnvelope<WeatherPayload>;
@@ -69,10 +112,14 @@ export default function SummaryStrip({
   traffic?: ApiEnvelope<TrafficPayload>;
   medical?: ApiEnvelope<MedicalPayload>;
   news?: ApiEnvelope<NewsPayload>;
-  onOpen: (mode: "medical" | "transit" | "life") => void;
   /**
-   * 지도와 무관한 정보는 모드로 넘기지 않고 그 자리에서 펼친다.
-   * 요약줄의 한 줄을 누르면 같은 주제의 상세가 열려야 한다.
+   * 지금 열려 있는 상세. 열린 칸을 채워 보여주기 위해 필요하다 —
+   * 같은 칸을 다시 누르면 닫히는데, 상태가 안 보이면 무엇을 누르는지 모른다.
+   */
+  openTab: InfoTab | null;
+  /**
+   * 요약줄의 한 칸을 누르면 같은 주제의 상세가 그 자리에서 열린다.
+   * 같은 칸을 다시 누르면 닫는 것까지 이 콜백이 맡는다.
    */
   onOpenInfo: (tab: InfoTab) => void;
 }) {
@@ -124,6 +171,7 @@ export default function SummaryStrip({
       {alerts.map((a) => (
         <Item
           key={a.kind}
+          active={openTab === "weather"}
           onClick={() => onOpenInfo("weather")}
           title={`${new Date(a.since).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })} 발효 · 기상청`}
         >
@@ -146,17 +194,28 @@ export default function SummaryStrip({
         목숨이 걸린 특보만 앞세우고 그다음 자리를 준다.
       */}
       {headline && (
-        <Item onClick={() => onOpenInfo("news")} title={headline.title}>
-          <span className="text-[1.05rem]">📰</span>
+        <Item
+          grow
+          active={openTab === "news"}
+          onClick={() => onOpenInfo("news")}
+          title={headline.title}
+        >
+          <span className="shrink-0 text-[1.05rem]">📰</span>
           {/* key 를 바꿔 제목이 갈릴 때마다 살짝 떠오르게 한다 */}
           <span
             key={headline.link}
-            className="fade-up max-w-[110px] truncate font-semibold text-[var(--text-muted)] sm:max-w-[220px]"
+            className={`fade-up min-w-0 flex-1 truncate font-semibold ${
+              openTab === "news" ? "" : "text-[var(--text-muted)]"
+            }`}
           >
             {headline.title}
           </span>
           {top.length > 1 && (
-            <span className="shrink-0 text-[var(--text-2xs)] tabular-nums text-[var(--text-faint)]">
+            <span
+              className={`hidden shrink-0 text-[var(--text-2xs)] tabular-nums sm:inline ${
+                openTab === "news" ? "opacity-70" : "text-[var(--text-faint)]"
+              }`}
+            >
               {(turn % top.length) + 1}/{top.length}
             </span>
           )}
@@ -165,46 +224,64 @@ export default function SummaryStrip({
 
       {/* 값을 못 가져온 항목은 아예 표시하지 않는다 — 빈칸이 기본값처럼 보이면 안 된다 */}
       {now?.temp != null && (
-        <>
-          {headline && <span className="h-4 w-px shrink-0 bg-[var(--border)]" />}
-          <Item onClick={() => onOpenInfo("weather")} title="날씨 상세 보기">
-            <span className="text-[1.05rem]">{icon}</span>
-            <span className="tabular-nums">{now.temp}°</span>
-          </Item>
-        </>
+        <Item
+          label={icon}
+          active={openTab === "weather"}
+          onClick={() => onOpenInfo("weather")}
+          title="날씨 상세 보기"
+        >
+          {now.temp}°
+        </Item>
       )}
 
       {grade && (
-        <>
-          <span className="h-4 w-px shrink-0 bg-[var(--border)]" />
-          <Item onClick={() => onOpenInfo("air")} title="미세먼지 상세 보기">
-            <span className="text-[var(--text-muted)]">미세</span>
-            <span style={{ color: GRADE_COLOR[grade] }}>{grade}</span>
-          </Item>
-        </>
+        <Item
+          label="미세"
+          active={openTab === "air"}
+          onClick={() => onOpenInfo("air")}
+          title="미세먼지 상세 보기"
+        >
+          <span style={openTab === "air" ? undefined : { color: GRADE_COLOR[grade] }}>
+            {grade}
+          </span>
+        </Item>
       )}
 
+      {/*
+        사고와 진료는 예전엔 지도 모드를 바꾸고 시트를 열었다. 같은 줄의
+        날씨·미세먼지는 그 자리에서 펼쳐지는데 이 둘만 화면이 통째로 바뀌어,
+        누르기 전에는 무슨 일이 일어날지 알 수 없었다. 이제 모두 같게 연다.
+      */}
       {traffic?.ok && (
-        <>
-          <span className="h-4 w-px shrink-0 bg-[var(--border)]" />
-          <Item onClick={() => onOpen("transit")} title="교통 상황 보기">
-            {accidents > 0 ? (
-              <span className="text-[var(--danger)]">🚨 사고 {accidents}</span>
-            ) : (
-              <span className="text-[var(--text-muted)]">🚗 사고없음</span>
-            )}
-          </Item>
-        </>
+        <Item
+          label="사고"
+          active={openTab === "traffic"}
+          onClick={() => onOpenInfo("traffic")}
+          title="사고·정체 상세 보기"
+        >
+          {accidents > 0 ? (
+            <span style={openTab === "traffic" ? undefined : { color: "var(--danger)" }}>
+              {accidents}건
+            </span>
+          ) : (
+            <span className={openTab === "traffic" ? undefined : "text-[var(--text-muted)]"}>
+              없음
+            </span>
+          )}
+        </Item>
       )}
 
       {openClinics != null && (
-        <>
-          <span className="h-4 w-px shrink-0 bg-[var(--border)]" />
-          <Item onClick={() => onOpen("medical")} title="진료 중인 곳 보기">
-            <span className="text-[var(--text-muted)]">진료중</span>
-            <span className="text-[var(--brand)] tabular-nums">{openClinics}</span>
-          </Item>
-        </>
+        <Item
+          label="진료중"
+          active={openTab === "medical"}
+          onClick={() => onOpenInfo("medical")}
+          title="진료 중인 곳 보기"
+        >
+          <span style={openTab === "medical" ? undefined : { color: "var(--brand)" }}>
+            {openClinics}
+          </span>
+        </Item>
       )}
     </div>
   );

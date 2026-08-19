@@ -6,7 +6,16 @@ import WeatherPanel from "@/components/panels/WeatherPanel";
 import AirPanel from "@/components/panels/AirPanel";
 import WastePanel from "@/components/panels/WastePanel";
 import PopulationPanel from "@/components/panels/PopulationPanel";
-import type { ApiEnvelope, NewsPayload, WeatherPayload, AirPayload } from "@/lib/types";
+import TrafficPanel from "@/components/panels/TrafficPanel";
+import MedicalPanel from "@/components/panels/MedicalPanel";
+import type {
+  ApiEnvelope,
+  NewsPayload,
+  WeatherPayload,
+  AirPayload,
+  TrafficPayload,
+  MedicalPayload,
+} from "@/lib/types";
 
 /**
  * 상단 요약줄에서 바로 펼치는 생활 정보.
@@ -22,12 +31,21 @@ import type { ApiEnvelope, NewsPayload, WeatherPayload, AirPayload } from "@/lib
  * (장소·정류소·CCTV)만 다룬다. 두 곳에 같은 것을 두면 한쪽은 반드시
  * 묻힌다 — 뉴스가 그랬다.
  */
-export type InfoTab = "news" | "weather" | "air" | "waste" | "population";
+export type InfoTab =
+  | "news"
+  | "weather"
+  | "air"
+  | "traffic"
+  | "medical"
+  | "waste"
+  | "population";
 
 const TABS: { id: InfoTab; label: string }[] = [
   { id: "news", label: "뉴스" },
   { id: "weather", label: "날씨" },
   { id: "air", label: "미세먼지" },
+  { id: "traffic", label: "사고·정체" },
+  { id: "medical", label: "진료" },
   { id: "waste", label: "쓰레기" },
   { id: "population", label: "인구" },
 ];
@@ -38,6 +56,9 @@ export default function InfoOverlay({
   news,
   weather,
   air,
+  traffic,
+  medical,
+  onFocus,
   query,
   onQueryChange,
   activeDong,
@@ -49,6 +70,10 @@ export default function InfoOverlay({
   news: { res?: ApiEnvelope<NewsPayload>; isLoading: boolean };
   weather: { res?: ApiEnvelope<WeatherPayload>; isLoading: boolean };
   air: { res?: ApiEnvelope<AirPayload>; isLoading: boolean };
+  traffic: { res?: ApiEnvelope<TrafficPayload>; isLoading: boolean };
+  medical: { res?: ApiEnvelope<MedicalPayload>; isLoading: boolean };
+  /** 목록에서 한 곳을 고르면 지도를 그리로 옮기고 오버레이는 비켜준다. */
+  onFocus: (lat: number, lng: number, level: number) => void;
   query: string;
   onQueryChange: (q: string) => void;
   activeDong: string | null;
@@ -123,6 +148,20 @@ export default function InfoOverlay({
           )}
           {tab === "weather" && <WeatherPanel res={weather.res} isLoading={weather.isLoading} />}
           {tab === "air" && <AirPanel res={air.res} isLoading={air.isLoading} />}
+          {tab === "traffic" && (
+            <TrafficPanel
+              res={traffic.res}
+              isLoading={traffic.isLoading}
+              onFocus={(lat, lng) => onFocus(lat, lng, 500)}
+            />
+          )}
+          {tab === "medical" && (
+            <MedicalPanel
+              res={medical.res}
+              isLoading={medical.isLoading}
+              onFocus={(lat, lng) => onFocus(lat, lng, 250)}
+            />
+          )}
           {tab === "waste" && <WastePanel />}
           {tab === "population" && (
             <PopulationPanel onSelectDong={onSelectDong} activeDong={activeDong} />

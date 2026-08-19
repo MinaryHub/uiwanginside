@@ -140,6 +140,16 @@ export default function Dashboard({
    * 날씨를 눌렀는데 뉴스가 뜨면 누른 것과 다른 것이 열리는 셈이다.
    */
   const [infoTab, setInfoTab] = useState<InfoTab | null>(null);
+
+  /**
+   * 요약줄의 같은 칸을 다시 누르면 상세를 닫는다.
+   * 연 것과 닫는 것이 같은 자리에 있어야 손이 헤매지 않는다 —
+   * 닫으려고 바깥이나 ✕ 를 찾아 옮겨 다닐 이유가 없다.
+   */
+  const toggleInfo = useCallback(
+    (t: InfoTab) => setInfoTab((cur) => (cur === t ? null : t)),
+    [],
+  );
   /** 검색으로 고른 곳 — 지금 목록에 없어도 지도와 카드에 남는다 */
   const [pinned, setPinned] = useState<Place | null>(null);
   const [copied, setCopied] = useState(false);
@@ -747,11 +757,8 @@ export default function Dashboard({
               traffic={traffic.data}
               medical={medical.data}
               news={news.data}
-              onOpenInfo={setInfoTab}
-              onOpen={(m) => {
-                setMode(m);
-                setSheetOpen(true);
-              }}
+              openTab={infoTab}
+              onOpenInfo={toggleInfo}
             />
           </div>
         </div>
@@ -799,11 +806,8 @@ export default function Dashboard({
             traffic={traffic.data}
             medical={medical.data}
             news={news.data}
-            onOpenInfo={setInfoTab}
-            onOpen={(m) => {
-              setMode(m);
-              setSheetOpen(true);
-            }}
+            openTab={infoTab}
+            onOpenInfo={toggleInfo}
           />
         </div>
       </header>
@@ -1077,6 +1081,14 @@ export default function Dashboard({
           news={{ res: news.data, isLoading: news.isLoading }}
           weather={{ res: weather.data, isLoading: weather.isLoading }}
           air={{ res: air.data, isLoading: air.isLoading }}
+          traffic={{ res: traffic.data, isLoading: traffic.isLoading }}
+          medical={{ res: medical.data, isLoading: medical.isLoading }}
+          /* 목록에서 한 곳을 고르면 지도를 옮기고 오버레이는 비켜준다 —
+             가리고 있으면 옮겨간 자리를 볼 수 없다 */
+          onFocus={(lat, lng, level) => {
+            focus(lat, lng, level);
+            setInfoTab(null);
+          }}
           query={newsQuery}
           onQueryChange={setNewsQuery}
           activeDong={activeDong}
