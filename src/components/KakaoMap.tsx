@@ -183,29 +183,46 @@ function meEl() {
   return el;
 }
 
-/** 운행 중인 버스 — 움직이는 대상이라 다른 마커와 확실히 구분되게 진하게 */
-function busEl(routeName: string, b: BusPositionsPayload["positions"][number]) {
-  // 혼잡할수록 붉게. 색만으로 판단하지 않도록 라벨도 함께 붙인다.
+/**
+ * 운행 중인 버스.
+ *
+ * 예전에는 노선번호에 정류소 이름·혼잡도·저상 여부까지 한 줄에 담았다.
+ * 노선 하나를 좇을 때는 괜찮았지만, 근처 여섯 노선 스무 대를 함께
+ * 띄우기 시작하니 알약이 지도를 덮었다. 장소 핀보다 두 배 넓었다.
+ *
+ * 기본은 노선번호만. 무엇이 어디 있는지는 그것으로 충분하다.
+ * 가까이 봤을 때(또는 한 노선을 좇을 때)만 정류소와 혼잡도를 붙인다 —
+ * 그때는 마커 수가 적어 자리가 있고, 알고 싶은 것도 더 자세하다.
+ */
+function busEl(
+  routeName: string,
+  b: BusPositionsPayload["positions"][number],
+  detailed: boolean,
+) {
+  // 혼잡할수록 붉게. 색만으로 판단하지 않도록 자세히 볼 때는 라벨도 붙인다.
   const CROWD = ["", "여유", "보통", "혼잡", "매우혼잡"];
   const bg =
     b.crowded === 4 || b.crowded === 3 ? "#c62828" : b.crowded === 2 ? "#a55a00" : "#1a5fb4";
   const el = document.createElement("div");
+  el.title = [routeName, b.nodeName, b.crowded ? CROWD[b.crowded] : "", b.lowPlate ? "저상" : ""]
+    .filter(Boolean)
+    .join(" · ");
   el.style.cssText = `
-    display:flex;align-items:center;gap:5px;
-    padding:4px 10px 4px 7px;border-radius:999px;
-    background:${bg};color:#fff;border:2px solid #fff;
-    box-shadow:0 2px 10px rgba(16,32,43,.38);
-    font-size:12px;font-weight:800;white-space:nowrap;letter-spacing:-.02em;
+    display:flex;align-items:center;gap:${detailed ? 5 : 3}px;
+    padding:${detailed ? "3px 8px 3px 6px" : "1px 6px 1px 4px"};border-radius:999px;
+    background:${bg};color:#fff;border:${detailed ? 2 : 1.5}px solid #fff;
+    box-shadow:0 1px ${detailed ? 8 : 4}px rgba(16,32,43,.32);
+    font-size:${detailed ? 12 : 10}px;font-weight:800;white-space:nowrap;letter-spacing:-.02em;
     font-family:Pretendard,-apple-system,"Apple SD Gothic Neo",sans-serif;`;
   el.innerHTML =
-    `<span style="font-size:12px">🚍</span><span>${routeName}</span>` +
-    (b.nodeName
+    `<span style="font-size:${detailed ? 12 : 9}px">🚍</span><span>${routeName}</span>` +
+    (detailed && b.nodeName
       ? `<span style="font-weight:600;opacity:.88">${b.nodeName.slice(0, 10)}</span>`
       : "") +
-    (b.crowded
+    (detailed && b.crowded
       ? `<span style="font-weight:700;opacity:.95">${CROWD[b.crowded] ?? ""}</span>`
       : "") +
-    (b.lowPlate ? `<span title="저상버스" style="opacity:.9">♿</span>` : "");
+    (detailed && b.lowPlate ? `<span title="저상버스" style="opacity:.9">♿</span>` : "");
   return el;
 }
 
@@ -815,12 +832,19 @@ export default function KakaoMap({
   useEffect(() => {
     if (!ready || !mapRef.current) return;
     const add = makeAdder(busOv);
+    /*
+     * 자세히 보여줄 때를 정한다.
+     * 확대해서 보고 있거나(level<=3), 노선 하나만 떠 있을 때다.
+     * 노선이 여럿이면 대수가 많아 알약이 서로 포개진다.
+     */
+    const detailed = level <= 3 || busPositions.length <= 1;
     for (const r of busPositions) {
       for (const b of r.positions) {
-        add(b.lat, b.lng, busEl(r.routeName || "버스", b), 95);
+        add(b.lat, b.lng, busEl(r.routeName || "버스", b, detailed), 95);
       }
     }
-  }, [ready, busPositions]);
+    // level 이 빠지면 확대해도 자세히 바뀌지 않는다
+  }, [ready, busPositions, level]);
 
   return (
     <div className="relative h-full w-full">
