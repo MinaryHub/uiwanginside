@@ -220,7 +220,11 @@ export interface KakaoMapProps {
   /** 진료중인 병원·약국 (의료 모드) */
   medicalOpen: { id: string; name: string; kind: string; lat: number | null; lng: number | null }[];
   /** 추적 중인 노선의 실시간 버스 위치 */
-  busPositions: BusPositionsPayload | null;
+  /**
+   * 실시간 버스. 노선 하나를 좇을 때는 한 개, 근처 노선을 함께 볼 때는
+   * 여럿이 들어온다. 여럿을 다루는 쪽으로 통일했다.
+   */
+  busPositions: BusPositionsPayload[];
   /** 로그인한 사용자가 등록한 사진 */
   photos: Photo[];
   onSelectPhoto: (p: Photo) => void;
@@ -811,8 +815,10 @@ export default function KakaoMap({
   useEffect(() => {
     if (!ready || !mapRef.current) return;
     const add = makeAdder(busOv);
-    for (const b of busPositions?.positions ?? []) {
-      add(b.lat, b.lng, busEl(busPositions?.routeName || "버스", b), 95);
+    for (const r of busPositions) {
+      for (const b of r.positions) {
+        add(b.lat, b.lng, busEl(r.routeName || "버스", b), 95);
+      }
     }
   }, [ready, busPositions]);
 

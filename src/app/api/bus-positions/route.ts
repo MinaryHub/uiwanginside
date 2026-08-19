@@ -1,6 +1,7 @@
 import { ok, fail, nowISO } from "@/lib/fetcher";
 import { fetchGbisPositions } from "@/lib/gbisLocation";
 import { fetchBusPositions } from "@/lib/tago";
+import { isInsideUiwang } from "@/lib/geo";
 import type { BusPositionsPayload } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -18,8 +19,22 @@ const EMPTY: BusPositionsPayload = {
   updatedAt: "",
 };
 
+/**
+ * 여러 노선을 한 번에.
+ *
+ * 노선 하나를 골라야만 버스가 보이던 것을, 근처에 곧 오는 노선들을
+ * 함께 띄우기 위해 열었다. 요청마다 노선 수만큼 상류를 두드리므로
+ * 위에서 개수를 제한해 보낸다.
+ *
+ * routes=아이디:이름,아이디:이름 …
+ */
+const MAX_ROUTES = 8;
+
 export async function GET(req: Request) {
   const sp = new URL(req.url).searchParams;
+  const many = sp.get("routes");
+  if (many) return manyRoutes(many);
+
   const routeId = (sp.get("routeId") ?? "").replace(/[^0-9]/g, "").slice(0, 20);
   const routeName = (sp.get("routeName") ?? "").slice(0, 40);
 
@@ -83,4 +98,87 @@ export async function GET(req: Request) {
     console.error("[bus-positions:tago]", e);
     return fail(base, `버스 위치 조회 실패: ${e instanceof Error ? e.message : e}`);
   }
+}
+
+async function manyRoutes(raw: string) {
+  const wanted = raw
+    .split(",")
+    .map((pair) => {
+      const [id, name] = pair.split(":");
+      return {
+        id: (id ?? "").replace(/[^0-9]/g, "").slice(0, 20),
+        name: decodeURIComponent(name ?? "").slice(0, 40),
+      };
+    })
+    .filter((r) => r.id)
+    .slice(0, MAX_ROUTES);
+
+  if (wanted.length === 0) {
+    return ok({ routes: [] as BusPositionsPayload[], updatedAt: nowISO() }, undefined, CACHE_SEC);
+  }
+
+  const dataKey = process.env.GBIS_SERVICE_KEY;
+  const ggKey = process.env.GG_DATA_KEY;
+  if (!dataKey) {
+    return fail(
+      { routes: [] as BusPositionsPayload[], updatedAt: "" },
+      "버스 인증키가 설정되지 않았습니다.",
+    );
+  }
+
+  /*
+   * 한 노선이 실패해도 나머지는 보여준다. 여덟 대를 한 번에 그리는
+   * 화면에서 하나 때문에 전부 사라지면 안 된다.
+   */
+  const settled = await Promise.allSettled(
+    wanted.map(async (r) => {
+      if (ggKey) {
+        try {
+          const g = await fetchGbisPositions(dataKey, ggKey, r.id);
+          if (g.positions.length > 0) {
+            return {
+              routeId: r.id,
+              routeName: r.name,
+              positions: g.positions,
+              cityName: "",
+              source: "gbis" as const,
+              unresolved: g.unresolved,
+              updatedAt: nowISO(),
+            } satisfies BusPositionsPayload;
+          }
+        } catch {
+          /* TAGO 로 넘어간다 */
+        }
+      }
+      const t = await fetchBusPositions(dataKey, r.id);
+      if (!t) return null;
+      return {
+        routeId: r.id,
+        routeName: r.name,
+        positions: t.positions,
+        cityName: t.cityName,
+        source: "tago" as const,
+        unresolved: 0,
+        updatedAt: nowISO(),
+      } satisfies BusPositionsPayload;
+    }),
+  );
+
+  /*
+   * 의왕 안을 달리는 버스만 남긴다.
+   *
+   * 노선은 의왕을 지나지만 대부분의 차량은 안양·광명·수원 구간에 있다.
+   * 실측하면 여섯 노선 55대 중 의왕 안은 일부뿐이다. 전부 찍으면
+   * 의왕 지도가 이웃 도시 버스로 뒤덮인다.
+   */
+  const routes = settled
+    .map((s) => (s.status === "fulfilled" ? s.value : null))
+    .filter((v): v is BusPositionsPayload => !!v)
+    .map((r) => ({
+      ...r,
+      positions: r.positions.filter((p) => isInsideUiwang(p.lat, p.lng)),
+    }))
+    .filter((r) => r.positions.length > 0);
+
+  return ok({ routes, updatedAt: nowISO() }, undefined, CACHE_SEC);
 }

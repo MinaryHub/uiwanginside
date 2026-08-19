@@ -193,6 +193,12 @@ export interface BusPositionsPayload {
   updatedAt: string;
 }
 
+/** 여러 노선의 실시간 위치를 한 번에 */
+export interface BusFleetPayload {
+  routes: BusPositionsPayload[];
+  updatedAt: string;
+}
+
 export type AirGrade = "좋음" | "보통" | "나쁨" | "매우나쁨";
 
 export interface AirStation {

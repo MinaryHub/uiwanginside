@@ -37,6 +37,7 @@ import type {
   TransitPayload,
   RatingsPayload,
   BusPositionsPayload,
+  BusFleetPayload,
   RoadsPayload,
 } from "@/lib/types";
 import Link from "next/link";
@@ -77,6 +78,7 @@ const NO_LANDMARKS: typeof LANDMARKS = [];
 const NO_PHOTOS: Photo[] = [];
 const NO_SEGMENTS: TrafficSegment[] = [];
 const NO_CCTVS: Cctv[] = [];
+const NO_BUSES: BusPositionsPayload[] = [];
 
 const POLL = {
   weather: 10 * 60_000,
@@ -270,6 +272,41 @@ export default function Dashboard({
       : null,
     swrFetcher,
     { keepPreviousData: true, revalidateOnFocus: false },
+  );
+
+  /**
+   * 근처에 곧 오는 노선들.
+   *
+   * 예전에는 노선 하나를 골라야만 버스가 보였다. 정류소를 눌러 노선을
+   * 좇기 전에는 지도에 버스가 한 대도 없었다. 근처 정류소의 도착 예정에서
+   * 가장 이른 노선들을 골라 함께 띄운다.
+   *
+   * 노선 수만큼 상류를 두드리므로 여섯 개로 묶는다. 근처 정류소에 도착
+   * 예정인 노선이 열다섯 개였는데, 전부 부르면 15초마다 열다섯 번이다.
+   */
+  const nearbyRoutes = useMemo(() => {
+    if (!def?.layers.bus || tracked) return "";
+    const seen = new Map<string, { name: string; sec: number }>();
+    for (const s of transit.data?.data.stops ?? []) {
+      for (const a of s.arrivals ?? []) {
+        if (a.predictSec == null) continue;
+        const cur = seen.get(a.routeId);
+        if (!cur || a.predictSec < cur.sec) {
+          seen.set(a.routeId, { name: a.routeName, sec: a.predictSec });
+        }
+      }
+    }
+    return [...seen.entries()]
+      .sort((a, b) => a[1].sec - b[1].sec)
+      .slice(0, 6)
+      .map(([id, v]) => `${id}:${encodeURIComponent(v.name)}`)
+      .join(",");
+  }, [def?.layers.bus, tracked, transit.data]);
+
+  const busFleet = useSWR<ApiEnvelope<BusFleetPayload>>(
+    nearbyRoutes ? `/api/bus-positions?routes=${nearbyRoutes}` : null,
+    swrFetcher,
+    { refreshInterval: POLL.busPositions, keepPreviousData: true },
   );
 
   const busPositions = useSWR<ApiEnvelope<BusPositionsPayload>>(
@@ -521,7 +558,17 @@ export default function Dashboard({
     return buildSegments(ways, speeds);
   }, [def?.layers.traffic, roads.data, traffic.data]);
   const mapLandmarks = mode === null ? LANDMARKS : NO_LANDMARKS;
-  const mapBusPositions = busPositions.data?.ok ? busPositions.data.data : null;
+  /*
+   * 노선을 좇는 중이면 그 노선만, 아니면 근처 노선들을 보여준다.
+   * 좇는 노선을 고른 사람은 그 버스를 보려는 것이지 스무 대를 보려는
+   * 것이 아니다.
+   */
+  const mapBusPositions = useMemo(() => {
+    if (tracked) {
+      return busPositions.data?.ok ? [busPositions.data.data] : NO_BUSES;
+    }
+    return busFleet.data?.ok ? busFleet.data.data.routes : NO_BUSES;
+  }, [tracked, busPositions.data, busFleet.data]);
 
   const medicalMarkers = useMemo(
     () =>
