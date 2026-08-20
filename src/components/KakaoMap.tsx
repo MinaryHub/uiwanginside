@@ -5,6 +5,7 @@ import { CATEGORY_MAP } from "@/lib/uiwang";
 import { UIWANG_BOUNDARY } from "@/lib/uiwang-boundary";
 import { DONG_BOUNDARIES } from "@/lib/dong-boundaries";
 import { LEVEL_COLOR, type TrafficLevel, type TrafficSegment } from "@/lib/traffic";
+import { planRun, walk, type LatLng, type PathRun } from "@/lib/busPath";
 import type { Photo } from "@/lib/photoTypes";
 import type { Cctv } from "@/lib/cctvTypes";
 import type {
@@ -249,6 +250,8 @@ export interface KakaoMapProps {
    * 여럿이 들어온다. 여럿을 다루는 쪽으로 통일했다.
    */
   busPositions: BusPositionsPayload[];
+  /** 노선별 실제 주행 경로 — 버스를 그 위로 움직인다 */
+  busPaths: Record<string, LatLng[]>;
   /** 로그인한 사용자가 등록한 사진 */
   photos: Photo[];
   onSelectPhoto: (p: Photo) => void;
@@ -298,6 +301,7 @@ export default function KakaoMap({
   photos,
   onSelectPhoto,
   busPositions,
+  busPaths,
   landmarks,
   trafficSegments,
   me,
@@ -350,6 +354,11 @@ export default function KakaoMap({
         to: { lat: number; lng: number };
         /** to 를 받은 시각 */
         at: number;
+        /**
+         * 노선 경로를 따라 걷는 구간. 경로가 없거나 붙이기가 어긋나면
+         * null 이고, 그때는 두 점을 직선으로 잇는다.
+         */
+        run: PathRun | null;
         sig: string;
       }
     >(),
@@ -953,6 +962,7 @@ export default function KakaoMap({
             from: { lat: b.lat, lng: b.lng },
             to: { lat: b.lat, lng: b.lng },
             at: now,
+            run: null,
             sig,
           });
           continue;
@@ -965,6 +975,13 @@ export default function KakaoMap({
           cur.from = jump > 2000 ? { lat: b.lat, lng: b.lng } : cur.to;
           cur.to = { lat: b.lat, lng: b.lng };
           cur.at = now;
+          // 노선 경로가 있으면 그 위를 걷는다. 붙이기가 어긋나면 null 이고
+          // 그때는 아래 애니메이션이 직선으로 잇는다.
+          const line = busPaths[r.routeId];
+          cur.run =
+            line && line.length > 1
+              ? planRun(line, [cur.from.lat, cur.from.lng], [cur.to.lat, cur.to.lng])
+              : null;
         }
         if (cur.sig !== sig) {
           cur.ov.setContent(busEl(r.routeName || "버스", b, detailed));
@@ -980,7 +997,7 @@ export default function KakaoMap({
       }
     }
     // level 이 빠지면 확대해도 자세히 바뀌지 않는다
-  }, [ready, busPositions, level]);
+  }, [ready, busPositions, level, busPaths]);
 
   /**
    * 버스를 사이 위치로 옮긴다.
@@ -995,12 +1012,14 @@ export default function KakaoMap({
       for (const m of busMarks.current.values()) {
         const t = Math.min(1, (now - m.at) / BUS_TWEEN_MS);
         if (m.from.lat === m.to.lat && m.from.lng === m.to.lng) continue;
-        m.ov.setPosition(
-          new window.kakao.maps.LatLng(
-            m.from.lat + (m.to.lat - m.from.lat) * t,
-            m.from.lng + (m.to.lng - m.from.lng) * t,
-          ),
-        );
+        // 경로를 따라 걷는다. 붙이지 못한 구간만 직선으로 잇는다.
+        const [lat, lng] = m.run
+          ? walk(m.run, t)
+          : [
+              m.from.lat + (m.to.lat - m.from.lat) * t,
+              m.from.lng + (m.to.lng - m.from.lng) * t,
+            ];
+        m.ov.setPosition(new window.kakao.maps.LatLng(lat, lng));
       }
       busRaf.current = requestAnimationFrame(step);
     };

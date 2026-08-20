@@ -13,6 +13,7 @@ import { DONG_BBOX, type LatLngBox } from "@/lib/dong-boundaries";
 import { MODES, MODE_MAP, type ModeId, type CardId } from "@/lib/modes";
 import type { CategoryKey } from "@/lib/uiwang";
 import { getDeviceId } from "@/lib/deviceId";
+import type { LatLng } from "@/lib/busPath";
 import { useMyLocation } from "@/lib/useMyLocation";
 import {
   buildSegments,
@@ -80,6 +81,7 @@ const NO_PHOTOS: Photo[] = [];
 const NO_SEGMENTS: TrafficSegment[] = [];
 const NO_CCTVS: Cctv[] = [];
 const NO_BUSES: BusPositionsPayload[] = [];
+const NO_PATHS: Record<string, LatLng[]> = {};
 
 const POLL = {
   weather: 10 * 60_000,
@@ -592,6 +594,26 @@ export default function Dashboard({
    * 좇는 노선을 고른 사람은 그 버스를 보려는 것이지 스무 대를 보려는
    * 것이 아니다.
    */
+  /**
+   * 지금 지도에 뜬 노선들의 주행 경로.
+   *
+   * 버스를 그 위로 움직여 코너에서 도로를 가로지르지 않게 한다.
+   * 경로는 바뀌지 않으므로 한 번 받아 오래 들고 있는다 — 노선 셋에
+   * 33KB 이고 하루를 캐시한다.
+   */
+  const shownRouteIds = useMemo(() => {
+    const ids = tracked
+      ? [tracked.id]
+      : (busFleet.data?.ok ? busFleet.data.data.routes : []).map((r) => r.routeId);
+    return ids.filter(Boolean).sort().join(",");
+  }, [tracked, busFleet.data]);
+
+  const busRoutePaths = useSWR<ApiEnvelope<{ paths: Record<string, LatLng[]> }>>(
+    shownRouteIds ? `/api/bus-route?routeIds=${shownRouteIds}` : null,
+    swrFetcher,
+    { revalidateOnFocus: false, revalidateIfStale: false, dedupingInterval: 12 * 60 * 60_000 },
+  );
+
   const mapBusPositions = useMemo(() => {
     if (tracked) {
       return busPositions.data?.ok ? [busPositions.data.data] : NO_BUSES;
@@ -709,6 +731,7 @@ export default function Dashboard({
           photos={mapPhotos}
           onSelectPhoto={setPhoto}
           busPositions={mapBusPositions}
+          busPaths={busRoutePaths.data?.data.paths ?? NO_PATHS}
           landmarks={mapLandmarks}
           showBoundary
           activeDong={activeDong}
