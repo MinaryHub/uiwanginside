@@ -58,6 +58,7 @@ export type CategoryKey =
   | "PARK"
   | "PKG"
   | "WC"
+  | "SEC"
   /** 분류가 없는 곳 — 호수·공원처럼 카카오 카테고리에 안 잡히는 것들 */
   | "ETC";
 
@@ -86,6 +87,7 @@ export const CATEGORIES: CategoryDef[] = [
   { code: "PARK", label: "공원", emoji: "🌳", color: "#15803d" },
   { code: "PKG", label: "주차장", emoji: "🅿️", color: "#334155" },
   { code: "WC", label: "화장실", emoji: "🚻", color: "#0369a1" },
+  { code: "SEC", label: "방범CCTV", emoji: "🎥", color: "#7c3aed" },
   { code: "ETC", label: "장소", emoji: "📍", color: "#475569" },
 ];
 

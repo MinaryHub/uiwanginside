@@ -135,6 +135,49 @@ function readableHours(kind, detail) {
   return d || "";
 }
 
+/**
+ * 방범·단속 CCTV — 행정안전부_CCTV정보 (오프라인 CSV).
+ *
+ * 이 자료에는 좌표가 들어 있어 변환이 필요 없다 (화장실은 없었다).
+ * 787곳에 카메라 2,634대다. 영상은 없고 어디에 무엇을 위해 설치돼
+ * 있는지만 공개된다 — "이 길에 CCTV 가 있나" 에 답하는 용도다.
+ */
+async function securityCams() {
+  const candidates = [
+    join(root, "data/전국CCTV정보_경기의왕시.csv"),
+    "/Users/smic/Downloads/전국CCTV정보_경기의왕시.csv",
+  ];
+  const file = candidates.find((f) => existsSync(f));
+  if (!file) {
+    console.log("  CCTV CSV 를 찾지 못했습니다 — 건너뜁니다");
+    return [];
+  }
+  const text = new TextDecoder("euc-kr").decode(readFileSync(file));
+  const lines = text.split(/\r?\n/).filter((l) => l.trim());
+  const head = splitCsv(lines[0]);
+  const col = (n) => head.indexOf(n);
+
+  const out = [];
+  for (const line of lines.slice(1)) {
+    const c = splitCsv(line);
+    const lat = Number(c[col("WGS84위도")]);
+    const lng = Number(c[col("WGS84경도")]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+    if (!inside(lat, lng)) continue;
+    // 도로명주소는 대부분 "경기도 의왕시" 까지만 채워져 있어 지번을 쓴다
+    const road = (c[col("소재지도로명주소")] ?? "").trim();
+    const jibun = (c[col("소재지지번주소")] ?? "").trim();
+    out.push({
+      purpose: (c[col("설치목적구분")] ?? "").trim() || "CCTV",
+      addr: road.length > "경기도 의왕시".length ? road : jibun,
+      cams: Number(c[col("카메라대수")]) || 1,
+      lat: Number(lat.toFixed(6)),
+      lng: Number(lng.toFixed(6)),
+    });
+  }
+  return out;
+}
+
 /** 쉼표가 든 값이 있어 따옴표를 지켜 잘라야 한다 */
 function splitCsv(line) {
   const out = [];
@@ -152,6 +195,7 @@ function splitCsv(line) {
 const parks = await collect("tn_pubr_public_cty_park_info_api", "도시공원");
 const lots = await collect("tn_pubr_prkplce_info_api", "주차장");
 const wcs = await toilets();
+const cams = await securityCams();
 
 const j = (v) => JSON.stringify(v ?? "");
 const num = (v) => Number(Number(v).toFixed(6));
@@ -165,6 +209,7 @@ writeFileSync(
  * 전국 데이터라 요청마다 부르면 2만 건을 훑어야 해서 굳혀 둔다.
  *
  * 공원 ${parks.length}곳 · 주차장 ${lots.length}곳 · 공중화장실 ${wcs.length}곳
+ * 방범·단속 CCTV ${cams.length}곳 (카메라 ${cams.reduce((s, c) => s + c.cams, 0)}대)
  */
 
 export interface Park {
@@ -188,6 +233,16 @@ export interface ParkingLot {
   /** 평일 운영시간 "09:00~18:00" — 비어 있으면 정보 없음 */
   weekday: string;
   charge: string;
+  lat: number;
+  lng: number;
+}
+
+export interface SecurityCam {
+  /** 생활방범 · 교통단속 · 쓰레기단속 … */
+  purpose: string;
+  addr: string;
+  /** 이 지점의 카메라 대수 */
+  cams: number;
   lat: number;
   lng: number;
 }
@@ -231,6 +286,16 @@ ${lots
   .join("\n")}
 ];
 
+export const UIWANG_SECURITY_CAMS: SecurityCam[] = [
+${cams
+  .map(
+    (c) =>
+      `  { purpose: ${j(c.purpose)}, addr: ${j(c.addr)}, cams: ${c.cams}, ` +
+      `lat: ${c.lat}, lng: ${c.lng} },`,
+  )
+  .join("\n")}
+];
+
 export const UIWANG_TOILETS: PublicToilet[] = [
 ${wcs
   .map(
@@ -243,4 +308,4 @@ ${wcs
 ];
 `,
 );
-console.log(`\nsrc/lib/uiwang-facilities.ts — 공원 ${parks.length} · 주차장 ${lots.length} · 화장실 ${wcs.length}`);
+console.log(`\nsrc/lib/uiwang-facilities.ts — 공원 ${parks.length} · 주차장 ${lots.length} · 화장실 ${wcs.length} · CCTV ${cams.length}`);

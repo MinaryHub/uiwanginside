@@ -66,8 +66,8 @@ export const MODES: ModeDef[] = [
   {
     id: "life",
     label: "생활",
-    hint: "마트·편의점·은행·학교·공원·화장실",
-    categories: ["MT1", "CS2", "BK9", "OL7", "SC4", "PO3", "CT1", "PARK", "WC"],
+    hint: "마트·편의점·은행·학교·공원·화장실·방범CCTV",
+    categories: ["MT1", "CS2", "BK9", "OL7", "SC4", "PO3", "CT1", "PARK", "WC", "SEC"],
     layers: { ...NO_LAYERS, places: true },
     /*
      * 지도와 무관한 정보(뉴스·날씨·미세먼지·쓰레기·인구)는 모두 상단

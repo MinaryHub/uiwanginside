@@ -26,6 +26,7 @@ const OSM_FILTERS: Record<CategoryKey, string[]> = {
   PARK: [],
   PKG: [],
   WC: [],
+  SEC: [],
   FD6: ['["amenity"~"^(restaurant|fast_food)$"]'],
   CE7: ['["amenity"~"^(cafe|dessert)$"]'],
   SC4: ['["amenity"~"^(school|college|university|kindergarten)$"]'],

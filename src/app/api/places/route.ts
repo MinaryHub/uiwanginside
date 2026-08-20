@@ -217,7 +217,7 @@ export async function GET(req: Request) {
    * category_group_code=PARK 같은 요청이 되어 조회 전체가 깨진다.
    * 갈라서 카카오에는 카카오 코드만 보내고, 나머지는 굳혀둔 자료로 채운다.
    */
-  const FACILITY: readonly string[] = ["PARK", "PKG", "WC"];
+  const FACILITY: readonly string[] = ["PARK", "PKG", "WC", "SEC"];
   const facilityKinds = wanted.filter((c): c is FacilityKind => FACILITY.includes(c));
   const codes = wanted.filter((c) => !FACILITY.includes(c));
   const lat = Number(sp.get("lat") ?? UIWANG.center.lat);
@@ -246,7 +246,7 @@ export async function GET(req: Request) {
    * 때마다 화장실이 나타났다 사라진다.
    */
   const facilities = facilityKinds.length
-    ? facilityPlaces(facilityKinds, { lat, lng })
+    ? facilityPlaces(facilityKinds, { lat, lng }, rect)
     : [];
 
   if (codes.length === 0 || !rect) {
