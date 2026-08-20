@@ -1,0 +1,54 @@
+# 파이에서 실행하는 구성. 이 파일과 Caddyfile, .env 를 파이의 같은 폴더에 둔다.
+#
+#   ~/uiwanginside/
+#     compose.yaml
+#     Caddyfile
+#     .env          ← 비밀값. 600 권한으로 두고 저장소에 넣지 않는다
+#
+# 이미지는 맥에서 빌드해 보내므로(scripts/deploy-pi.sh) 여기서는 build 하지 않는다.
+# 파이에서 빌드하면 Next 빌드만 수십 분이 걸린다.
+
+services:
+  app:
+    image: uiwanginside:latest
+    container_name: uiwanginside
+    restart: unless-stopped
+    env_file: .env
+    # 호스트에 포트를 열지 않는다 — 바깥에서 들어오는 길은 caddy 하나로 좁힌다.
+    expose:
+      - "3000"
+    networks: [web]
+    # 파이의 메모리를 앱이 다 먹고 시스템이 굶는 일을 막는다
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # 발급받은 인증서를 남긴다 — 없으면 재시작마다 재발급을 시도해
+      # Let's Encrypt 발급 한도에 걸린다
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [web]
+    depends_on: [app]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+networks:
+  web:
+
+volumes:
+  caddy_data:
+  caddy_config:

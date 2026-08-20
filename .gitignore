@@ -43,3 +43,6 @@ next-env.d.ts
 
 # 원본 공공데이터 파일 — 생성물(src/lib/uiwang-*.ts)만 커밋한다
 data/
+
+# 파이 배포용 환경변수 — 비밀값
+deploy/.env.pi

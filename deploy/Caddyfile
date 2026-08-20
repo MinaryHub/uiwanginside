@@ -1,0 +1,22 @@
+# 도메인만 바꿔 쓰면 된다. Caddy 가 Let's Encrypt 인증서를 자동으로 발급·갱신하고
+# HTTP 는 HTTPS 로 넘긴다 — 따로 설정할 것이 없다.
+#
+# 전제: 80·443 이 파이로 포워딩되어 있고, 도메인의 A 레코드가 공인 IP 를 가리킨다.
+# 발급 확인이 80 포트로 오므로, 포워딩 전에 올리면 인증서를 받지 못한다.
+#
+# X-Forwarded-Proto / -Host / -For 는 Caddy 의 reverse_proxy 가 기본으로 넣어 준다.
+# NextAuth 가 리다이렉트 주소를 만들 때 이 값을 쓰므로 따로 적을 필요가 없다.
+
+uiwang.example.com {
+	# 컨테이너 이름으로 찾는다 — compose 네트워크 안에서 DNS 가 된다
+	reverse_proxy app:3000
+
+	encode zstd gzip
+
+	log {
+		output file /data/access.log {
+			roll_size 10MiB
+			roll_keep 3
+		}
+	}
+}
