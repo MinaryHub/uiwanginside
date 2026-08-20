@@ -331,7 +331,10 @@ export default function KakaoMap({
   const placeMarks = useRef(
     new Map<string, { ov: kakao.maps.CustomOverlay; sig: string; place?: Place }>(),
   );
-  const transitOv = useRef<kakao.maps.CustomOverlay[]>([]);
+  /** 정류소·사고·CCTV — 장소와 같이 키로 들고 있어야 확대할 때 깜빡이지 않는다 */
+  const transitMarks = useRef(
+    new Map<string, { ov: kakao.maps.CustomOverlay; sig: string; hit?: () => void }>(),
+  );
 /**
  * 버스는 차량번호로 들고 있는다. 갱신마다 지웠다 만들면 방금 지나간
  * 위치를 이어 붙일 수 없고, 마커가 깜빡인다.
@@ -778,57 +781,109 @@ export default function KakaoMap({
     meRef.current = ov;
   }, [ready, me]);
 
-  /** 정류소·사고·구간속도 — 갱신 주기가 장소와 달라 따로 그린다 */
+  /**
+   * 정류소·사고·CCTV.
+   *
+   * 장소 마커와 같은 방식으로 키를 두고 달라진 것만 손댄다. 전에는
+   * 확대·축소할 때마다 통째로 지웠다 다시 만들었다 — deps 에 level 이
+   * 있으니 손가락을 벌릴 때마다 정류소와 CCTV 가 한 번씩 사라졌다
+   * 나타났다.
+   *
+   * 확대 수준이 바뀌면 겉모습(점 ↔ 이름표)만 갈아 끼운다. 위치는
+   * 그대로이므로 오버레이를 다시 만들 이유가 없다.
+   */
   useEffect(() => {
     if (!ready || !mapRef.current) return;
-    const add = makeAdder(transitOv);
+    const map = mapRef.current;
     const labelled = level <= 2;
+    const live = transitMarks.current;
+
+    type Want = { lat: number; lng: number; sig: string; z: number; el: () => HTMLElement; hit?: () => void };
+    const want = new Map<string, Want>();
 
     for (const st of busStops.slice(0, 12)) {
       const next = st.arrivals?.[0]?.predictSec;
       const label =
         next != null ? `${st.name} · ${Math.max(1, Math.round(next / 60))}분` : st.name;
       const on = selectedMarkerId === `stop:${st.stationId}`;
-      add(
-        st.lat,
-        st.lng,
-        on || labelled
-          ? pinEl("🚌", "#1a5fb4", label, { active: on })
-          : dotEl("#1a5fb4", "🚌"),
-        on ? 92 : 20,
-        () => onSelectStop(st),
-      );
+      want.set(`stop:${st.stationId}`, {
+        lat: st.lat,
+        lng: st.lng,
+        // 도착 분이 바뀌면 이름표도 바뀌어야 하므로 라벨을 서명에 넣는다
+        sig: `${on || labelled ? "pin" : "dot"}|${on}|${label}`,
+        z: on ? 92 : 20,
+        el: () =>
+          on || labelled
+            ? pinEl("🚌", "#1a5fb4", label, { active: on })
+            : dotEl("#1a5fb4", "🚌"),
+        hit: () => onSelectStop(st),
+      });
     }
 
     // 사고는 건수가 적고 가장 중요하므로 항상 이름표 + 강조
     for (const inc of incidents) {
       if (inc.lat == null || inc.lng == null) continue;
       const st = INCIDENT_STYLE[inc.kind];
-      add(
-        inc.lat,
-        inc.lng,
-        pinEl(st.emoji, st.color, inc.type, {
-          pulse: inc.kind === "accident",
-          active: selectedMarkerId === `incident:${inc.id}`,
-        }),
-        80,
-        () => onSelectIncident(inc),
-      );
+      const on = selectedMarkerId === `incident:${inc.id}`;
+      want.set(`incident:${inc.id}`, {
+        lat: inc.lat,
+        lng: inc.lng,
+        sig: `inc|${on}|${inc.type}`,
+        z: 80,
+        el: () => pinEl(st.emoji, st.color, inc.type, { pulse: inc.kind === "accident", active: on }),
+        hit: () => onSelectIncident(inc),
+      });
     }
 
     // CCTV 는 열다섯 대뿐이고 모두 고속도로 위라 겹치지 않는다.
-    // 이름표를 늘 붙여도 화면이 붐비지 않는다.
     for (const c of cctvs) {
       const on = selectedMarkerId === `cctv:${c.id}`;
-      add(
-        c.lat,
-        c.lng,
-        on || labelled
-          ? pinEl("📹", "#5b21b6", c.name, { active: on })
-          : dotEl("#5b21b6", "📹"),
-        on ? 92 : 30,
-        () => onSelectCctv(c),
-      );
+      want.set(`cctv:${c.id}`, {
+        lat: c.lat,
+        lng: c.lng,
+        sig: `${on || labelled ? "pin" : "dot"}|${on}`,
+        z: on ? 92 : 30,
+        el: () =>
+          on || labelled
+            ? pinEl("📹", "#5b21b6", c.name, { active: on })
+            : dotEl("#5b21b6", "📹"),
+        hit: () => onSelectCctv(c),
+      });
+    }
+
+    for (const [key, entry] of live) {
+      if (!want.has(key)) {
+        entry.ov.setMap(null);
+        live.delete(key);
+      }
+    }
+
+    for (const [key, w] of want) {
+      const cur = live.get(key);
+      const make = () => {
+        const el = w.el();
+        if (w.hit) el.addEventListener("click", () => live.get(key)?.hit?.());
+        return el;
+      };
+      if (!cur) {
+        const ov = new window.kakao.maps.CustomOverlay({
+          position: new window.kakao.maps.LatLng(w.lat, w.lng),
+          content: make(),
+          yAnchor: 1,
+          zIndex: w.z,
+          clickable: true,
+        });
+        ov.setMap(map);
+        live.set(key, { ov, sig: w.sig, hit: w.hit });
+        continue;
+      }
+      // 핸들러는 매번 갈아 끼운다 — 도착 정보가 바뀌면 넘길 값도 바뀐다
+      cur.hit = w.hit;
+      if (cur.sig !== w.sig) {
+        cur.ov.setContent(make());
+        cur.ov.setZIndex(w.z);
+        cur.sig = w.sig;
+      }
     }
 
     // 구간속도는 여기서 그리지 않는다. 좌표가 없어 점으로 찍을 수 없고,

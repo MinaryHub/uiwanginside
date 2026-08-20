@@ -186,17 +186,29 @@ export default function Dashboard({
       lastViewRef.current = { rect, lat: c.lat, lng: c.lng };
 
       const prev = areaRef.current;
-      let refresh = !prev || prev.level !== lv;
+      let refresh = !prev;
 
-      if (!refresh && prev) {
+      if (prev) {
         const [aMinX, aMinY, aMaxX, aMaxY] = prev.rect.split(",").map(Number);
         const [bMinX, bMinY, bMaxX, bMaxY] = rect.split(",").map(Number);
         const w = bMaxX - bMinX;
         const h = bMaxY - bMinY;
+
+        /*
+         * 확대 수준이 한 칸 바뀔 때마다 다시 조회하고 있었다. 새 결과는
+         * 범위가 달라 목록이 통째로 갈리고, 그러면 지도 마커도 함께
+         * 갈린다 — 손가락을 벌릴 때마다 배지가 사라졌다 나타난 이유다.
+         *
+         * 확대는 그 자체로 새 자료를 부르지 않는다. 화면이 넓어져 이전에
+         * 훑은 범위를 벗어났을 때만 다시 찾는다. 좁히는 쪽은 이미 가진
+         * 것으로 충분하다.
+         */
+        const grew = w > (aMaxX - aMinX) * 1.6 || h > (aMaxY - aMinY) * 1.6;
+
         // 가로·세로 어느 쪽으로든 화면의 절반을 넘게 움직였으면 새로 찾는다
         const movedX = Math.abs((bMinX + bMaxX) / 2 - (aMinX + aMaxX) / 2);
         const movedY = Math.abs((bMinY + bMaxY) / 2 - (aMinY + aMaxY) / 2);
-        refresh = movedX > w * 0.5 || movedY > h * 0.5;
+        refresh = grew || movedX > w * 0.5 || movedY > h * 0.5;
       }
 
       if (refresh) {
