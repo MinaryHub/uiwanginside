@@ -6,8 +6,13 @@ import type { BusPositionsPayload } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-/** GBIS·TAGO 모두 10~20초 주기로 갱신된다 */
-const CACHE_SEC = 15;
+/**
+ * 상류 갱신 주기에 맞춘다.
+ * 경기버스 위치 API 를 2.5초마다 두드려 재보니 값이 바뀌는 간격이
+ * 15.7 · 15.9 · 15.7 초였다. 15초로 두면 두 번에 한 번은 같은 값을
+ * 다시 받고, 10초로 줄이면 헛조회가 37% 가 된다.
+ */
+const CACHE_SEC = 16;
 
 const EMPTY: BusPositionsPayload = {
   routeId: "",

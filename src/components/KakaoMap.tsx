@@ -14,6 +14,13 @@ import type {
   BusPositionsPayload,
 } from "@/lib/types";
 
+/**
+ * 버스를 두 관측 지점 사이로 옮기는 데 쓰는 시간.
+ * GBIS 갱신 주기와 같아야 한다 — 짧으면 도착해 놓고 멈춰 서 있고,
+ * 길면 다음 관측이 올 때까지 목표에 닿지 못한다.
+ */
+const BUS_TWEEN_MS = 16_000;
+
 let sdkPromise: Promise<void> | null = null;
 
 function loadSdk(appKey: string): Promise<void> {
@@ -325,7 +332,26 @@ export default function KakaoMap({
     new Map<string, { ov: kakao.maps.CustomOverlay; sig: string; place?: Place }>(),
   );
   const transitOv = useRef<kakao.maps.CustomOverlay[]>([]);
-  const busOv = useRef<kakao.maps.CustomOverlay[]>([]);
+/**
+ * 버스는 차량번호로 들고 있는다. 갱신마다 지웠다 만들면 방금 지나간
+ * 위치를 이어 붙일 수 없고, 마커가 깜빡인다.
+ */
+  const busMarks = useRef(
+    new Map<
+      string,
+      {
+        ov: kakao.maps.CustomOverlay;
+        /** 직전에 관측된 위치 */
+        from: { lat: number; lng: number };
+        /** 방금 관측된 위치 */
+        to: { lat: number; lng: number };
+        /** to 를 받은 시각 */
+        at: number;
+        sig: string;
+      }
+    >(),
+  );
+  const busRaf = useRef<number | null>(null);
   const photoOv = useRef<kakao.maps.CustomOverlay[]>([]);
   const meRef = useRef<kakao.maps.CustomOverlay | null>(null);
   const boundaryRef = useRef<kakao.maps.Polygon[]>([]);
@@ -828,23 +854,107 @@ export default function KakaoMap({
     }
   }, [ready, photos, onSelectPhoto]);
 
-  /** 운행 중인 버스 — 15초마다 갱신되므로 반드시 따로 둔다 */
+  /**
+   * 운행 중인 버스.
+   *
+   * GBIS 는 16초에 한 번만 새 위치를 준다 (실측 15.7·15.9·15.7초).
+   * 그대로 찍으면 버스가 16초마다 뚝 뛴다. 관측된 두 지점 사이를 그
+   * 시간에 걸쳐 이어 움직인다.
+   *
+   * 지어내지 않기 위해 지키는 것들.
+   *  - 실제로 관측된 두 점 사이만 움직인다. 최신 지점을 지나 앞질러
+   *    가지 않는다 — 그건 없는 위치를 만드는 것이다.
+   *  - 처음 본 차량은 애니메이션 없이 그 자리에 놓는다. 이어 붙일
+   *    직전 위치가 없다.
+   *  - 16초에 2km 를 넘는 도약은 잇지 않고 건너뛴다. 차고지 회차나
+   *    자료 오류이고, 이으면 버스가 시내를 가로지르는 것처럼 보인다.
+   */
   useEffect(() => {
     if (!ready || !mapRef.current) return;
-    const add = makeAdder(busOv);
-    /*
-     * 자세히 보여줄 때를 정한다.
-     * 확대해서 보고 있거나(level<=3), 노선 하나만 떠 있을 때다.
-     * 노선이 여럿이면 대수가 많아 알약이 서로 포개진다.
-     */
+    const map = mapRef.current;
+    const live = busMarks.current;
+    const now = Date.now();
+
     const detailed = level <= 3 || busPositions.length <= 1;
+    const seen = new Set<string>();
+
     for (const r of busPositions) {
       for (const b of r.positions) {
-        add(b.lat, b.lng, busEl(r.routeName || "버스", b, detailed), 95);
+        const key = b.vehicleNo || `${r.routeId}:${b.nodeName}:${b.lat},${b.lng}`;
+        seen.add(key);
+        const sig = `${detailed}|${r.routeName}|${b.crowded ?? ""}|${b.nodeName}`;
+        const cur = live.get(key);
+
+        if (!cur) {
+          const ov = new window.kakao.maps.CustomOverlay({
+            position: new window.kakao.maps.LatLng(b.lat, b.lng),
+            content: busEl(r.routeName || "버스", b, detailed),
+            yAnchor: 1,
+            zIndex: 95,
+          });
+          ov.setMap(map);
+          live.set(key, {
+            ov,
+            from: { lat: b.lat, lng: b.lng },
+            to: { lat: b.lat, lng: b.lng },
+            at: now,
+            sig,
+          });
+          continue;
+        }
+
+        // 같은 자리면 새 구간을 열지 않는다 — 정차 중인 버스가 떨지 않게
+        const moved = cur.to.lat !== b.lat || cur.to.lng !== b.lng;
+        if (moved) {
+          const jump = Math.hypot((b.lat - cur.to.lat) * 111_000, (b.lng - cur.to.lng) * 88_000);
+          cur.from = jump > 2000 ? { lat: b.lat, lng: b.lng } : cur.to;
+          cur.to = { lat: b.lat, lng: b.lng };
+          cur.at = now;
+        }
+        if (cur.sig !== sig) {
+          cur.ov.setContent(busEl(r.routeName || "버스", b, detailed));
+          cur.sig = sig;
+        }
+      }
+    }
+
+    for (const [key, entry] of live) {
+      if (!seen.has(key)) {
+        entry.ov.setMap(null);
+        live.delete(key);
       }
     }
     // level 이 빠지면 확대해도 자세히 바뀌지 않는다
   }, [ready, busPositions, level]);
+
+  /**
+   * 버스를 사이 위치로 옮긴다.
+   *
+   * 매 프레임 두 관측 지점 사이를 비율로 나눈다. 16초가 지나면 1 에서
+   * 멈춘다 — 다음 관측을 앞질러 가지 않는다.
+   */
+  useEffect(() => {
+    if (!ready) return;
+    const step = () => {
+      const now = Date.now();
+      for (const m of busMarks.current.values()) {
+        const t = Math.min(1, (now - m.at) / BUS_TWEEN_MS);
+        if (m.from.lat === m.to.lat && m.from.lng === m.to.lng) continue;
+        m.ov.setPosition(
+          new window.kakao.maps.LatLng(
+            m.from.lat + (m.to.lat - m.from.lat) * t,
+            m.from.lng + (m.to.lng - m.from.lng) * t,
+          ),
+        );
+      }
+      busRaf.current = requestAnimationFrame(step);
+    };
+    busRaf.current = requestAnimationFrame(step);
+    return () => {
+      if (busRaf.current !== null) cancelAnimationFrame(busRaf.current);
+      busRaf.current = null;
+    };
+  }, [ready]);
 
   return (
     <div className="relative h-full w-full">

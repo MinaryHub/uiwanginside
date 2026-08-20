@@ -88,7 +88,8 @@ const POLL = {
   traffic: 60_000,
   transit: 30_000,
   news: 5 * 60_000,
-  busPositions: 15_000,
+  // GBIS 는 16초에 한 번만 새 값을 준다 (실측 15.8초). 그보다 자주 물으면 헛조회다.
+  busPositions: 16_000,
 };
 
 /**
