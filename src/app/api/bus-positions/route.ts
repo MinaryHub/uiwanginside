@@ -175,6 +175,11 @@ async function manyRoutes(raw: string) {
    * 노선은 의왕을 지나지만 대부분의 차량은 안양·광명·수원 구간에 있다.
    * 실측하면 여섯 노선 55대 중 의왕 안은 일부뿐이다. 전부 찍으면
    * 의왕 지도가 이웃 도시 버스로 뒤덮인다.
+   *
+   * 한 대도 안 남은 노선도 빈 채로 돌려준다. 지워버리면 화면이
+   * "아직 안 받았다" 와 "지금 없다" 를 구별하지 못한다 — 둘 다
+   * 목록에 없기 때문이다. 빈 노선을 자리에서 내보내려면 그 구별이
+   * 필요하다.
    */
   const routes = settled
     .map((s) => (s.status === "fulfilled" ? s.value : null))
@@ -182,8 +187,7 @@ async function manyRoutes(raw: string) {
     .map((r) => ({
       ...r,
       positions: r.positions.filter((p) => isInsideUiwang(p.lat, p.lng)),
-    }))
-    .filter((r) => r.positions.length > 0);
+    }));
 
   return ok({ routes, updatedAt: nowISO() }, undefined, CACHE_SEC);
 }

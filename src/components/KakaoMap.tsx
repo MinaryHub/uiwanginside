@@ -939,7 +939,13 @@ export default function KakaoMap({
     const live = busMarks.current;
     const now = Date.now();
 
-    const detailed = level <= 3 || busPositions.length <= 1;
+    /*
+     * 자세히 보일지. 확대했거나, 화면에 버스가 한 대뿐일 때다.
+     * 노선 수가 아니라 버스 수로 센다 — 서버가 빈 노선도 돌려주므로
+     * 노선 수는 버스가 몇 대인지 말해주지 않는다.
+     */
+    const buses = busPositions.reduce((n, r) => n + r.positions.length, 0);
+    const detailed = level <= 3 || buses <= 1;
     const seen = new Set<string>();
 
     for (const r of busPositions) {

@@ -14,6 +14,7 @@ import { MODES, MODE_MAP, type ModeId, type CardId } from "@/lib/modes";
 import type { CategoryKey } from "@/lib/uiwang";
 import { getDeviceId } from "@/lib/deviceId";
 import type { LatLng } from "@/lib/busPath";
+import { pickFleet, EMPTY_FLEET } from "@/lib/busFleet";
 import { useMyLocation } from "@/lib/useMyLocation";
 import {
   buildSegments,
@@ -82,6 +83,7 @@ const NO_SEGMENTS: TrafficSegment[] = [];
 const NO_CCTVS: Cctv[] = [];
 const NO_BUSES: BusPositionsPayload[] = [];
 const NO_PATHS: Record<string, LatLng[]> = {};
+
 
 const POLL = {
   weather: 10 * 60_000,
@@ -306,16 +308,15 @@ export default function Dashboard({
   );
 
   /**
-   * 근처에 곧 오는 노선들.
+   * 근처에 곧 오는 노선들 — 후보.
    *
    * 예전에는 노선 하나를 골라야만 버스가 보였다. 정류소를 눌러 노선을
    * 좇기 전에는 지도에 버스가 한 대도 없었다. 근처 정류소의 도착 예정에서
-   * 가장 이른 노선들을 골라 함께 띄운다.
+   * 노선을 모아 함께 띄운다.
    *
-   * 노선 수만큼 상류를 두드리므로 여섯 개로 묶는다. 근처 정류소에 도착
-   * 예정인 노선이 열다섯 개였는데, 전부 부르면 15초마다 열다섯 번이다.
+   * 여기서는 자르지 않는다. 무엇을 띄울지는 아래에서 정한다.
    */
-  const nearbyRoutes = useMemo(() => {
+  const busCandidates = useMemo(() => {
     if (!def?.layers.bus || tracked) return "";
     const seen = new Map<string, { name: string; sec: number }>();
     for (const s of transit.data?.data.stops ?? []) {
@@ -329,16 +330,35 @@ export default function Dashboard({
     }
     return [...seen.entries()]
       .sort((a, b) => a[1].sec - b[1].sec)
-      .slice(0, 6)
-      .map(([id, v]) => `${id}:${encodeURIComponent(v.name)}`)
+      .map(([id, v]) => `${id}:${v.name}`)
       .join(",");
   }, [def?.layers.bus, tracked, transit.data]);
 
+  /** 지금 지도에 띄우고 있는 노선. 쉽게 바뀌지 않는다 */
+  const [picked, setPicked] = useState({ at: "", fleet: EMPTY_FLEET });
+
+  const fleetKey = picked.fleet.routes
+    .map((r) => `${r.id}:${encodeURIComponent(r.name)}`)
+    .join(",");
+
   const busFleet = useSWR<ApiEnvelope<BusFleetPayload>>(
-    nearbyRoutes ? `/api/bus-positions?routes=${nearbyRoutes}` : null,
+    fleetKey ? `/api/bus-positions?routes=${fleetKey}` : null,
     swrFetcher,
     { refreshInterval: POLL.busPositions, keepPreviousData: true },
   );
+
+  /*
+   * 후보나 응답이 바뀌었을 때만 다시 고른다.
+   *
+   * 렌더 중에 상태를 고치는 것은 React 가 인정하는 방식이다 — 이전
+   * 선택을 알아야 다음 선택을 정할 수 있고, 이 계산은 화면에 그리기
+   * 전에 끝나야 한다. 효과로 미루면 한 번 잘못된 노선으로 조회한다.
+   */
+  const answered = busFleet.data?.ok ? busFleet.data.data.routes : null;
+  const pickAt = `${busCandidates}|${busFleet.data?.data.updatedAt ?? ""}`;
+  if (picked.at !== pickAt) {
+    setPicked({ at: pickAt, fleet: pickFleet(picked.fleet, busCandidates, answered) });
+  }
 
   const busPositions = useSWR<ApiEnvelope<BusPositionsPayload>>(
     tracked
@@ -604,7 +624,9 @@ export default function Dashboard({
   const shownRouteIds = useMemo(() => {
     const ids = tracked
       ? [tracked.id]
-      : (busFleet.data?.ok ? busFleet.data.data.routes : []).map((r) => r.routeId);
+      : (busFleet.data?.ok ? busFleet.data.data.routes : [])
+          .filter((r) => r.positions.length)
+          .map((r) => r.routeId);
     return ids.filter(Boolean).sort().join(",");
   }, [tracked, busFleet.data]);
 
