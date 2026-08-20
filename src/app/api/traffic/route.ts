@@ -2,6 +2,7 @@ import { timedFetch, ok, fail, nowISO } from "@/lib/fetcher";
 import { UIWANG } from "@/lib/uiwang";
 import { cityTiles, spaceMeanSpeed } from "@/lib/traffic";
 import { UIWANG_ROAD_NAMES } from "@/lib/uiwang-roads";
+import { isInsideUiwang } from "@/lib/geo";
 import { getSql, ensureSchema, hasDb } from "@/lib/db";
 import type {
   TrafficPayload,
@@ -217,6 +218,16 @@ export async function GET() {
       fetchTiles(key),
     ]);
 
+    /*
+     * 돌발상황은 경계로 걸러야 한다.
+     *
+     * 조회 범위가 사각형이라 안양·수원·용인 것이 함께 온다. 실측하면
+     * 9건 중 8건이 의왕 밖이었다. 목록에서 누르면 지도가 남의 동네로
+     * 날아가서, 위치가 틀린 것처럼 보였다.
+     *
+     * 좌표가 없는 건은 지도에 찍을 수 없지만 목록에는 남긴다 — 어느
+     * 도로에 무슨 일이 있는지는 알려줄 수 있다.
+     */
     const incidents: Incident[] = [];
     if (evRes.ok) {
       const j = await evRes.json();
@@ -240,6 +251,23 @@ export async function GET() {
         });
       }
     }
+
+    const inCity = incidents.filter(
+      (i) => i.lat == null || i.lng == null || isInsideUiwang(i.lat, i.lng),
+    );
+
+    /*
+     * 같은 자리에 같은 종류가 여러 번 온다 (강우 같은 기상 정보가 노선
+     * 방향별로 따로 온다). 지도에서는 마커가 정확히 겹쳐 하나로 보이고,
+     * 목록에서는 같은 줄이 두 번 나온다.
+     */
+    const seenIncident = new Set<string>();
+    const deduped = inCity.filter((i) => {
+      const k = `${i.type}|${i.lat?.toFixed(5)}|${i.lng?.toFixed(5)}`;
+      if (seenIncident.has(k)) return false;
+      seenIncident.add(k);
+      return true;
+    });
 
     /**
      * (칸 × 도로) 마다 공간평균속도를 낸다.
@@ -290,14 +318,14 @@ export async function GET() {
 
 
     const payload: TrafficPayload = {
-      incidents,
+      incidents: deduped,
       links: roadLinks.slice(0, 12),
       speeds,
       source: "its",
       updatedAt: nowISO(),
     };
     // 한 칸도 못 받았으면 성공이 아니다 — 낡은 값이 있으면 그쪽이 낫다
-    if (speeds.length === 0 && incidents.length === 0) {
+    if (speeds.length === 0 && deduped.length === 0) {
       void writeSnapshot(null, true);
       return staleOr("ITS 에서 소통정보를 받지 못했습니다.", snap);
     }
@@ -305,7 +333,7 @@ export async function GET() {
     return ok(
       payload,
       // 소통정보는 왔는데 돌발만 없는 것은 정상이다. 그렇다고 말해준다.
-      incidents.length === 0 ? "현재 의왕시 범위에 보고된 돌발상황이 없습니다." : undefined,
+      deduped.length === 0 ? "현재 의왕시 범위에 보고된 돌발상황이 없습니다." : undefined,
       CACHE_SEC,
     );
   } catch (e) {
