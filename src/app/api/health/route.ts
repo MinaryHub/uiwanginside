@@ -504,8 +504,31 @@ const SPECS: Omit<HealthCheck, "status" | "detail" | "configured">[] = [
   },
 ];
 
+/**
+ * 브라우저가 실제로 두드린 주소.
+ *
+ * `new URL(req.url).origin` 을 그대로 쓰면 안 된다. 리버스 프록시 뒤에서는
+ * Next 가 컨테이너 안쪽 주소를 돌려준다 — 파이에서 https://0.0.0.0:3000 이
+ * 나왔고, 그 화면이 "이 도메인을 카카오에 등록하세요" 라고 안내했다.
+ * 등록할 수 없는 주소이고, 정작 진짜 도메인은 멀쩡한데도 오류로 보였다.
+ *
+ * 프록시가 붙여 주는 값을 먼저 보고, 없으면 설정된 공개 주소를 쓴다.
+ * 진단용이라 헤더를 믿어도 위험하지 않다 — 권한을 주는 데 쓰지 않는다.
+ */
+function publicOrigin(req: Request): string {
+  const h = req.headers;
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+  if (host) {
+    const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+    return `${proto}://${host}`;
+  }
+  const configured = process.env.AUTH_URL;
+  if (configured) return configured.replace(/\/$/, "");
+  return new URL(req.url).origin;
+}
+
 export async function GET(req: Request) {
-  const origin = new URL(req.url).origin;
+  const origin = publicOrigin(req);
 
   const [kakaoRest, kma, naver, its, ggStations, gbisArrival, gbisLocation] =
     await Promise.all([
