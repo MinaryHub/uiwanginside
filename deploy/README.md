@@ -30,8 +30,8 @@ Silicon 은 `linux/arm64` 컨테이너를 에뮬레이션 없이 돌리므로, �
 지도 JS 키는 **도메인 제한**이 걸린다. 등록하지 않은 도메인에서는 지도가 아예
 그려지지 않는다. 이 앱은 지도가 본체라 사실상 배포 실패다.
 
-- **플랫폼 → Web → 사이트 도메인**: `https://<도메인>` 추가
-- **카카오 로그인 → Redirect URI**: `https://<도메인>/api/auth/callback/kakao` 추가
+- **플랫폼 → Web → 사이트 도메인**: `https://apps.kimserv.com` 추가
+- **카카오 로그인 → Redirect URI**: `https://apps.kimserv.com/api/auth/callback/kakao` 추가
 
 Vercel 을 대체하므로 기존 Vercel 도메인은 지워도 된다.
 
@@ -51,7 +51,7 @@ mkdir -p ~/uiwanginside
 ### 4. 환경변수 옮기기
 
 ```bash
-DOMAIN=uiwang.example.com ./scripts/export-env.sh     # deploy/.env.pi 생성
+DOMAIN=apps.kimserv.com ./scripts/export-env.sh     # deploy/.env.pi 생성
 scp deploy/.env.pi <파이>:~/uiwanginside/.env
 ```
 
@@ -59,9 +59,19 @@ Vercel 의 프로덕션 값을 그대로 가져오되 `AUTH_URL` 만 새 도메�
 `VERCEL_*`·`NX_*`·`TURBO_*` 는 파이에서 의미가 없어 걸러낸다.
 **비밀값이므로 저장소에 넣지 않는다** — `deploy/.env.pi` 는 `.gitignore` 에 있다.
 
-### 5. 도메인 적기
+### 5. DNS
 
-`deploy/Caddyfile` 의 `uiwang.example.com` 을 실제 도메인으로 바꾼다.
+`apps.kimserv.com` 으로 쓴다 — `deploy/Caddyfile` 에 이미 적혀 있다.
+kimserv.com apex 와 www 는 Vercel 의 앱 마켓이 계속 쓰므로 건드리지 않는다.
+
+Google Cloud DNS(`ns-cloud-b*.googledomains.com`)에 A 레코드를 하나 추가한다.
+
+```
+apps.kimserv.com.   A   <파이 공인 IP>      # 파이에서: curl -s ifconfig.me
+```
+
+공인 IP 가 유동이면 갱신 수단이 필요하다 — Google Cloud DNS 에는 자동 갱신이
+없어서, 바뀔 때마다 인증서와 접속이 함께 끊긴다.
 
 ## 배포
 
@@ -81,10 +91,10 @@ ssh <파이> 'cd ~/uiwanginside && docker compose logs -f app'
 
 브라우저에서 순서대로 본다.
 
-1. `https://<도메인>` — 자물쇠가 잠기고 **지도가 그려지는지** (안 그려지면 1번 도메인 등록)
+1. `https://apps.kimserv.com` — 자물쇠가 잠기고 **지도가 그려지는지** (안 그려지면 1번 도메인 등록)
 2. 상단 요약줄에 날씨·미세먼지·사고·진료 값이 들어오는지 (안 들어오면 `.env` 의 키)
 3. 카카오 로그인 (실패하면 Redirect URI 또는 `AUTH_URL`)
-4. `https://<도메인>/status` — 외부 API 6개의 키 상태를 한 화면에서 진단
+4. `https://apps.kimserv.com/status` — 외부 API 6개의 키 상태를 한 화면에서 진단
 
 ## 되돌리기
 
