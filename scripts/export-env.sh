@@ -1,51 +1,99 @@
 #!/usr/bin/env bash
-# Vercel 프로덕션 환경변수를 파이용 .env 로 뽑아낸다.
+# 파이용 .env 를 만든다.
 #
-# Vercel 을 대체하는 것이므로 값 자체는 그대로 쓰되, 주소에 매인 두 개만 바꿔야 한다.
-#   AUTH_URL            → 파이의 공개 주소 (NextAuth 가 리다이렉트를 만들 때 쓴다)
-#   VERCEL_*            → 의미 없으므로 걸러낸다
+# 값의 출처가 둘이다.
+#
+#   .env.local   맥에 있는 실제 값. 여기가 비밀값의 출처다.
+#   Vercel       프로덕션에만 있고 맥에는 없는 것을 메운다.
+#
+# Vercel 을 그대로 쓸 수 없다. `vercel env pull` 은 Sensitive 로 표시된 변수를
+# 실제 값이 아니라 "[SENSITIVE]" 로 내려준다 — 이 프로젝트에서는 14개가 그렇다.
+# 그대로 파이에 올리면 지도도 로그인도 외부 API 도 전부 조용히 실패한다.
+# 실제로 한 번 겪었다. 그래서 자리표시자는 아래에서 거부한다.
+#
+# 주소에 매인 것 하나만 바꾼다.
+#   AUTH_URL   → 파이의 공개 주소 (NextAuth 가 리다이렉트를 만들 때 쓴다)
 #
 # 결과 파일에는 비밀값이 들어 있다. 저장소에 넣지 말고 600 으로 둔다.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 OUT="${1:-deploy/.env.pi}"
-DOMAIN="${DOMAIN:?DOMAIN 을 지정하세요 — 예: DOMAIN=uiwang.example.com}"
+DOMAIN="${DOMAIN:?DOMAIN 을 지정하세요 — 예: DOMAIN=uiwanginside.kimserv.com}"
+
+[[ -f .env.local ]] || { echo "✗ .env.local 이 없습니다 — 비밀값의 출처입니다." >&2; exit 1; }
 
 TMP="$(mktemp)"
 trap 'rm -f "$TMP"' EXIT
-npx vercel env pull "$TMP" --environment=production --yes >/dev/null
+# Vercel 쪽은 있으면 참고하고, 없어도 진행한다
+npx vercel env pull "$TMP" --environment=production --yes >/dev/null 2>&1 || : > "$TMP"
 
 python3 - "$TMP" "$OUT" "$DOMAIN" <<'PY'
-import re, sys
-src, out, domain = sys.argv[1], sys.argv[2], sys.argv[3]
-text = open(src, encoding='utf-8').read()
+import re, sys, os
 
-# Vercel 이 빌드에 끼워 넣는 것들 — 파이에서는 의미가 없거나 방해가 된다
-drop = re.compile(r'^(VERCEL|NX_|TURBO_)')
-kept, skipped = [], []
-for m in re.finditer(r'^([A-Z_0-9]+)="((?:[^"\\]|\\.)*)"$', text, re.M):
-    name, val = m.group(1), m.group(2)
-    if drop.match(name):
-        skipped.append(name); continue
-    if name == 'AUTH_URL':
-        val = f'https://{domain}'      # 주소에 매인 값은 새 도메인으로
-    kept.append((name, val))
+vercel_file, out, domain = sys.argv[1], sys.argv[2], sys.argv[3]
+LINE = re.compile(r'^([A-Z_0-9]+)\s*=\s*"?(.*?)"?\s*$', re.M)
+# Vercel 이 빌드에 끼워 넣는 것 — 파이에서는 의미가 없거나 방해가 된다
+DROP = re.compile(r'^(VERCEL|NX_|TURBO_)')
+# Sensitive 변수를 가린 자리표시자
+MASK = '[SENSITIVE]'
+
+
+def read(path):
+    if not os.path.exists(path):
+        return {}
+    text = open(path, encoding='utf-8').read()
+    return {m.group(1): m.group(2) for m in LINE.finditer(text)}
+
+
+local, remote = read('.env.local'), read(vercel_file)
+
+env, source, masked = {}, {}, []
+# Vercel 을 먼저 깔고 .env.local 로 덮는다 — 실제 값이 이깁니다
+for name, val in remote.items():
+    if DROP.match(name):
+        continue
+    if val == MASK:
+        masked.append(name)
+        continue
+    env[name], source[name] = val, 'vercel'
+for name, val in local.items():
+    env[name], source[name] = val, 'local'
+
+# AUTH_URL 은 여기서 정하므로 어디에 있었는지는 상관없다
+env['AUTH_URL'] = f'https://{domain}'
+source['AUTH_URL'] = '이 스크립트'
+
+# 가려진 것 중 맥에도 없는 것은 값을 구할 데가 없다
+lost = [n for n in masked if n not in env]
+
+# 없으면 기능이 죽는 것들. AIRKOREA·EMERGENCY 는 KMA 키로 대체되므로 뺀다
+REQUIRED = ('DATABASE_URL', 'AUTH_SECRET', 'AUTH_URL', 'BLOB_READ_WRITE_TOKEN',
+            'NEXT_PUBLIC_KAKAO_JS_KEY', 'KAKAO_CLIENT_ID', 'KAKAO_CLIENT_SECRET',
+            'KAKAO_REST_KEY', 'KMA_SERVICE_KEY', 'GBIS_SERVICE_KEY', 'GG_DATA_KEY')
+missing = [n for n in REQUIRED if not env.get(n)]
+
+if lost:
+    print('✗ 값을 구할 수 없습니다 (Vercel 은 가려서 주고 .env.local 에도 없음):')
+    for n in sorted(lost):
+        print(f'    {n}')
+    print('  Vercel 대시보드에서 값을 확인해 .env.local 에 넣고 다시 실행하세요.')
+if missing:
+    print('✗ 반드시 있어야 하는 값이 빠졌습니다:', ', '.join(missing))
+if lost or missing:
+    sys.exit(1)
 
 with open(out, 'w', encoding='utf-8') as f:
-    f.write('# Vercel 프로덕션에서 옮긴 값. 비밀값이므로 저장소에 넣지 마세요.\n')
-    f.write(f'# AUTH_URL 은 https://{domain} 으로 바꿨습니다.\n')
-    for name, val in kept:
-        f.write(f'{name}="{val}"\n')
+    f.write('# scripts/export-env.sh 가 만든다. 비밀값이므로 저장소에 넣지 마세요.\n')
+    f.write(f'# AUTH_URL = https://{domain}\n')
+    for name in sorted(env):
+        f.write(f'{name}="{env[name]}"\n')
 
-print(f'{len(kept)}개 기록 → {out}')
-print('걸러낸 것:', ', '.join(sorted(set(skipped))) or '없음')
-names = {n for n, _ in kept}
-for need in ('DATABASE_URL', 'AUTH_SECRET', 'AUTH_URL',
-             'BLOB_READ_WRITE_TOKEN', 'NEXT_PUBLIC_KAKAO_JS_KEY',
-             'KAKAO_CLIENT_ID', 'KAKAO_CLIENT_SECRET'):
-    if need not in names:
-        print(f'⚠ 빠짐: {need}')
+n_local = sum(1 for v in source.values() if v == 'local')
+print(f'{len(env)}개 기록 → {out}')
+print(f'  .env.local {n_local}개 · Vercel {len(env) - n_local - 1}개 · AUTH_URL 1개')
+if masked:
+    print(f'  Vercel 이 가려서 준 {len(masked)}개는 .env.local 값으로 채웠습니다')
 PY
 
 chmod 600 "$OUT"

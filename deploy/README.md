@@ -30,8 +30,8 @@ Silicon 은 `linux/arm64` 컨테이너를 에뮬레이션 없이 돌리므로, �
 지도 JS 키는 **도메인 제한**이 걸린다. 등록하지 않은 도메인에서는 지도가 아예
 그려지지 않는다. 이 앱은 지도가 본체라 사실상 배포 실패다.
 
-- **플랫폼 → Web → 사이트 도메인**: `https://apps.kimserv.com` 추가
-- **카카오 로그인 → Redirect URI**: `https://apps.kimserv.com/api/auth/callback/kakao` 추가
+- **플랫폼 → Web → 사이트 도메인**: `https://uiwanginside.kimserv.com` 추가
+- **카카오 로그인 → Redirect URI**: `https://uiwanginside.kimserv.com/api/auth/callback/kakao` 추가
 
 Vercel 을 대체하므로 기존 Vercel 도메인은 지워도 된다.
 
@@ -51,27 +51,48 @@ mkdir -p ~/uiwanginside
 ### 4. 환경변수 옮기기
 
 ```bash
-DOMAIN=apps.kimserv.com ./scripts/export-env.sh     # deploy/.env.pi 생성
+DOMAIN=uiwanginside.kimserv.com ./scripts/export-env.sh     # deploy/.env.pi 생성
 scp deploy/.env.pi <파이>:~/uiwanginside/.env
 ```
 
-Vercel 의 프로덕션 값을 그대로 가져오되 `AUTH_URL` 만 새 도메인으로 바꾼다.
-`VERCEL_*`·`NX_*`·`TURBO_*` 는 파이에서 의미가 없어 걸러낸다.
+값의 출처는 **`.env.local`** 이다. Vercel 은 참고만 한다.
+
+`vercel env pull` 을 그대로 쓸 수 없다. Sensitive 로 표시된 변수를 실제 값이 아니라
+`[SENSITIVE]` 로 내려주는데, 이 프로젝트에서는 13개가 그렇다 — 지도 키·카카오
+로그인·모든 공공데이터 키가 거기에 든다. 그대로 올리면 화면은 뜨는데 아무 데이터도
+안 나오고, 원인이 어디인지도 보이지 않는다. 스크립트가 자리표시자를 거부한다.
+
+`AUTH_URL` 만 새 도메인으로 바꾼다. `VERCEL_*`·`NX_*`·`TURBO_*` 는 파이에서 의미가
+없어 걸러낸다. 필수 값이 빠지면 파일을 쓰지 않고 멈춘다.
+
 **비밀값이므로 저장소에 넣지 않는다** — `deploy/.env.pi` 는 `.gitignore` 에 있다.
 
 ### 5. DNS
 
-`apps.kimserv.com` 으로 쓴다 — `deploy/Caddyfile` 에 이미 적혀 있다.
+`uiwanginside.kimserv.com` 으로 쓴다 — `deploy/Caddyfile` 에 이미 적혀 있다.
 kimserv.com apex 와 www 는 Vercel 의 앱 마켓이 계속 쓰므로 건드리지 않는다.
 
 Google Cloud DNS(`ns-cloud-b*.googledomains.com`)에 A 레코드를 하나 추가한다.
 
 ```
-apps.kimserv.com.   A   <파이 공인 IP>      # 파이에서: curl -s ifconfig.me
+uiwanginside.kimserv.com.   A   <파이 공인 IP>      # 파이에서: curl -s ifconfig.me
 ```
 
 공인 IP 가 유동이면 갱신 수단이 필요하다 — Google Cloud DNS 에는 자동 갱신이
 없어서, 바뀔 때마다 인증서와 접속이 함께 끊긴다.
+
+## 미리 확인한 것 (2026-08-22, 파이 없이 맥에서)
+
+파이에 올리기 전에 맥에서 검증할 수 있는 것은 해 뒀다.
+
+- `linux/arm64` 이미지 빌드 — 성공, 452MB
+- 그 이미지를 띄워 파이에 올라갈 `.env` 그대로 실행 — 홈·`/status` 200,
+  `/gallery`·`/lists` 는 307(로그인 필요, 정상), 날씨·미세먼지·의료·교통 API 200
+- `_next/static` 의 CSS·JS 가 404 가 아닌지 — 정상 (standalone 이 빼먹는 부분)
+- 지도 키가 클라이언트 번들에 박혔는지 — 박혀 있다
+- Neon 쓰기 — `/api/visit` 204
+
+남은 것은 파이·DNS·공유기·카카오 콘솔처럼 맥에서 확인할 수 없는 것뿐이다.
 
 ## 배포
 
@@ -91,10 +112,10 @@ ssh <파이> 'cd ~/uiwanginside && docker compose logs -f app'
 
 브라우저에서 순서대로 본다.
 
-1. `https://apps.kimserv.com` — 자물쇠가 잠기고 **지도가 그려지는지** (안 그려지면 1번 도메인 등록)
+1. `https://uiwanginside.kimserv.com` — 자물쇠가 잠기고 **지도가 그려지는지** (안 그려지면 1번 도메인 등록)
 2. 상단 요약줄에 날씨·미세먼지·사고·진료 값이 들어오는지 (안 들어오면 `.env` 의 키)
 3. 카카오 로그인 (실패하면 Redirect URI 또는 `AUTH_URL`)
-4. `https://apps.kimserv.com/status` — 외부 API 6개의 키 상태를 한 화면에서 진단
+4. `https://uiwanginside.kimserv.com/status` — 외부 API 6개의 키 상태를 한 화면에서 진단
 
 ## 되돌리기
 
