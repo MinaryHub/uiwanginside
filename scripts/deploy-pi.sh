@@ -13,7 +13,9 @@
 set -euo pipefail
 
 PI="${PI:?PI 를 지정하세요 — 예: PI=uiwang@192.168.0.50}"
-REMOTE_DIR="${REMOTE_DIR:-/home/${PI##*@}/uiwanginside}"
+# 홈 기준 상대 경로다. 절대 경로를 만들려고 PI 에서 사용자명을 잘라내면
+# ${PI##*@} 처럼 잘못 잘라 /home/192.168.75.107 같은 곳을 만든다 — 겪었다.
+REMOTE_DIR="${REMOTE_DIR:-uiwanginside}"
 IMAGE="uiwanginside:latest"
 cd "$(dirname "$0")/.."
 
