@@ -38,6 +38,13 @@ function device(): "mobile" | "tablet" | "desktop" {
 
 const lastSent = new Map<string, number>();
 
+/** 식별자가 든 경로를 틀로 바꾼다 */
+function collapse(pathname: string): string {
+  if (pathname.startsWith("/list/")) return "/list/[slug]";
+  if (pathname.startsWith("/stats/")) return "/stats/[token]";
+  return pathname;
+}
+
 export default function VisitTracker() {
   const pathname = usePathname();
   const params = useSearchParams();
@@ -46,8 +53,13 @@ export default function VisitTracker() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    // 공유받은 리스트 주소는 slug 가 곧 식별자라 경로를 뭉뚱그린다
-    const path = pathname.startsWith("/list/") ? "/list/[slug]" : pathname;
+    /*
+     * 주소의 일부가 곧 열쇠인 화면들은 경로를 뭉뚱그린다.
+     *
+     * /list/<slug> 는 slug 가 식별자다. /stats/<토큰> 은 더하다 — 그대로
+     * 보내면 통계 표의 "인기 화면" 칸에 자기 비밀 주소가 적힌다.
+     */
+    const path = collapse(pathname);
 
     const key = `${path}|${mode ?? ""}`;
     const now = Date.now();

@@ -36,6 +36,7 @@ const PATH_LABEL: Record<string, string> = {
   "/share": "사진 공유받기",
   "/status": "연동 상태",
   "/admin": "관리자",
+  "/stats/[token]": "접속 통계 (비밀 주소)",
 };
 
 function num(n: number) {
@@ -166,9 +167,14 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
   );
 }
 
-export default function AdminClient() {
+export default function AdminClient({
+  /** 통계를 어디서 받을지. 비밀 주소로 열 때는 토큰이 붙은 주소를 준다 */
+  endpoint = "/api/admin/stats",
+}: {
+  endpoint?: string;
+} = {}) {
   const { data, error, isLoading } = useSWR<ApiEnvelope<StatsPayload>>(
-    "/api/admin/stats",
+    endpoint,
     fetcher,
     { refreshInterval: 60_000, revalidateOnFocus: true, shouldRetryOnError: false },
   );

@@ -46,7 +46,19 @@ export async function POST(req: Request) {
     return new Response(null, { status: 204 });
   }
 
-  const path = clamp(body.path, 120);
+  /*
+   * 식별자가 든 경로는 여기서도 뭉뚱그린다.
+   *
+   * 화면 쪽에서 이미 바꿔 보내지만, 이 주소는 누구나 두드릴 수 있다.
+   * /stats/<토큰> 이 표에 그대로 적히면 통계 화면이 자기 비밀 주소를
+   * 남에게 보여주게 된다. 들어오는 값을 믿지 않는다.
+   */
+  const rawPath = clamp(body.path, 120);
+  const path = rawPath?.startsWith("/stats/")
+    ? "/stats/[token]"
+    : rawPath?.startsWith("/list/")
+      ? "/list/[slug]"
+      : rawPath;
   const visitorId = clamp(body.visitorId, 64);
   const sessionId = clamp(body.sessionId, 64);
   if (!path || !visitorId || !sessionId) return new Response(null, { status: 204 });
