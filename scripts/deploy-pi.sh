@@ -47,11 +47,11 @@ if [[ -z "${SKIP_BUILD:-}" ]]; then
 fi
 
 echo "▶ 파이로 전송 ($PI)"
-ssh "$PI" "mkdir -p '$REMOTE_DIR'"
+ssh -n "$PI" "mkdir -p '$REMOTE_DIR'"
 
 # 지금 도는 이미지를 :prev 로 남긴다. 새 것이 잘못됐을 때 되돌릴 유일한
 # 수단이다 — 레지스트리를 쓰지 않으므로 지난 이미지를 다시 받아올 곳이 없다.
-ssh "$PI" "docker image inspect '$IMAGE' >/dev/null 2>&1 && docker tag '$IMAGE' uiwanginside:prev || true"
+ssh -n "$PI" "docker image inspect '$IMAGE' >/dev/null 2>&1 && docker tag '$IMAGE' uiwanginside:prev || true"
 # 이미지를 파일로 남기지 않고 파이프로 넘긴다
 docker save "$IMAGE" | gzip -1 | ssh "$PI" "gunzip | docker load"
 
@@ -60,13 +60,13 @@ scp -q deploy/compose.yaml deploy/Caddyfile "$PI:$REMOTE_DIR/"
 
 echo "▶ 재시작"
 # --remove-orphans: 구성에서 빠진 컨테이너를 남겨두지 않는다
-ssh "$PI" "cd '$REMOTE_DIR' && docker compose up -d --remove-orphans && docker image prune -f >/dev/null"
+ssh -n "$PI" "cd '$REMOTE_DIR' && docker compose up -d --remove-orphans && docker image prune -f >/dev/null"
 
 echo "▶ 확인"
 # 컨테이너 안에서 직접 물어본다. 집 안에서는 공인 IP 로 돌아올 수 없어
 # (공유기가 헤어핀 NAT 을 하지 않는다) 바깥 주소로는 확인이 안 된다.
-ssh "$PI" "cd '$REMOTE_DIR' && docker compose ps --format '  {{.Service}}  {{.Status}}'"
-RUNNING="$(ssh "$PI" "docker exec uiwanginside node -e \"fetch('http://127.0.0.1:3000/api/version').then(r=>r.json()).then(v=>console.log(v.sha)).catch(()=>console.log('확인불가'))\"" 2>/dev/null || echo 확인불가)"
+ssh -n "$PI" "cd '$REMOTE_DIR' && docker compose ps --format '  {{.Service}}  {{.Status}}'"
+RUNNING="$(ssh -n "$PI" "docker exec uiwanginside node -e \"fetch('http://127.0.0.1:3000/api/version').then(r=>r.json()).then(v=>console.log(v.sha)).catch(()=>console.log('확인불가'))\"" 2>/dev/null || echo 확인불가)"
 if [[ "$RUNNING" == "$GIT_SHA" ]]; then
   echo "✓ $GIT_SHA 가 돌고 있습니다."
 else

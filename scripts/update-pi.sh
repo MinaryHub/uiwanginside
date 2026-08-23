@@ -63,7 +63,7 @@ echo "  올릴 것: $TARGET  $(git log -1 --format='%s' | cut -c1-56)"
 
 # ── 2. 파이에 도는 것 ───────────────────────────────────────
 step "2/4  파이에 도는 버전"
-RUNNING="$(ssh -o BatchMode=yes "$PI" \
+RUNNING="$(ssh -n -o BatchMode=yes "$PI" \
   "docker image inspect uiwanginside:latest --format '{{index .Config.Labels \"org.opencontainers.image.revision\"}}' 2>/dev/null" \
   2>/dev/null | tr -d '\r' || true)"
 RUNNING="${RUNNING:-없음}"
@@ -73,7 +73,7 @@ echo "  도는 것: $RUNNING"
 step "3/4  환경변수"
 DOMAIN="$DOMAIN" ./scripts/export-env.sh >/dev/null
 MINE="$(shasum -a 256 deploy/.env.pi | cut -d' ' -f1)"
-THEIRS="$(ssh -o BatchMode=yes "$PI" "sha256sum '$REMOTE_DIR/.env' 2>/dev/null | cut -d' ' -f1" || true)"
+THEIRS="$(ssh -n -o BatchMode=yes "$PI" "sha256sum '$REMOTE_DIR/.env' 2>/dev/null | cut -d' ' -f1" || true)"
 ENV_CHANGED=0
 if [[ "$MINE" != "$THEIRS" ]]; then
   ENV_CHANGED=1
@@ -90,9 +90,9 @@ if [[ "$RUNNING" == "$TARGET" && "$ENV_CHANGED" -eq 0 && -z "${FORCE:-}" ]]; the
 fi
 
 if [[ "$ENV_CHANGED" -eq 1 ]]; then
-  ssh -o BatchMode=yes "$PI" "mkdir -p '$REMOTE_DIR'"
+  ssh -n -o BatchMode=yes "$PI" "mkdir -p '$REMOTE_DIR'"
   scp -q deploy/.env.pi "${PI}:${REMOTE_DIR}/.env"
-  ssh -o BatchMode=yes "$PI" "chmod 600 '$REMOTE_DIR/.env'"
+  ssh -n -o BatchMode=yes "$PI" "chmod 600 '$REMOTE_DIR/.env'"
 fi
 
 # ── 4. 올리기 ───────────────────────────────────────────────
