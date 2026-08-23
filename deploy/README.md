@@ -125,10 +125,52 @@ tls-alpn-01 로 확인했으니, 그 성공 자체가 포트 포워딩이 된다
 
 남은 것은 파이·DNS·공유기·카카오 콘솔처럼 맥에서 확인할 수 없는 것뿐이다.
 
-## 배포
+## 최신으로 올리기
+
+배포 PC 에서 이것 하나면 된다.
 
 ```bash
-PI=uiwang@192.168.0.50 ./scripts/deploy-pi.sh
+./scripts/update-pi.sh
+```
+
+origin 에서 최신을 받아 → 파이에 도는 커밋과 비교하고 → 달라진 환경변수까지
+함께 보내 → 올린 뒤 정말 그 커밋이 도는지 확인한다. **이미 최신이면 아무것도
+하지 않는다** (`FORCE=1` 로 무시할 수 있다).
+
+커밋하지 않은 변경이 있으면 멈춘다. 추적되지 않은 새 파일도 본다 — Docker 는
+`COPY . .` 로 그것까지 담으므로, 그대로 올리면 이미지에 새겨지는 커밋 해시가
+그 파일이 없던 시점을 가리켜 무엇이 도는지 알 수 없어진다.
+
+주소는 `PI`·`DOMAIN` 으로 바꾼다 (기본 `knoxxr@192.168.75.107`,
+`uiwanginside.kimserv.com`).
+
+### 지금 무엇이 도는가
+
+```bash
+curl -s https://uiwanginside.kimserv.com/api/version
+# {"sha":"71bb121","builtAt":"2026-08-23T..."}
+```
+
+이미지에 커밋 해시를 새겨 둔다. 자체 호스팅에는 배포 목록 같은 화면이 없어,
+이것이 없으면 올렸는지 안 올렸는지 몰라 같은 것을 두 번 올리게 된다.
+작업트리에 수정이 남은 채 빌드하면 `abc1234+수정본` 으로 표시된다.
+
+### 되돌리기
+
+```bash
+./scripts/rollback-pi.sh
+```
+
+올리기 직전 이미지를 `uiwanginside:prev` 로 남겨 둔다. 레지스트리를 쓰지 않아
+지난 이미지를 다시 받아올 곳이 없으므로, **되돌림 지점은 한 판뿐이다** — 두 번
+배포하면 그 전 것은 사라진다.
+
+## 지금 이 트리를 올리기
+
+개발 중에 커밋하지 않은 채 시험 삼아 올릴 때.
+
+```bash
+PI=knoxxr@192.168.75.107 ./scripts/deploy-pi.sh
 ```
 
 빌드 → 전송 → 재시작까지 한 번에 한다. 이미지를 그대로 다시 쓰려면
@@ -147,15 +189,6 @@ ssh <파이> 'cd ~/uiwanginside && docker compose logs -f app'
 2. 상단 요약줄에 날씨·미세먼지·사고·진료 값이 들어오는지 (안 들어오면 `.env` 의 키)
 3. 카카오 로그인 (실패하면 Redirect URI 또는 `AUTH_URL`)
 4. `https://uiwanginside.kimserv.com/status` — 외부 API 6개의 키 상태를 한 화면에서 진단
-
-## 되돌리기
-
-이미지에 태그를 남겨 두면 바로 되돌릴 수 있다.
-
-```bash
-ssh <파이> 'docker tag uiwanginside:latest uiwanginside:prev'   # 배포 전에
-ssh <파이> 'cd ~/uiwanginside && docker tag uiwanginside:prev uiwanginside:latest && docker compose up -d'
-```
 
 ## 남는 것
 

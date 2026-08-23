@@ -30,16 +30,28 @@ if [[ -z "$KEY" ]]; then
   exit 1
 fi
 
+# 어느 커밋으로 만든 이미지인지 새겨 둔다. 파이에서 무엇이 도는지 알아야
+# 올렸는지 안 올렸는지 헷갈리지 않는다.
+GIT_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+if ! git diff --quiet HEAD 2>/dev/null; then GIT_SHA="$GIT_SHA+수정본"; fi
+BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
 if [[ -z "${SKIP_BUILD:-}" ]]; then
-  echo "▶ linux/arm64 이미지 빌드"
+  echo "▶ linux/arm64 이미지 빌드 ($GIT_SHA)"
   docker buildx build \
     --platform linux/arm64 \
     --build-arg "NEXT_PUBLIC_KAKAO_JS_KEY=$KEY" \
+    --build-arg "GIT_SHA=$GIT_SHA" \
+    --build-arg "BUILT_AT=$BUILT_AT" \
     -t "$IMAGE" --load .
 fi
 
 echo "▶ 파이로 전송 ($PI)"
 ssh "$PI" "mkdir -p '$REMOTE_DIR'"
+
+# 지금 도는 이미지를 :prev 로 남긴다. 새 것이 잘못됐을 때 되돌릴 유일한
+# 수단이다 — 레지스트리를 쓰지 않으므로 지난 이미지를 다시 받아올 곳이 없다.
+ssh "$PI" "docker image inspect '$IMAGE' >/dev/null 2>&1 && docker tag '$IMAGE' uiwanginside:prev || true"
 # 이미지를 파일로 남기지 않고 파이프로 넘긴다
 docker save "$IMAGE" | gzip -1 | ssh "$PI" "gunzip | docker load"
 
@@ -50,6 +62,14 @@ echo "▶ 재시작"
 # --remove-orphans: 구성에서 빠진 컨테이너를 남겨두지 않는다
 ssh "$PI" "cd '$REMOTE_DIR' && docker compose up -d --remove-orphans && docker image prune -f >/dev/null"
 
-echo "▶ 상태"
-ssh "$PI" "cd '$REMOTE_DIR' && docker compose ps"
-echo "✓ 완료 — 도메인으로 접속해 지도가 뜨는지 확인하세요."
+echo "▶ 확인"
+# 컨테이너 안에서 직접 물어본다. 집 안에서는 공인 IP 로 돌아올 수 없어
+# (공유기가 헤어핀 NAT 을 하지 않는다) 바깥 주소로는 확인이 안 된다.
+ssh "$PI" "cd '$REMOTE_DIR' && docker compose ps --format '  {{.Service}}  {{.Status}}'"
+RUNNING="$(ssh "$PI" "docker exec uiwanginside node -e \"fetch('http://127.0.0.1:3000/api/version').then(r=>r.json()).then(v=>console.log(v.sha)).catch(()=>console.log('확인불가'))\"" 2>/dev/null || echo 확인불가)"
+if [[ "$RUNNING" == "$GIT_SHA" ]]; then
+  echo "✓ $GIT_SHA 가 돌고 있습니다."
+else
+  echo "⚠ 올린 것은 $GIT_SHA 인데 도는 것은 $RUNNING 입니다." >&2
+  echo "  컨테이너가 아직 뜨는 중일 수 있습니다: ssh $PI 'cd $REMOTE_DIR && docker compose logs -f app'" >&2
+fi

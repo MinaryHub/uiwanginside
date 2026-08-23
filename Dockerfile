@@ -58,6 +58,21 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
+# 어느 커밋으로 만든 이미지인지 새긴다.
+#
+# 이것이 없으면 파이에 무엇이 돌고 있는지 알 방법이 없다 — 올렸는지 안
+# 올렸는지 몰라 같은 것을 두 번 올리게 된다. 라벨은 배포 스크립트가 읽고,
+# 환경변수는 /api/version 이 읽는다.
+#
+# COPY 뒤에 두는 이유: 매번 바뀌는 값이라 앞에 두면 그 아래 층이 전부
+# 다시 만들어진다.
+ARG GIT_SHA=unknown
+ARG BUILT_AT=unknown
+ENV BUILD_SHA=${GIT_SHA}
+ENV BUILT_AT=${BUILT_AT}
+LABEL org.opencontainers.image.revision=${GIT_SHA}
+LABEL org.opencontainers.image.created=${BUILT_AT}
+
 USER nextjs
 EXPOSE 3000
 
