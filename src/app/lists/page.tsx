@@ -3,6 +3,7 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import Logo from "@/components/Logo";
 import ListsClient from "@/components/ListsClient";
+import { SHOW_PHOTOS } from "@/lib/features";
 
 export const dynamic = "force-dynamic";
 
@@ -17,12 +18,14 @@ export default async function ListsPage() {
           <Logo size={26} />
           <span className="text-[var(--text-base)] font-extrabold">내 장소 리스트</span>
         </Link>
-        <Link
-          href="/gallery"
-          className="ml-auto text-[var(--text-xs)] font-bold text-[var(--brand)] underline underline-offset-4"
-        >
-          내 사진
-        </Link>
+        {SHOW_PHOTOS && (
+          <Link
+            href="/gallery"
+            className="ml-auto text-[var(--text-xs)] font-bold text-[var(--brand)] underline underline-offset-4"
+          >
+            내 사진
+          </Link>
+        )}
       </header>
       <ListsClient />
     </main>

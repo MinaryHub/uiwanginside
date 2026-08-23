@@ -7,6 +7,7 @@ import { swrFetcher } from "@/lib/fetcher";
 import { Empty, Skeleton } from "@/components/ui";
 import type { ListsPayload, PlaceList } from "@/lib/listTypes";
 import type { ApiEnvelope } from "@/lib/types";
+import { SHOW_LIST_SHARE } from "@/lib/features";
 
 export default function ListsClient() {
   const { data, isLoading, mutate } = useSWR<ApiEnvelope<ListsPayload>>(
@@ -128,20 +129,27 @@ export default function ListsClient() {
               </div>
 
               <div className="mt-2 flex flex-wrap gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => patch(l.id, { share: !l.shareSlug })}
-                  className="min-h-[38px] rounded-[var(--radius)] border px-3 text-[var(--text-2xs)] font-bold"
-                  style={
-                    l.shareSlug
-                      ? { borderColor: "var(--brand)", color: "var(--brand)" }
-                      : { borderColor: "var(--border-strong)" }
-                  }
-                >
-                  {l.shareSlug ? "공유 중" : "공유하기"}
-                </button>
+                {SHOW_LIST_SHARE && (
+                  <button
+                    type="button"
+                    onClick={() => patch(l.id, { share: !l.shareSlug })}
+                    className="min-h-[38px] rounded-[var(--radius)] border px-3 text-[var(--text-2xs)] font-bold"
+                    style={
+                      l.shareSlug
+                        ? { borderColor: "var(--brand)", color: "var(--brand)" }
+                        : { borderColor: "var(--border-strong)" }
+                    }
+                  >
+                    {l.shareSlug ? "공유 중" : "공유하기"}
+                  </button>
+                )}
 
-                {l.shareSlug && (
+                {/*
+                  이미 공유 중인 리스트는 남에게 링크를 보냈을 수 있다. 링크
+                  자체는 살려 두되(그쪽에서 404 가 되면 감추는 게 아니라
+                  망가뜨리는 것이다) 여기서 새로 보낼 길만 닫는다.
+                */}
+                {SHOW_LIST_SHARE && l.shareSlug && (
                   <>
                     <button
                       type="button"

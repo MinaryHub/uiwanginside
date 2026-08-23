@@ -64,6 +64,7 @@ import NewsPanel from "@/components/panels/NewsPanel";
 import WastePanel from "@/components/panels/WastePanel";
 import PopulationPanel from "@/components/panels/PopulationPanel";
 import RatingPanel from "@/components/panels/RatingPanel";
+import { SHOW_PHOTOS, SHOW_MAP_SHARE } from "@/lib/features";
 
 const KakaoMap = dynamic(() => import("@/components/KakaoMap"), { ssr: false });
 
@@ -369,9 +370,12 @@ export default function Dashboard({
   );
 
   /** 내 사진. 로그인하지 않았으면 서버가 빈 목록을 준다. */
-  const myPhotos = useSWR<ApiEnvelope<PhotosPayload>>("/api/photos", swrFetcher, {
-    revalidateOnFocus: false,
-  });
+  const myPhotos = useSWR<ApiEnvelope<PhotosPayload>>(
+    // 감춰 둔 동안에는 받아오지도 않는다 — 안 그리는 것을 매번 조회할 이유가 없다
+    SHOW_PHOTOS ? "/api/photos" : null,
+    swrFetcher,
+    { revalidateOnFocus: false },
+  );
   const mapPhotos = myPhotos.data?.data.photos ?? NO_PHOTOS;
   const [photo, setPhoto] = useState<Photo | null>(null);
 
@@ -750,7 +754,7 @@ export default function Dashboard({
           incidents={mapIncidents}
           busStops={mapStops}
           medicalOpen={medicalMarkers}
-          photos={mapPhotos}
+          photos={SHOW_PHOTOS ? mapPhotos : NO_PHOTOS}
           onSelectPhoto={setPhoto}
           busPositions={mapBusPositions}
           busPaths={busRoutePaths.data?.data.paths ?? NO_PATHS}
@@ -831,15 +835,17 @@ export default function Dashboard({
           🔍
         </button>
         <AccountMenu user={user} className={mapBtn} />
-        <button
-          type="button"
-          onClick={share}
-          title="현재 화면 공유"
-          aria-label="현재 화면 공유"
-          className={`pointer-events-auto ${mapBtn}`}
-        >
-          {copied ? "✓" : "↗"}
-        </button>
+        {SHOW_MAP_SHARE && (
+          <button
+            type="button"
+            onClick={share}
+            title="현재 화면 공유"
+            aria-label="현재 화면 공유"
+            className={`pointer-events-auto ${mapBtn}`}
+          >
+            {copied ? "✓" : "↗"}
+          </button>
+        )}
         <button
           type="button"
           onClick={refreshAll}

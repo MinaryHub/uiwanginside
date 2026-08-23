@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { signOut } from "next-auth/react";
+import { SHOW_PHOTOS } from "@/lib/features";
 
 export interface HeaderUser {
   name: string | null;
@@ -88,9 +89,11 @@ export default function AccountMenu({
               <Link href="/lists" className={item} onClick={() => setOpen(false)}>
                 ☰ 내 장소 리스트
               </Link>
-              <Link href="/gallery" className={item} onClick={() => setOpen(false)}>
-                ▣ 내 사진
-              </Link>
+              {SHOW_PHOTOS && (
+                <Link href="/gallery" className={item} onClick={() => setOpen(false)}>
+                  ▣ 내 사진
+                </Link>
+              )}
               {/*
                 링크로 걸면 Auth.js 의 "정말 로그아웃하시겠습니까" 화면을
                 한 번 거친다. 지도를 보다가 페이지가 통째로 바뀌는 것보다
@@ -110,9 +113,19 @@ export default function AccountMenu({
           ) : (
             <>
               <p className="border-b border-[var(--border)] px-3.5 py-2 text-[var(--text-2xs)] leading-relaxed text-[var(--text-muted)]">
-                로그인하면 사진을 올리고
-                <br />
-                나만의 장소 리스트를 만들 수 있습니다.
+                {SHOW_PHOTOS ? (
+                  <>
+                    로그인하면 사진을 올리고
+                    <br />
+                    나만의 장소 리스트를 만들 수 있습니다.
+                  </>
+                ) : (
+                  <>
+                    로그인하면 나만의 장소
+                    <br />
+                    리스트를 만들 수 있습니다.
+                  </>
+                )}
               </p>
               <Link href="/login" className={item} onClick={() => setOpen(false)}>
                 카카오로 로그인
