@@ -1,0 +1,81 @@
+# 파이가 받아갈 이미지를 GitHub 에서 만든다.
+#
+# 예전에는 맥에서 빌드해 SSH 로 파이에 밀어넣었다. 그러면 맥을 켜야 하고,
+# 파이와 같은 랜에 있어야 한다. 여기서 만들어 ghcr.io 에 두면 파이가 어디서든
+# 받아갈 수 있다 — 밖에서 폰으로 SSH 만 되면 된다.
+#
+# arm64 를 에뮬레이션으로 빌드한다. 무료 플랜의 비공개 저장소에는 arm64
+# 러너(ubuntu-24.04-arm)가 없다. 느린 대신 캐시를 쓴다 — node_modules 층은
+# package-lock.json 이 바뀌지 않으면 다시 만들지 않는다.
+
+name: 이미지 빌드
+
+on:
+  push:
+    branches: [main]
+    # 코드가 아닌 것만 바뀌었을 때는 빌드하지 않는다
+    paths-ignore:
+      - "deploy/README.md"
+      - "**/*.md"
+  workflow_dispatch:
+
+concurrency:
+  # 연달아 푸시하면 앞선 빌드는 버린다. 마지막 것만 쓸모 있다.
+  group: image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # 이름은 소문자만 받는다. MinaryHub → minaryhub
+      - name: 이미지 이름 정하기
+        id: name
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/uiwanginside" >> "$GITHUB_OUTPUT"
+
+      - name: arm64 를 흉내낼 준비
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: ghcr.io 로그인
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 빌드해서 올리기
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/arm64
+          push: true
+          # latest 와 커밋 해시를 함께 붙인다. 해시 태그가 있으면 특정
+          # 버전으로 되돌릴 때 그것을 가리키면 된다.
+          tags: |
+            ${{ steps.name.outputs.image }}:latest
+            ${{ steps.name.outputs.image }}:${{ github.sha }}
+          build-args: |
+            NEXT_PUBLIC_KAKAO_JS_KEY=${{ secrets.NEXT_PUBLIC_KAKAO_JS_KEY }}
+            GIT_SHA=${{ github.sha }}
+            BUILT_AT=${{ github.event.repository.pushed_at }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: 무엇을 올렸는지
+        run: |
+          echo "### 이미지" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "${{ steps.name.outputs.image }}:latest" >> "$GITHUB_STEP_SUMMARY"
+          echo "${{ steps.name.outputs.image }}:${GITHUB_SHA:0:7}" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "파이에서: \`./update.sh\`" >> "$GITHUB_STEP_SUMMARY"

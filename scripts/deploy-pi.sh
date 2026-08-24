@@ -16,7 +16,10 @@ PI="${PI:?PI 를 지정하세요 — 예: PI=uiwang@192.168.0.50}"
 # 홈 기준 상대 경로다. 절대 경로를 만들려고 PI 에서 사용자명을 잘라내면
 # ${PI##*@} 처럼 잘못 잘라 /home/192.168.75.107 같은 곳을 만든다 — 겪었다.
 REMOTE_DIR="${REMOTE_DIR:-uiwanginside}"
-IMAGE="uiwanginside:latest"
+# compose 가 찾는 이름과 같아야 한다. 같은 이름으로 넣어두면 파이는 받아오지
+# 않고 들어 있는 것을 쓴다 (도커의 기본 정책이 "없을 때만 받아온다" 다).
+IMAGE="${UIWANG_IMAGE:-ghcr.io/minaryhub/uiwanginside}:latest"
+PREV="${UIWANG_IMAGE:-ghcr.io/minaryhub/uiwanginside}:prev"
 cd "$(dirname "$0")/.."
 
 # NEXT_PUBLIC_* 은 빌드 시점에 클라이언트 번들로 박힌다. 여기서 빠지면 지도가
@@ -51,12 +54,14 @@ ssh -n "$PI" "mkdir -p '$REMOTE_DIR'"
 
 # 지금 도는 이미지를 :prev 로 남긴다. 새 것이 잘못됐을 때 되돌릴 유일한
 # 수단이다 — 레지스트리를 쓰지 않으므로 지난 이미지를 다시 받아올 곳이 없다.
-ssh -n "$PI" "docker image inspect '$IMAGE' >/dev/null 2>&1 && docker tag '$IMAGE' uiwanginside:prev || true"
+ssh -n "$PI" "docker image inspect '$IMAGE' >/dev/null 2>&1 && docker tag '$IMAGE' '$PREV' || true"
 # 이미지를 파일로 남기지 않고 파이프로 넘긴다
 docker save "$IMAGE" | gzip -1 | ssh "$PI" "gunzip | docker load"
 
 echo "▶ 구성 파일 전송"
-scp -q deploy/compose.yaml deploy/Caddyfile "$PI:$REMOTE_DIR/"
+# update.sh·rollback.sh 도 같이 보낸다 — 파이에서 직접 올릴 때 쓴다
+scp -q deploy/compose.yaml deploy/Caddyfile deploy/update.sh deploy/rollback.sh "$PI:$REMOTE_DIR/"
+ssh -n "$PI" "chmod +x '$REMOTE_DIR/update.sh' '$REMOTE_DIR/rollback.sh'"
 
 echo "▶ 재시작"
 # --remove-orphans: 구성에서 빠진 컨테이너를 남겨두지 않는다

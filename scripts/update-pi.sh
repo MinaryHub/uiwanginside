@@ -102,3 +102,6 @@ PI="$PI" REMOTE_DIR="$REMOTE_DIR" ./scripts/deploy-pi.sh
 echo
 echo "  https://$DOMAIN/api/version 에서 확인할 수 있습니다"
 echo "  되돌리려면: PI=$PI ./scripts/rollback-pi.sh"
+echo
+echo "  참고: 평소에는 파이에서 './update.sh' 만 하면 됩니다."
+echo "        이 스크립트는 GitHub 빌드를 기다리지 않고 급히 올릴 때 쓰는 길입니다."

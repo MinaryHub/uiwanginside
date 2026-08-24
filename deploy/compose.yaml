@@ -5,12 +5,20 @@
 #     Caddyfile
 #     .env          ← 비밀값. 600 권한으로 두고 저장소에 넣지 않는다
 #
-# 이미지는 맥에서 빌드해 보내므로(scripts/deploy-pi.sh) 여기서는 build 하지 않는다.
-# 파이에서 빌드하면 Next 빌드만 수십 분이 걸린다.
+# 이미지는 GitHub 에서 만들어 ghcr.io 에 둔다(.github/workflows/image.yml).
+# 파이는 받아서 돌리기만 한다 — ./update.sh
+#
+# 파이에서 직접 빌드하지 않는다. node_modules 571MB + .next 837MB 에 도커
+# 층마다의 사본까지 더하면 2.5~3.5GB 인데, SD 카드에 2.5GB 밖에 없고 스왑도
+# 없어 빌드 도중에 죽는다. 재봤다.
+#
+# 맥에서 급히 올릴 때도(scripts/deploy-pi.sh) 같은 이름으로 넣으므로, 그때는
+# 받아오지 않고 들어 있는 것을 쓴다.
 
 services:
   app:
-    image: uiwanginside:latest
+    # TAG 를 .env 에 적으면 특정 판으로 못 박을 수 있다
+    image: ${UIWANG_IMAGE:-ghcr.io/minaryhub/uiwanginside}:${TAG:-latest}
     container_name: uiwanginside
     restart: unless-stopped
     env_file: .env
