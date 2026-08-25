@@ -4,16 +4,22 @@ Vercel 을 대체해 파이(Ubuntu Server, aarch64)에서 직접 돌린다.
 
 ## 왜 이런 구성인가
 
-**맥에서 빌드해 파이로 보낸다.** Next 빌드는 파이에서 수십 분이 걸린다. Apple
-Silicon 은 `linux/arm64` 컨테이너를 에뮬레이션 없이 돌리므로, 맥에서 빌드하면
-파이와 같은 산출물을 네이티브 속도로 얻는다. 파이는 실행만 한다.
+**GitHub 이 빌드하고 파이는 받아간다.** 파이에서 직접 빌드하지 않는다 — 재보니
+node_modules 571MB + .next 837MB 에 도커 층마다의 사본까지 더하면 2.5~3.5GB 인데,
+SD 카드에 2.5GB 밖에 없고 스왑도 없다. 빌드 도중에 죽거나 카드를 채운다. 도는
+서비스까지 함께 위험해진다.
 
-산출물을 그냥 `rsync` 하지 않고 컨테이너로 옮기는 이유는 OS 다. 맥에서 만든
-`node_modules` 에는 darwin 용 네이티브 바이너리가 섞이고, Next 는 플랫폼별 SWC
-바이너리를 쓴다. 컨테이너 안에서 linux 로 설치·빌드해야 어긋나지 않는다.
+예전에는 맥에서 빌드해 SSH 로 밀어넣었다. 그러려면 맥을 켜야 하고 파이와 같은
+랜에 있어야 해서, 파이에 들어가 업데이트할 수 없었다. 이제 ghcr.io 를 거치므로
+밖에서 폰으로 SSH 만 되면 올린다.
 
-레지스트리는 쓰지 않는다. 서버 하나에 올리는 데 계정과 인증을 붙일 이유가 없어,
-`docker save | ssh docker load` 로 바로 넘긴다.
+arm64 를 에뮬레이션으로 빌드한다. 무료 플랜의 비공개 저장소에는 arm64
+러너(ubuntu-24.04-arm)가 없다. 실측 **7분 26초** — buildx 캐시를 GitHub 에 둬
+package-lock.json 이 그대로면 node_modules 층을 다시 만들지 않는다.
+
+맥에서 급히 올리는 길(`scripts/deploy-pi.sh`)도 남겨 뒀다. GitHub 빌드를
+기다리지 않아도 될 때가 있다. 같은 이미지 이름으로 파이에 넣으므로 그때는
+받아오지 않고 들어 있는 것을 쓴다 — 도커의 기본 정책이 "없을 때만 받아온다" 다.
 
 ## 이 앱이 자체 호스팅에 유리한 점
 
@@ -127,22 +133,34 @@ tls-alpn-01 로 확인했으니, 그 성공 자체가 포트 포워딩이 된다
 
 ## 최신으로 올리기
 
-배포 PC 에서 이것 하나면 된다.
+`main` 에 푸시하면 GitHub 이 이미지를 만든다(`.github/workflows/image.yml`).
+7~8분 뒤 **파이에서** 받아온다.
 
 ```bash
-./scripts/update-pi.sh
+ssh knoxxr@<파이>
+cd ~/uiwanginside && ./update.sh
 ```
 
-origin 에서 최신을 받아 → 파이에 도는 커밋과 비교하고 → 달라진 환경변수까지
-함께 보내 → 올린 뒤 정말 그 커밋이 도는지 확인한다. **이미 최신이면 아무것도
-하지 않는다** (`FORCE=1` 로 무시할 수 있다).
+받아온 것이 지금 것과 같으면 아무것도 하지 않는다 (`FORCE=1` 로 무시할 수 있다).
+바뀌었으면 받아오기 전에 지금 이미지를 `:prev` 로 남기고 바꿔 올린 뒤, 정말 그
+커밋이 도는지 컨테이너 안에서 확인한다.
 
-커밋하지 않은 변경이 있으면 멈춘다. 추적되지 않은 새 파일도 본다 — Docker 는
-`COPY . .` 로 그것까지 담으므로, 그대로 올리면 이미지에 새겨지는 커밋 해시가
-그 파일이 없던 시점을 가리켜 무엇이 도는지 알 수 없어진다.
+빌드 상태는 `gh run list` 로 본다.
 
-주소는 `PI`·`DOMAIN` 으로 바꾼다 (기본 `knoxxr@192.168.75.107`,
-`uiwanginside.kimserv.com`).
+### 받을 권한 (한 번만)
+
+패키지가 비공개라 파이에 로그인이 필요하다. 저장소가 비공개면 패키지도 비공개로
+만들어진다.
+
+github.com/settings/tokens 에서 **classic 토큰**을 `read:packages` **하나만** 주어
+만든다. 서버가 들고 있을 열쇠이므로 그 이상 주지 않는다 — 파이가 해킹당해도
+새어나갈 것이 없어야 한다.
+
+```bash
+echo <토큰> | docker login ghcr.io -u <깃허브아이디> --password-stdin
+```
+
+한 번 해두면 `~/.docker/config.json` 에 남는다. 만료 없이 만들면 다시 할 일이 없다.
 
 ### 지금 무엇이 도는가
 
@@ -158,12 +176,21 @@ curl -s https://uiwanginside.kimserv.com/api/version
 ### 되돌리기
 
 ```bash
-./scripts/rollback-pi.sh
+cd ~/uiwanginside && ./rollback.sh          # 파이에서
+./scripts/rollback-pi.sh                    # 맥에서 — 위 스크립트를 불러준다
 ```
 
-올리기 직전 이미지를 `uiwanginside:prev` 로 남겨 둔다. 레지스트리를 쓰지 않아
-지난 이미지를 다시 받아올 곳이 없으므로, **되돌림 지점은 한 판뿐이다** — 두 번
-배포하면 그 전 것은 사라진다.
+`update.sh` 가 받아오기 전에 남겨 둔 `:prev` 가 되돌림 지점이다. **한 판만
+남는다** — 두 번 받아오면 그 전 것은 사라진다.
+
+더 옛 판으로 가려면 커밋 해시 태그를 직접 받아온다. GitHub 이 `:latest` 와 함께
+전체 커밋 해시로도 태그를 붙여 둔다.
+
+```bash
+docker pull ghcr.io/minaryhub/uiwanginside:<40자 커밋해시>
+# ~/uiwanginside/.env 에 TAG=<해시> 를 적고
+docker compose up -d
+```
 
 ## 지금 이 트리를 올리기
 
