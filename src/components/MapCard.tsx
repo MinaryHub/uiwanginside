@@ -24,9 +24,10 @@ export default function MapCard({
 }) {
   return (
     <div
-      className="fade-up absolute inset-x-3 bottom-3 z-30 mx-auto max-w-[440px] overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)]"
-      style={accent ? { borderLeft: `3px solid ${accent}` } : undefined}
+      className="fade-up absolute inset-x-3 bottom-3 z-30 mx-auto max-w-[440px] overflow-hidden rounded-[var(--radius-xl)] bg-[var(--surface)] shadow-[var(--shadow-lg)] ring-1 ring-[var(--glass-ring)]"
     >
+      {/* 종류 색 — 왼쪽 띠 대신 위쪽 얇은 선. 둥근 모서리와 어울린다 */}
+      {accent && <div aria-hidden className="h-1 w-full" style={{ background: accent }} />}
       <div className="max-h-[52vh] overflow-y-auto p-4 thin-scroll">
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
@@ -41,7 +42,7 @@ export default function MapCard({
             type="button"
             onClick={onClose}
             aria-label="닫기"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius)] text-[var(--text-base)] text-[var(--text-muted)] transition hover:bg-[var(--surface-2)]"
+            className="press grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius-full)] bg-[var(--surface-2)] text-[var(--text-sm)] text-[var(--text-muted)] hover:bg-[var(--surface-3)]"
           >
             ✕
           </button>

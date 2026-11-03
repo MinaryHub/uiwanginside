@@ -87,7 +87,7 @@ function Item({
       title={title}
       aria-pressed={active}
       className={`${cls} ${active ? "" : "hover:bg-[var(--surface-2)]"}`}
-      style={active ? { background: "var(--brand)", color: "var(--on-brand)" } : undefined}
+      style={active ? { background: "var(--brand-grad)", color: "var(--on-brand)" } : undefined}
     >
       {body}
     </button>

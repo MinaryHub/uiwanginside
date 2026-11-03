@@ -48,7 +48,7 @@ export default function VisitTracker() {
   const pathname = usePathname();
   const params = useSearchParams();
   // 어떤 목적으로 왔는지. 지도를 옮길 때마다 바뀌는 좌표는 보내지 않는다.
-  const mode = params.get("mode");
+  const mode = params.get("m");
 
   useEffect(() => {
     if (typeof window === "undefined") return;

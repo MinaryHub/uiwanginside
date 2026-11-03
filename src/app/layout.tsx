@@ -24,8 +24,8 @@ export const viewport: Viewport = {
   // 확대를 막지 않는다. 글자를 키운 취지와 어긋나고, 저시력 이용자에게
   // 핀치 줌은 마지막 수단이다.
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f2f4f6" },
-    { media: "(prefers-color-scheme: dark)", color: "#0e1319" },
+    { media: "(prefers-color-scheme: light)", color: "#eef1f5" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0e14" },
   ],
 };
 

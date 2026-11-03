@@ -79,6 +79,14 @@ const NO_BUSES: BusPositionsPayload[] = [];
 const NO_PATHS: Record<string, LatLng[]> = {};
 
 
+/** 모드 알약·시트 머리에 붙는 표시. 글자만으로 넷을 가르면 한눈에 안 들어온다 */
+const MODE_ICON: Record<ModeId, string> = {
+  food: "🍽️",
+  life: "🏘️",
+  medical: "🏥",
+  transit: "🚌",
+};
+
 const POLL = {
   weather: 10 * 60_000,
   air: 10 * 60_000,
@@ -662,10 +670,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
   };
 
   /** 지도 위에 떠 있는 버튼 공통 스타일 */
-  const mapBtn =
-    "grid h-10 w-10 place-items-center rounded-[var(--radius)] border border-[var(--border)] " +
-    "bg-[var(--surface)]/92 text-[var(--text-base)] font-bold shadow-[var(--shadow-md)] " +
-    "backdrop-blur transition hover:border-[var(--brand)] hover:text-[var(--brand)]";
+  const mapBtn = "glass map-btn";
 
   return (
     <div className="relative h-dvh overflow-hidden bg-[var(--bg)]">
@@ -714,19 +719,24 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
       */}
       <header className="pointer-events-none absolute inset-x-0 top-0 z-40 p-3">
         <div className="flex items-center gap-2">
-        <div className="pointer-events-auto flex min-w-0 flex-1 items-center gap-2 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)]/92 px-3 py-2 shadow-[var(--shadow-md)] backdrop-blur">
+        <div className="glass pointer-events-auto flex h-11 min-w-0 flex-1 items-center gap-2.5 rounded-[var(--radius-full)] pl-1.5 pr-3">
           <button
             type="button"
             onClick={() => {
               setMode(null);
               setSheetOpen(false);
             }}
-            className="flex shrink-0 items-center gap-1.5"
+            className="press flex shrink-0 items-center gap-2 rounded-[var(--radius-full)] py-1 pl-1 pr-2 hover:bg-[var(--surface-2)]"
             title="둘러보기로"
           >
-            <Logo size={24} />
-            <span className="text-[var(--text-base)] font-extrabold tracking-tight">
-              의왕
+            <Logo size={30} />
+            <span className="flex flex-col leading-none">
+              <span className="text-[var(--text-base)] font-extrabold tracking-tight">
+                의왕 인사이드
+              </span>
+              <span className="mt-0.5 hidden text-[10px] font-semibold tracking-wide text-[var(--text-faint)] sm:block">
+                공공데이터 지도
+              </span>
             </span>
           </button>
           {/*
@@ -783,7 +793,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           기온만 보였다. 폭을 다 쓰는 자기 줄을 주면 미세먼지·사고·
           진료중·특보가 함께 들어온다. 지도를 46px 내주는 대신이다.
         */}
-        <div className="pointer-events-auto mt-1.5 flex h-10 items-center overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)]/92 px-2 shadow-[var(--shadow-md)] backdrop-blur sm:hidden">
+        <div className="glass pointer-events-auto mt-1.5 flex h-10 items-center overflow-hidden rounded-[var(--radius-full)] px-2 sm:hidden">
           <SummaryStrip
             weather={weather.data}
             air={air.data}
@@ -801,7 +811,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
         className="pointer-events-none absolute inset-x-0 top-[104px] z-40 flex justify-center px-3 sm:top-[64px]"
         aria-label="보기 모드"
       >
-        <div className="pointer-events-auto flex gap-1 rounded-[var(--radius-full)] border border-[var(--border)] bg-[var(--surface)]/92 p-1 shadow-[var(--shadow-md)] backdrop-blur">
+        <div className="glass pointer-events-auto flex gap-0.5 rounded-[var(--radius-full)] p-1">
           {MODES.map((m) => {
             const on = m.id === mode;
             return (
@@ -810,13 +820,15 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
                 type="button"
                 onClick={() => toggleMode(m.id)}
                 aria-pressed={on}
-                className="min-h-[36px] rounded-[var(--radius-full)] px-3.5 text-[var(--text-sm)] font-bold transition"
-                style={
+                className={`press flex min-h-[36px] items-center gap-1 rounded-[var(--radius-full)] px-3 text-[var(--text-sm)] font-bold sm:px-3.5 ${
                   on
-                    ? { background: "var(--brand)", color: "var(--on-brand)" }
-                    : { color: "var(--text-muted)" }
-                }
+                    ? "brand-fill"
+                    : "text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
+                }`}
               >
+                <span aria-hidden className="text-[0.95rem] leading-none">
+                  {MODE_ICON[m.id]}
+                </span>
                 {m.label}
               </button>
             );
@@ -846,13 +858,13 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             동
           </button>
           {dongMenu && (
-            <div className="fade-up absolute right-12 top-0 w-32 overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)]">
+            <div className="glass fade-up absolute right-14 top-0 w-36 overflow-hidden rounded-[var(--radius-lg)] p-1">
               {DONGS.map((d) => (
                 <button
                   key={d.name}
                   type="button"
                   onClick={() => toggleDong(d)}
-                  className="block min-h-[40px] w-full px-3 text-left text-[var(--text-sm)] font-semibold transition hover:bg-[var(--surface-2)]"
+                  className="block min-h-[40px] w-full rounded-[var(--radius)] px-3 text-left text-[var(--text-sm)] font-semibold transition hover:bg-[var(--surface-2)]"
                   style={activeDong === d.name ? { color: "var(--info)" } : undefined}
                 >
                   {d.name}
@@ -865,7 +877,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
                   setFitBounds({ ...UIWANG_BBOX });
                   setDongMenu(false);
                 }}
-                className="block min-h-[40px] w-full border-t border-[var(--border)] px-3 text-left text-[var(--text-sm)] font-semibold text-[var(--text-muted)] transition hover:bg-[var(--surface-2)]"
+                className="block min-h-[40px] w-full rounded-[var(--radius)] px-3 text-left text-[var(--text-sm)] font-semibold text-[var(--text-muted)] transition hover:bg-[var(--surface-2)]"
               >
                 의왕시 전체
               </button>
@@ -876,7 +888,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
                   focus(UIWANG.center.lat, UIWANG.center.lng, 1500);
                   setDongMenu(false);
                 }}
-                className="block min-h-[40px] w-full border-t border-[var(--border)] px-3 text-left text-[var(--text-sm)] font-semibold text-[var(--text-muted)] transition hover:bg-[var(--surface-2)]"
+                className="block min-h-[40px] w-full rounded-[var(--radius)] px-3 text-left text-[var(--text-sm)] font-semibold text-[var(--text-muted)] transition hover:bg-[var(--surface-2)]"
               >
                 의왕시청
               </button>
@@ -930,7 +942,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           <button
             type="button"
             onClick={() => setLocNotice(null)}
-            className="pointer-events-auto max-w-[420px] rounded-[var(--radius-full)] border border-[var(--border)] bg-[var(--surface)]/95 px-3.5 py-2 text-[var(--text-xs)] font-semibold shadow-[var(--shadow-md)] backdrop-blur"
+            className="glass fade-up pointer-events-auto max-w-[420px] rounded-[var(--radius-full)] px-4 py-2 text-[var(--text-xs)] font-semibold"
           >
             {locNotice} <span className="text-[var(--text-faint)]">✕</span>
           </button>
@@ -939,7 +951,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
 
       {/* 색만 칠해두고 뜻을 안 알려주면 읽을 수 없다 */}
       {trafficSegments.length > 0 && !bottomCard && (
-        <div className="absolute bottom-3 left-3 z-10 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)]/92 px-2.5 py-2 shadow-[var(--shadow-md)] backdrop-blur">
+        <div className="glass absolute bottom-3 left-3 z-10 rounded-[var(--radius-lg)] px-3 py-2">
           <p className="mb-1 text-[var(--text-2xs)] font-bold text-[var(--text-muted)]">
             도로 소통
           </p>
@@ -1067,8 +1079,12 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
            * 화면을 통째로 덮으면 지금 날씨가 어떤지, 어느 모드를 보고
            * 있는지가 시트에 가려 보이지 않는다.
            */
-          className={`absolute bottom-0 left-0 top-[152px] z-30 flex w-full flex-col sm:top-[112px] rounded-tr-[var(--radius-lg)] border-r border-t border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)] transition-transform duration-200 sm:w-[360px] ${
-            sheetOpen ? "translate-x-0" : "-translate-x-full"
+          /*
+           * 넓은 화면에서는 가장자리에 붙이지 않고 띄운다. 지도가 시트 둘레로
+           * 비쳐 보여 화면이 둘로 갈라져 보이지 않는다.
+           */
+          className={`absolute bottom-0 left-0 top-[152px] z-30 flex w-full flex-col overflow-hidden rounded-t-[var(--radius-xl)] bg-[var(--surface)] shadow-[var(--shadow-lg)] ring-1 ring-[var(--glass-ring)] transition-transform duration-300 ease-[var(--ease-out)] sm:bottom-3 sm:left-3 sm:top-[116px] sm:w-[372px] sm:rounded-[var(--radius-xl)] ${
+            sheetOpen ? "translate-x-0" : "-translate-x-[105%] sm:-translate-x-[110%]"
           }`}
         >
           {/*
@@ -1079,9 +1095,15 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             무엇인지 알아야 하고, 아래 패널들의 소제목이 매달릴 자리도
             있어야 한다.
           */}
-          <header className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-1.5">
+          <header className="flex items-center gap-3 border-b border-[var(--border)] py-2.5 pl-4 pr-2">
+            <span
+              aria-hidden
+              className="brand-fill grid h-9 w-9 shrink-0 place-items-center rounded-[var(--radius)] text-[1.05rem]"
+            >
+              {MODE_ICON[def.id]}
+            </span>
             <div className="min-w-0 flex-1">
-              <h1 className="sr-only">{def.label}</h1>
+              <h1 className="text-[var(--text-base)] font-extrabold leading-tight">{def.label}</h1>
               <p className="truncate text-[var(--text-xs)] text-[var(--text-muted)]">
                 {def.hint}
               </p>
@@ -1090,7 +1112,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
               type="button"
               onClick={() => setSheetOpen(false)}
               aria-label="목록 닫기"
-              className="grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius)] text-[var(--text-base)] text-[var(--text-muted)] transition hover:bg-[var(--surface-2)]"
+              className="press grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius-full)] text-[var(--text-base)] text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
             >
               ✕
             </button>
@@ -1120,9 +1142,11 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           type="button"
           onClick={() => setSheetOpen(true)}
           aria-label={`${def.label} 목록 열기`}
-          className="absolute left-0 top-1/2 z-20 -translate-y-1/2 rounded-r-[var(--radius)] border border-l-0 border-[var(--border)] bg-[var(--surface)]/92 px-2 py-5 text-[var(--text-sm)] font-bold shadow-[var(--shadow-md)] backdrop-blur"
+          className={`glass press fade-up absolute bottom-6 left-1/2 z-20 min-h-[44px] ${bottomCard ? "hidden sm:flex" : "flex"} -translate-x-1/2 items-center gap-1.5 rounded-[var(--radius-full)] px-4 text-[var(--text-sm)] font-bold sm:bottom-auto sm:left-3 sm:top-[124px] sm:translate-x-0`}
         >
-          ›
+          <span aria-hidden>{MODE_ICON[def.id]}</span>
+          {def.label} 목록 보기
+
         </button>
       )}
     </div>

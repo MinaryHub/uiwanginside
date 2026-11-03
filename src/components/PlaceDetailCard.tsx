@@ -39,13 +39,15 @@ export default function PlaceDetailCard({
   )},${place.lat},${place.lng}`;
 
   return (
-    <div className="pointer-events-auto fade-up absolute inset-x-3 bottom-3 z-30 mx-auto max-w-[440px] overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)]">
-      <div className="p-3.5">
+    <div className="pointer-events-auto fade-up absolute inset-x-3 bottom-3 z-30 mx-auto max-w-[440px] overflow-hidden rounded-[var(--radius-xl)] bg-[var(--surface)] shadow-[var(--shadow-lg)] ring-1 ring-[var(--glass-ring)]">
+      <div className="p-4">
         <div className="flex items-start gap-2">
           <span
             aria-hidden
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-[var(--radius)] text-[1.05rem]"
-            style={{ background: `color-mix(in srgb, ${def.color} 15%, transparent)` }}
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-[var(--radius)] text-[1.2rem]"
+            style={{
+              background: `linear-gradient(140deg, color-mix(in srgb, ${def.color} 24%, transparent), color-mix(in srgb, ${def.color} 8%, transparent))`,
+            }}
           >
             {def.emoji}
           </span>
@@ -66,7 +68,7 @@ export default function PlaceDetailCard({
             type="button"
             onClick={onClose}
             aria-label="닫기"
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-[var(--radius)] text-[var(--text-base)] text-[var(--text-muted)] transition hover:bg-[var(--surface-2)]"
+            className="press grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius-full)] bg-[var(--surface-2)] text-[var(--text-sm)] text-[var(--text-muted)] hover:bg-[var(--surface-3)]"
           >
             ✕
           </button>
@@ -85,7 +87,7 @@ export default function PlaceDetailCard({
           {place.phone && (
             <a
               href={`tel:${place.phone}`}
-              className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-[var(--radius)] bg-[var(--brand)] text-[var(--text-sm)] font-bold text-[var(--on-brand)]"
+              className="brand-fill press inline-flex min-h-[46px] flex-1 items-center justify-center gap-1.5 rounded-[var(--radius-full)] text-[var(--text-sm)] font-bold"
             >
               📞 전화
             </a>
@@ -94,7 +96,7 @@ export default function PlaceDetailCard({
             href={directionsUrl}
             target="_blank"
             rel="noreferrer noopener"
-            className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-[var(--radius)] border border-[var(--border-strong)] text-[var(--text-sm)] font-bold"
+            className="press inline-flex min-h-[46px] flex-1 items-center justify-center gap-1.5 rounded-[var(--radius-full)] bg-[var(--surface-2)] text-[var(--text-sm)] font-bold hover:bg-[var(--surface-3)]"
           >
             🧭 길찾기
           </a>
@@ -103,7 +105,7 @@ export default function PlaceDetailCard({
               href={place.url}
               target="_blank"
               rel="noreferrer noopener"
-              className="inline-flex min-h-[44px] items-center justify-center rounded-[var(--radius)] border border-[var(--border-strong)] px-3 text-[var(--text-sm)] font-bold"
+              className="press inline-flex min-h-[46px] min-w-[46px] items-center justify-center rounded-[var(--radius-full)] bg-[var(--surface-2)] px-3 text-[var(--text-sm)] font-bold hover:bg-[var(--surface-3)]"
               title="카카오맵에서 보기"
             >
               ↗

@@ -121,9 +121,9 @@ export default function SearchOverlay({
   }, []);
 
   return (
-    <div className="absolute inset-0 z-50 flex flex-col bg-[var(--bg)]/70 backdrop-blur-sm">
+    <div className="scrim fade-up absolute inset-0 z-50 flex flex-col">
       <div className="mx-auto flex max-h-full w-full max-w-[520px] flex-col p-3">
-        <div className="flex items-center gap-2 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] px-3 shadow-[var(--shadow-lg)]">
+        <div className="flex items-center gap-2 rounded-[var(--radius-full)] bg-[var(--surface)] pl-4 pr-1.5 shadow-[var(--shadow-lg)] ring-1 ring-[var(--glass-ring)] focus-within:ring-2 focus-within:ring-[var(--brand-2)]">
           <span aria-hidden className="text-[var(--text-muted)]">
             🔍
           </span>
@@ -142,13 +142,13 @@ export default function SearchOverlay({
             type="button"
             onClick={onClose}
             aria-label="검색 닫기"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius)] text-[var(--text-muted)] transition hover:bg-[var(--surface-2)]"
+            className="press grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius-full)] text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
           >
             ✕
           </button>
         </div>
 
-        <div className="thin-scroll mt-2 min-h-0 flex-1 overflow-y-auto rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-1.5 shadow-[var(--shadow-lg)]">
+        <div className="thin-scroll mt-2 min-h-0 flex-1 overflow-y-auto rounded-[var(--radius-xl)] bg-[var(--surface)] p-2 shadow-[var(--shadow-lg)] ring-1 ring-[var(--glass-ring)]">
           {q.trim().length < 2 ? (
             recent.length > 0 ? (
               <>

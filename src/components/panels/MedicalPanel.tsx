@@ -112,7 +112,7 @@ export default function MedicalPanel({
                   className="rounded px-1.5 py-0.5 text-[var(--text-2xs)] font-bold transition"
                   style={
                     filter === k
-                      ? { background: "var(--brand)", color: "#fff" }
+                      ? { background: "var(--brand-grad)", color: "var(--on-brand)" }
                       : { color: "var(--text-muted)" }
                   }
                 >

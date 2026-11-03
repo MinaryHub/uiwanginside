@@ -27,8 +27,9 @@ export function Section({
 }) {
   return (
     <section className="border-t border-[var(--border)] px-4 py-4 first:border-t-0">
-      <header className="mb-2.5 flex items-center gap-2">
-        <h2 className="text-[var(--text-2xs)] font-bold uppercase tracking-wide text-[var(--text-faint)]">
+      <header className="mb-3 flex items-center gap-2">
+        <span aria-hidden className="h-3.5 w-1 rounded-full bg-[var(--brand-2)]" />
+        <h2 className="text-[var(--text-sm)] font-extrabold tracking-tight text-[var(--text)]">
           {title}
         </h2>
         {right && <div className="ml-auto flex items-center">{right}</div>}
@@ -90,7 +91,7 @@ export function Badge({
       : `color-mix(in srgb, ${color} 14%, transparent)`;
   return (
     <span
-      className="inline-flex shrink-0 items-center gap-1 rounded-[5px] px-1.5 py-0.5 text-[var(--text-2xs)] font-bold"
+      className="inline-flex shrink-0 items-center gap-1 rounded-[var(--radius-full)] px-2 py-0.5 text-[var(--text-2xs)] font-bold"
       style={
         filled ? { background: color, color: "var(--surface)" } : { background: soft, color }
       }
@@ -120,7 +121,7 @@ export function Button({
 }) {
   const style =
     variant === "primary"
-      ? { background: "var(--brand)", color: "var(--on-brand)" }
+      ? undefined
       : variant === "secondary"
         ? {
             background: "transparent",
@@ -134,9 +135,11 @@ export function Button({
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className={`inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-[var(--radius)] px-3.5 text-[var(--text-sm)] font-bold transition disabled:opacity-45 ${
+      className={`press inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-[var(--radius-full)] px-4 text-[var(--text-sm)] font-bold disabled:opacity-45 ${
         full ? "w-full" : ""
-      } ${disabled ? "cursor-not-allowed" : "hover:brightness-[0.97] active:scale-[0.99]"}`}
+      } ${variant === "primary" ? "brand-fill" : ""} ${
+        disabled ? "cursor-not-allowed" : "hover:brightness-[0.97]"
+      }`}
       style={style}
     >
       {children}
@@ -155,7 +158,7 @@ export function Notice({
   const color = `var(--${tone})`;
   return (
     <p
-      className="mb-3 rounded-[var(--radius)] px-3 py-2 text-[var(--text-xs)] leading-relaxed"
+      className="mb-3 rounded-[var(--radius)] px-3.5 py-2.5 text-[var(--text-xs)] font-medium leading-relaxed"
       style={{ background: `color-mix(in srgb, ${color} 12%, transparent)`, color }}
     >
       {children}
@@ -211,7 +214,10 @@ export function LiveDot({ live }: { live: boolean }) {
       className="inline-flex items-center gap-1.5 text-[var(--text-2xs)] font-bold text-[var(--ok)]"
       title="실시간 데이터"
     >
-      <span className="h-1.5 w-1.5 rounded-full bg-[var(--ok)]" />
+      <span className="relative flex h-2 w-2">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--ok)] opacity-50" />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--ok)]" />
+      </span>
       실시간
     </span>
   );

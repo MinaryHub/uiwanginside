@@ -4,8 +4,8 @@
   "description": "의왕시 공공데이터를 지도 한 장에",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f2f4f6",
-  "theme_color": "#0f6b60",
+  "background_color": "#eef1f5",
+  "theme_color": "#0b7a6c",
   "lang": "ko",
   "icons": [
     {

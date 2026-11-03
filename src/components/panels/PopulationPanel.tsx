@@ -92,7 +92,7 @@ export default function PopulationPanel({
               className="rounded px-1.5 py-0.5 text-[var(--text-2xs)] font-bold transition"
               style={
                 sort === k
-                  ? { background: "var(--brand)", color: "#fff" }
+                  ? { background: "var(--brand-grad)", color: "var(--on-brand)" }
                   : { color: "var(--text-muted)" }
               }
             >
