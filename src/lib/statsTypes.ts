@@ -18,8 +18,6 @@ export interface StatsSummary {
   views: number;
   visitors: number;
   sessions: number;
-  /** 로그인한 채로 본 조회 수 */
-  memberViews: number;
 }
 
 export interface StatsPayload {
@@ -37,14 +35,6 @@ export interface StatsPayload {
   paths: NamedCount[];
   referrers: NamedCount[];
   devices: NamedCount[];
-  /** 쌓인 콘텐츠 — 사람이 남긴 것들 */
-  content: {
-    members: number;
-    photos: number;
-    ratings: number;
-    lists: number;
-    sharedLists: number;
-  };
   /** 기록이 시작된 시각 */
   since: string | null;
   updatedAt: string;

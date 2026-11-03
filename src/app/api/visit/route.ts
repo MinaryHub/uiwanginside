@@ -1,5 +1,4 @@
 import { getSql, ensureSchema, hasDb } from "@/lib/db";
-import { currentUserId } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -10,9 +9,9 @@ export const dynamic = "force-dynamic";
  * 이미 쓰고 있는 Postgres 에 최소한만 남긴다 — 방문자 수를 세는 데
  * 필요한 것 이상은 받지도 저장하지도 않는다.
  *
- * 남기지 않는 것: IP, User-Agent 원문, 전체 리퍼러 URL, 카카오 계정 식별자.
+ * 남기지 않는 것: IP, User-Agent 원문, 전체 리퍼러 URL.
  * 남기는 것: 경로, 모드, 리퍼러 호스트, 기기 종류(모바일/PC/태블릿),
- *            브라우저가 스스로 만든 임의의 방문자·세션 값, 로그인 여부.
+ *            브라우저가 스스로 만든 임의의 방문자·세션 값.
  */
 
 /** 사람이 아닌 접속은 통계를 흐린다 */
@@ -54,11 +53,7 @@ export async function POST(req: Request) {
    * 남에게 보여주게 된다. 들어오는 값을 믿지 않는다.
    */
   const rawPath = clamp(body.path, 120);
-  const path = rawPath?.startsWith("/stats/")
-    ? "/stats/[token]"
-    : rawPath?.startsWith("/list/")
-      ? "/list/[slug]"
-      : rawPath;
+  const path = rawPath?.startsWith("/stats/") ? "/stats/[token]" : rawPath;
   const visitorId = clamp(body.visitorId, 64);
   const sessionId = clamp(body.sessionId, 64);
   if (!path || !visitorId || !sessionId) return new Response(null, { status: 204 });
@@ -78,12 +73,11 @@ export async function POST(req: Request) {
   try {
     await ensureSchema();
     const sql = getSql();
-    const userId = await currentUserId();
     await sql`
-      INSERT INTO visits (path, mode, referrer, device, visitor_id, session_id, member)
+      INSERT INTO visits (path, mode, referrer, device, visitor_id, session_id)
       VALUES (${path}, ${clamp(body.mode, 20)}, ${referrer},
               ${isDevice(body.device) ? body.device : "unknown"},
-              ${visitorId}, ${sessionId}, ${!!userId})
+              ${visitorId}, ${sessionId})
     `;
   } catch (e) {
     console.error("[visit]", e);

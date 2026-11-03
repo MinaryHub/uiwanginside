@@ -6,13 +6,12 @@ import dynamic from "next/dynamic";
 import useSWR from "swr";
 import { swrFetcher } from "@/lib/fetcher";
 import { useDebounced } from "@/lib/useDebounced";
-import { parseUrlState, useSyncUrl, shareUrl } from "@/lib/urlState";
+import { parseUrlState, useSyncUrl } from "@/lib/urlState";
 import { UIWANG, DONGS, LANDMARKS } from "@/lib/uiwang";
 import { UIWANG_BBOX } from "@/lib/uiwang-boundary";
 import { DONG_BBOX, type LatLngBox } from "@/lib/dong-boundaries";
 import { MODES, MODE_MAP, type ModeId, type CardId } from "@/lib/modes";
 import type { CategoryKey } from "@/lib/uiwang";
-import { getDeviceId } from "@/lib/deviceId";
 import type { LatLng } from "@/lib/busPath";
 import { pickFleet, EMPTY_FLEET } from "@/lib/busFleet";
 import { useMyLocation } from "@/lib/useMyLocation";
@@ -22,7 +21,6 @@ import {
   LEVEL_LABEL,
   type TrafficSegment,
 } from "@/lib/traffic";
-import type { Photo, PhotosPayload } from "@/lib/photoTypes";
 import type { Cctv, CctvPayload } from "@/lib/cctvTypes";
 import { timeAgo } from "@/components/ui";
 import type {
@@ -37,7 +35,6 @@ import type {
   NewsPayload,
   TrafficPayload,
   TransitPayload,
-  RatingsPayload,
   BusPositionsPayload,
   BusFleetPayload,
   RoadsPayload,
@@ -51,7 +48,6 @@ import CctvCard from "@/components/CctvCard";
 import SearchOverlay from "@/components/SearchOverlay";
 import InfoOverlay, { type InfoTab } from "@/components/InfoOverlay";
 import DongCard from "@/components/DongCard";
-import AccountMenu, { type HeaderUser } from "@/components/AccountMenu";
 import MapCard from "@/components/MapCard";
 import PlacesPanel from "@/components/panels/PlacesPanel";
 import WeatherPanel from "@/components/panels/WeatherPanel";
@@ -63,8 +59,6 @@ import CctvPanel from "@/components/panels/CctvPanel";
 import NewsPanel from "@/components/panels/NewsPanel";
 import WastePanel from "@/components/panels/WastePanel";
 import PopulationPanel from "@/components/panels/PopulationPanel";
-import RatingPanel from "@/components/panels/RatingPanel";
-import { SHOW_PHOTOS, SHOW_MAP_SHARE } from "@/lib/features";
 
 const KakaoMap = dynamic(() => import("@/components/KakaoMap"), { ssr: false });
 
@@ -79,7 +73,6 @@ const NO_INCIDENTS: Incident[] = [];
 const NO_STOPS: BusStop[] = [];
 const NO_MEDICAL: MedicalPayload["places"] = [];
 const NO_LANDMARKS: typeof LANDMARKS = [];
-const NO_PHOTOS: Photo[] = [];
 const NO_SEGMENTS: TrafficSegment[] = [];
 const NO_CCTVS: Cctv[] = [];
 const NO_BUSES: BusPositionsPayload[] = [];
@@ -104,14 +97,7 @@ const POLL = {
  * 남짓이었다. 지도 중심 포털에서 지도를 양쪽에서 누르고 있었던 셈이다.
  * 지금은 지도가 전면이고 상단 바·모드 알약·시트가 그 위에 떠 있다.
  */
-export default function Dashboard({
-  appKey,
-  user,
-}: {
-  appKey?: string;
-  /** 서버에서 넘겨받은 로그인 상태. 클라이언트에서 다시 물어볼 이유가 없다. */
-  user: HeaderUser | null;
-}) {
+export default function Dashboard({ appKey }: { appKey?: string }) {
   const initial = parseUrlState(useSearchParams());
 
   /** null = 둘러보기. 지도만 보이는 기본 상태다. */
@@ -158,7 +144,6 @@ export default function Dashboard({
   );
   /** 검색으로 고른 곳 — 지금 목록에 없어도 지도와 카드에 남는다 */
   const [pinned, setPinned] = useState<Place | null>(null);
-  const [copied, setCopied] = useState(false);
 
   const def = mode ? MODE_MAP[mode] : null;
 
@@ -239,18 +224,6 @@ export default function Dashboard({
   );
   useSyncUrl(urlState);
 
-  const share = useCallback(async () => {
-    const url = shareUrl(urlState);
-    try {
-      if (navigator.share) await navigator.share({ title: "의왕 인사이드", url });
-      else await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    } catch {
-      /* 사용자가 공유를 취소한 경우 */
-    }
-  }, [urlState]);
-
   // ── 데이터 ────────────────────────────────────────────
   const needs = (c: CardId) => !!def?.cards.includes(c);
 
@@ -296,17 +269,6 @@ export default function Dashboard({
   );
 
   const placeList = useMemo(() => places.data?.data.places ?? [], [places.data]);
-
-  const ratings = useSWR<ApiEnvelope<RatingsPayload>>(
-    mode === "food" && placeList.length > 0
-      ? `/api/ratings?placeIds=${placeList
-          .slice(0, 120)
-          .map((p) => p.id)
-          .join(",")}&deviceId=${encodeURIComponent(getDeviceId())}`
-      : null,
-    swrFetcher,
-    { keepPreviousData: true, revalidateOnFocus: false },
-  );
 
   /**
    * 근처에 곧 오는 노선들 — 후보.
@@ -369,21 +331,9 @@ export default function Dashboard({
     { refreshInterval: POLL.busPositions, keepPreviousData: true },
   );
 
-  /** 내 사진. 로그인하지 않았으면 서버가 빈 목록을 준다. */
-  const myPhotos = useSWR<ApiEnvelope<PhotosPayload>>(
-    // 감춰 둔 동안에는 받아오지도 않는다 — 안 그리는 것을 매번 조회할 이유가 없다
-    SHOW_PHOTOS ? "/api/photos" : null,
-    swrFetcher,
-    { revalidateOnFocus: false },
-  );
-  const mapPhotos = myPhotos.data?.data.photos ?? NO_PHOTOS;
-  const [photo, setPhoto] = useState<Photo | null>(null);
-
   const refreshAll = useCallback(() => {
-    [places, weather, air, traffic, medical, transit, news, ratings].forEach((s) =>
-      s.mutate(),
-    );
-  }, [places, weather, air, traffic, medical, transit, news, ratings]);
+    [places, weather, air, traffic, medical, transit, news].forEach((s) => s.mutate());
+  }, [places, weather, air, traffic, medical, transit, news]);
 
   // ── 동작 ──────────────────────────────────────────────
   /**
@@ -502,21 +452,6 @@ export default function Dashboard({
     [revealMap, focus],
   );
 
-  /** 등록 결과를 SWR 캐시에 바로 반영한다 (재조회 없이) */
-  const applyRating = useCallback(
-    (placeId: string, r: RatingsPayload["ratings"][string]) => {
-      ratings.mutate(
-        (cur) =>
-          cur && {
-            ...cur,
-            data: { ...cur.data, ratings: { ...cur.data.ratings, [placeId]: r } },
-          },
-        { revalidate: false },
-      );
-    },
-    [ratings],
-  );
-
   const selectStop = useCallback(
     (stop: BusStop) => {
       setSelectedPlaceId(null);
@@ -570,7 +505,7 @@ export default function Dashboard({
   );
 
   /** 화면 아래에 카드가 떠 있는가 — 범례를 비켜 주는 판단에 쓴다 */
-  const bottomCard = !!(selectedPlaceId || marker || photo);
+  const bottomCard = !!(selectedPlaceId || marker);
 
   const basePlaces = def?.layers.places ? placeList : NO_PLACES;
   const mapPlaces = useMemo(() => {
@@ -660,16 +595,6 @@ export default function Dashboard({
   // ── 시트 내용 ─────────────────────────────────────────
   const card = (id: CardId) => {
     switch (id) {
-      case "rating":
-        return (
-          <RatingPanel
-            key={id}
-            ratings={ratings.data?.data.ratings ?? {}}
-            places={placeList}
-            selectedId={selectedPlaceId}
-            onSelectPlace={handleSelectPlace}
-          />
-        );
       case "weather":
         return <WeatherPanel key={id} res={weather.data} isLoading={weather.isLoading} />;
       case "air":
@@ -754,8 +679,6 @@ export default function Dashboard({
           incidents={mapIncidents}
           busStops={mapStops}
           medicalOpen={medicalMarkers}
-          photos={SHOW_PHOTOS ? mapPhotos : NO_PHOTOS}
-          onSelectPhoto={setPhoto}
           busPositions={mapBusPositions}
           busPaths={busRoutePaths.data?.data.paths ?? NO_PATHS}
           landmarks={mapLandmarks}
@@ -834,18 +757,15 @@ export default function Dashboard({
         >
           🔍
         </button>
-        <AccountMenu user={user} className={mapBtn} />
-        {SHOW_MAP_SHARE && (
-          <button
-            type="button"
-            onClick={share}
-            title="현재 화면 공유"
-            aria-label="현재 화면 공유"
-            className={`pointer-events-auto ${mapBtn}`}
-          >
-            {copied ? "✓" : "↗"}
-          </button>
-        )}
+        {/* 화면에 보이는 숫자가 어디서 왔는지 — 공공데이터 출처와 갱신 주기 */}
+        <Link
+          href="/opendata"
+          title="공공데이터 안내"
+          aria-label="공공데이터 안내"
+          className={`pointer-events-auto ${mapBtn}`}
+        >
+          ⓘ
+        </Link>
         <button
           type="button"
           onClick={refreshAll}
@@ -1077,44 +997,13 @@ export default function Dashboard({
         />
       )}
 
-      {photo && (
-        <MapCard
-          key={photo.id}
-          title={photo.caption || "내 사진"}
-          subtitle={new Date(photo.takenAt ?? photo.createdAt).toLocaleDateString("ko-KR", {
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-            timeZone: "Asia/Seoul",
-          })}
-          onClose={() => setPhoto(null)}
-        >
-          {/* 원본을 그대로 쓴다 — Blob URL 은 next/image 최적화 대상이 아니다 */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={photo.url}
-            alt={photo.caption ?? "내 사진"}
-            className="mt-3 max-h-[40vh] w-full rounded-[var(--radius)] object-contain"
-          />
-          <Link
-            href="/gallery"
-            className="mt-3 inline-flex min-h-[40px] items-center text-[var(--text-xs)] font-bold text-[var(--brand)] underline underline-offset-4"
-          >
-            갤러리에서 관리
-          </Link>
-        </MapCard>
-      )}
-
       {selectedPlace && (
         <PlaceDetailCard
           key={selectedPlace.id}
           place={selectedPlace}
-          rating={ratings.data?.data.ratings[selectedPlace.id]}
-          showRating={mode === "food"}
           medical={medical.data?.data.places ?? NO_MEDICAL}
           medicalDay={medical.data?.data.day ?? 0}
           onClose={() => setSelectedPlaceId(null)}
-          onRated={applyRating}
         />
       )}
 

@@ -289,57 +289,6 @@ async function checkGbisArrival(): Promise<Partial<HealthCheck>> {
 }
 
 /**
- * 카카오 로그인 자격 증명 점검.
- *
- * 로그인은 실제로 눌러보기 전까지 깨진 걸 알 수 없고, Auth.js 는 실패를
- * CallbackRouteError 로만 알려 원인을 짚기 어렵다. 그래서 일부러 틀린
- * 인가 코드로 토큰 교환을 시도한다. 코드가 틀렸다고 답하면 자격 증명은
- * 성한 것이고, KOE010(Bad client credentials) 이 오면 키·시크릿 문제다.
- * 틀린 코드로는 아무것도 발급되지 않으므로 부작용이 없다.
- */
-async function checkKakaoLogin(origin: string): Promise<Partial<HealthCheck>> {
-  const id = process.env.KAKAO_CLIENT_ID;
-  const secret = process.env.KAKAO_CLIENT_SECRET;
-  if (!id) return { status: "missing", detail: "KAKAO_CLIENT_ID(REST API 키) 없음" };
-
-  const body = new URLSearchParams({
-    grant_type: "authorization_code",
-    client_id: id,
-    redirect_uri: `${origin}/api/auth/callback/kakao`,
-    code: "health-check-invalid-code",
-  });
-  if (secret) body.set("client_secret", secret);
-
-  const [res, latencyMs, err] = await timed(() =>
-    timedFetch("https://kauth.kakao.com/oauth/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=utf-8" },
-      body,
-    }),
-  );
-  if (err) return { status: "error", detail: msg(err), latencyMs };
-
-  const text = await res!.text();
-  const code = (text.match(/"error_code"\s*:\s*"([^"]+)"/) ?? [])[1] ?? "";
-
-  if (code === "KOE010") {
-    return {
-      status: "error",
-      detail: secret
-        ? "KOE010 — Client Secret 이 콘솔 값과 다릅니다"
-        : "KOE010 — 콘솔에서 Client Secret 활성화가 켜져 있는데 KAKAO_CLIENT_SECRET 이 없습니다",
-      latencyMs,
-    };
-  }
-  // 코드가 틀렸다는 답 = 자격 증명은 통과했다는 뜻
-  return {
-    status: "live",
-    detail: `자격 증명 정상 (리다이렉트 URI 는 ${origin}/api/auth/callback/kakao 등록 필요)`,
-    latencyMs,
-  };
-}
-
-/**
  * 응급의료·미세먼지는 이 화면에 항목이 없어, 망가진 채로 오래 지나갔다.
  * 의료 모드가 통째로 비어 있는데도 아무 데서도 드러나지 않았다.
  * 화면에 쓰는 것은 모두 여기 올린다.
@@ -438,14 +387,6 @@ const SPECS: Omit<HealthCheck, "status" | "detail" | "configured">[] = [
     howTo: "위와 같은 카카오 애플리케이션의 REST API 키",
   },
   {
-    id: "kakao-login",
-    label: "카카오 로그인 (회원)",
-    envVars: ["KAKAO_CLIENT_ID", "KAKAO_CLIENT_SECRET", "AUTH_SECRET"],
-    howTo:
-      "제품 설정 → 카카오 로그인 → 보안 → Client Secret 생성 후 활성화 ON. " +
-      "리다이렉트 URI 는 JavaScript 키가 아니라 REST API 키 쪽에 등록해야 한다",
-  },
-  {
     id: "emergency",
     label: "응급의료 (진료중 병원·약국)",
     envVars: ["KMA_SERVICE_KEY"],
@@ -522,7 +463,8 @@ function publicOrigin(req: Request): string {
     const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
     return `${proto}://${host}`;
   }
-  const configured = process.env.AUTH_URL;
+  // AUTH_URL 은 로그인을 쓰던 시절의 이름이다. 이미 넣어둔 배포를 위해 함께 읽는다.
+  const configured = process.env.PUBLIC_URL ?? process.env.AUTH_URL;
   if (configured) return configured.replace(/\/$/, "");
   return new URL(req.url).origin;
 }
@@ -544,7 +486,6 @@ export async function GET(req: Request) {
   const results: Record<string, Partial<HealthCheck>> = {
     "kakao-js": await checkKakaoJs(origin),
     "kakao-rest": kakaoRest,
-    "kakao-login": await checkKakaoLogin(origin),
     emergency: await checkEmergency(),
     air: await checkAir(),
     neis: await checkNeis(),

@@ -1,7 +1,7 @@
 {
   "name": "의왕 인사이드",
   "short_name": "의왕",
-  "description": "의왕시 생활·실시간 정보와 내 사진 지도",
+  "description": "의왕시 공공데이터를 지도 한 장에",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f2f4f6",
