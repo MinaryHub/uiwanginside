@@ -69,7 +69,7 @@ function Item({
   title?: string;
   children: React.ReactNode;
 }) {
-  const cls = `flex min-h-[36px] items-center gap-1.5 rounded-[var(--radius-full)] px-2.5 text-[var(--text-sm)] transition ${
+  const cls = `flex min-h-[36px] items-center gap-1.5 rounded-[var(--radius-full)] px-2.5 text-[length:var(--text-sm)] transition ${
     grow ? "min-w-0 flex-1" : "shrink-0"
   }`;
   const body = (
@@ -87,7 +87,7 @@ function Item({
       title={title}
       aria-pressed={active}
       className={`${cls} ${active ? "" : "hover:bg-[var(--surface-2)]"}`}
-      style={active ? { background: "var(--brand)", color: "var(--on-brand)" } : undefined}
+      style={active ? { background: "var(--text)", color: "var(--surface)" } : undefined}
     >
       {body}
     </button>
@@ -176,7 +176,7 @@ export default function SummaryStrip({
           title={`${new Date(a.since).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })} 발효 · 기상청`}
         >
           <span
-            className="rounded-[var(--radius)] px-1.5 py-0.5 text-[var(--text-xs)] font-extrabold"
+            className="rounded-[var(--radius)] px-1.5 py-0.5 text-[length:var(--text-xs)] font-bold"
             style={{
               background: a.level === "warning" ? "var(--danger)" : "var(--warn)",
               color: "#fff",
@@ -212,7 +212,7 @@ export default function SummaryStrip({
           </span>
           {top.length > 1 && (
             <span
-              className={`hidden shrink-0 text-[var(--text-2xs)] tabular-nums sm:inline ${
+              className={`hidden shrink-0 text-[length:var(--text-2xs)] tabular-nums sm:inline ${
                 openTab === "news" ? "opacity-70" : "text-[var(--text-faint)]"
               }`}
             >

@@ -44,93 +44,6 @@ export async function ensureSchema(): Promise<void> {
   if (ensured) return;
   const sql = getSql();
 
-  await sql`
-    CREATE TABLE IF NOT EXISTS place_ratings (
-      id          BIGSERIAL PRIMARY KEY,
-      place_id    TEXT      NOT NULL,
-      place_name  TEXT      NOT NULL,
-      stars       SMALLINT  NOT NULL CHECK (stars BETWEEN 1 AND 5),
-      comment     TEXT,
-      device_id   TEXT      NOT NULL,
-      -- 평가 당시 위치. 사후 검증과 분쟁 확인을 위해 남긴다.
-      rated_lat   DOUBLE PRECISION NOT NULL,
-      rated_lng   DOUBLE PRECISION NOT NULL,
-      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-      -- 같은 기기가 같은 가게를 두 번 평가할 수 없다 (수정은 덮어쓰기)
-      UNIQUE (place_id, device_id)
-    )
-  `;
-  await sql`
-    CREATE INDEX IF NOT EXISTS place_ratings_place_idx ON place_ratings (place_id)
-  `;
-  // 속도 제한 판정용 — 최근 등록을 기기 단위로 빠르게 센다
-  await sql`
-    CREATE INDEX IF NOT EXISTS place_ratings_device_time_idx
-      ON place_ratings (device_id, created_at DESC)
-  `;
-
-  await sql`
-    CREATE TABLE IF NOT EXISTS photos (
-      id          BIGSERIAL PRIMARY KEY,
-      user_id     TEXT      NOT NULL,
-      url         TEXT      NOT NULL,
-      pathname    TEXT      NOT NULL,
-      caption     TEXT,
-      lat         DOUBLE PRECISION NOT NULL,
-      lng         DOUBLE PRECISION NOT NULL,
-      -- 위치를 어디서 얻었는지. 사진 EXIF 가 가장 정확하고, 없으면 현위치다.
-      loc_source  TEXT      NOT NULL DEFAULT 'device',
-      taken_at    TIMESTAMPTZ,
-      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
-  `;
-  await sql`
-    CREATE INDEX IF NOT EXISTS photos_user_idx ON photos (user_id, created_at DESC)
-  `;
-
-  /**
-   * 나만의 장소 리스트.
-   * share_slug 가 있으면 그 링크를 아는 사람은 로그인 없이 볼 수 있다.
-   * 공유를 끄면 slug 를 지워 링크가 즉시 무효가 된다.
-   */
-  await sql`
-    CREATE TABLE IF NOT EXISTS place_lists (
-      id          BIGSERIAL PRIMARY KEY,
-      user_id     TEXT      NOT NULL,
-      owner_name  TEXT,
-      title       TEXT      NOT NULL,
-      description TEXT,
-      share_slug  TEXT      UNIQUE,
-      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-      updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
-  `;
-  await sql`
-    CREATE INDEX IF NOT EXISTS place_lists_user_idx
-      ON place_lists (user_id, updated_at DESC)
-  `;
-  await sql`
-    CREATE TABLE IF NOT EXISTS place_list_items (
-      id         BIGSERIAL PRIMARY KEY,
-      list_id    BIGINT    NOT NULL REFERENCES place_lists(id) ON DELETE CASCADE,
-      place_id   TEXT      NOT NULL,
-      name       TEXT      NOT NULL,
-      category   TEXT      NOT NULL,
-      address    TEXT,
-      phone      TEXT,
-      lat        DOUBLE PRECISION NOT NULL,
-      lng        DOUBLE PRECISION NOT NULL,
-      note       TEXT,
-      sort_order INT       NOT NULL DEFAULT 0,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-      UNIQUE (list_id, place_id)
-    )
-  `;
-  await sql`
-    CREATE INDEX IF NOT EXISTS place_list_items_list_idx
-      ON place_list_items (list_id, sort_order, created_at)
-  `;
-
   /**
    * 접속 기록.
    *
@@ -150,6 +63,7 @@ export async function ensureSchema(): Promise<void> {
       device     TEXT      NOT NULL DEFAULT 'unknown',
       visitor_id TEXT      NOT NULL,
       session_id TEXT      NOT NULL,
+      -- 로그인 기능을 없앤 뒤로는 늘 false 다. 기존 표와 맞추려고 남겨 둔다.
       member     BOOLEAN   NOT NULL DEFAULT false
     )
   `;

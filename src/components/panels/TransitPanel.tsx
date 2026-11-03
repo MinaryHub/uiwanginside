@@ -47,27 +47,27 @@ function ArrivalRow({
         style={tracked ? { background: "var(--brand-soft)" } : undefined}
       >
       <div className="flex items-center gap-1.5">
-        <span className="w-12 shrink-0 truncate text-[var(--text-sm)] font-extrabold text-[var(--info)]">
+        <span className="w-12 shrink-0 truncate text-[length:var(--text-sm)] font-bold text-[var(--info)]">
           {a.routeName}
         </span>
         {a.destName && (
-          <span className="min-w-0 flex-1 truncate text-[var(--text-2xs)] text-[var(--text-muted)]">
+          <span className="min-w-0 flex-1 truncate text-[length:var(--text-2xs)] text-[var(--text-muted)]">
             {a.destName} 방면
           </span>
         )}
         <span
-          className="ml-auto shrink-0 text-[var(--text-sm)] font-extrabold tabular-nums"
+          className="ml-auto shrink-0 text-[length:var(--text-sm)] font-bold tabular-nums"
           style={{ color: first.color }}
         >
           {first.text}
         </span>
-        <span className="w-8 shrink-0 text-right text-[var(--text-2xs)] text-[var(--text-muted)] tabular-nums">
+        <span className="w-8 shrink-0 text-right text-[length:var(--text-2xs)] text-[var(--text-muted)] tabular-nums">
           {a.predictSec2 != null ? second.text : ""}
         </span>
       </div>
 
       {tracked && (
-        <div className="mt-0.5 pl-[54px] text-[var(--text-2xs)] font-bold text-[var(--brand)]">
+        <div className="mt-0.5 pl-[54px] text-[length:var(--text-2xs)] font-bold text-[var(--brand)]">
           지도에서 위치 표시 중
         </div>
       )}
@@ -76,20 +76,20 @@ function ArrivalRow({
       {(a.stationsLeft != null || crowd || a.remainSeats != null || a.lowPlate) && (
         <div className="mt-0.5 flex items-center gap-1.5 pl-[54px]">
           {a.stationsLeft != null && a.stationsLeft > 0 && (
-            <span className="text-[var(--text-2xs)] text-[var(--text-muted)]">
+            <span className="text-[length:var(--text-2xs)] text-[var(--text-muted)]">
               {a.stationsLeft}번째 전
             </span>
           )}
           {crowd && (
-            <span className="text-[var(--text-2xs)] font-bold" style={{ color: crowd.color }}>
+            <span className="text-[length:var(--text-2xs)] font-bold" style={{ color: crowd.color }}>
               {crowd.label}
             </span>
           )}
           {a.remainSeats != null && (
-            <span className="text-[var(--text-2xs)] text-[var(--text-muted)]">좌석 {a.remainSeats}</span>
+            <span className="text-[length:var(--text-2xs)] text-[var(--text-muted)]">좌석 {a.remainSeats}</span>
           )}
           {a.lowPlate && (
-            <span className="rounded bg-[var(--ok-soft)] px-1 text-[var(--text-2xs)] font-bold text-[var(--ok)]">
+            <span className="rounded bg-[var(--ok-soft)] px-1 text-[length:var(--text-2xs)] font-bold text-[var(--ok)]">
               저상
             </span>
           )}
@@ -125,7 +125,7 @@ export default function TransitPanel({
         positionOnly ? (
           <span
             title="정류소 위치만 실제 데이터 · 도착 시간은 표시할 수 없음"
-            className="text-[var(--text-2xs)] font-bold text-[var(--info)]"
+            className="text-[length:var(--text-2xs)] font-bold text-[var(--info)]"
           >
             위치만
           </span>
@@ -149,17 +149,17 @@ export default function TransitPanel({
                 onClick={() => onFocus(s.lat, s.lng)}
                 className="mb-1 flex w-full items-center gap-1.5 text-left"
               >
-                <span className="truncate text-[var(--text-sm)] font-bold">{s.name}</span>
+                <span className="truncate text-[length:var(--text-sm)] font-bold">{s.name}</span>
                 {s.mobileNo && (
                   <span
                     title="정류소 번호 (표지판에 적힌 숫자)"
-                    className="shrink-0 rounded bg-[var(--surface)] px-1 text-[var(--text-2xs)] font-semibold text-[var(--text-muted)]"
+                    className="shrink-0 rounded bg-[var(--surface)] px-1 text-[length:var(--text-2xs)] font-semibold text-[var(--text-muted)]"
                   >
                     {s.mobileNo}
                   </span>
                 )}
                 {s.distance != null && (
-                  <span className="ml-auto shrink-0 text-[var(--text-2xs)] text-[var(--text-muted)]">
+                  <span className="ml-auto shrink-0 text-[length:var(--text-2xs)] text-[var(--text-muted)]">
                     {s.distance >= 1000
                       ? `${(s.distance / 1000).toFixed(1)}km`
                       : `${s.distance}m`}
@@ -179,7 +179,7 @@ export default function TransitPanel({
                   ))}
                 </ul>
               ) : (
-                <p className="py-1 text-[var(--text-xs)] text-[var(--text-muted)]">
+                <p className="py-1 text-[length:var(--text-xs)] text-[var(--text-muted)]">
                   {positionOnly ? "도착정보 미연동" : "지금 운행 중인 버스가 없습니다"}
                 </p>
               )}

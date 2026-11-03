@@ -25,7 +25,6 @@ package-lock.json 이 그대로면 node_modules 층을 다시 만들지 않는�
 
 - Vercel 전용 런타임 API(`@vercel/functions`·`geolocation()`·`waitUntil()`)를 쓰지 않는다
 - 모든 페이지가 `force-dynamic` — ISR·캐시 재검증 문제가 없다
-- `@vercel/blob` 이 `BLOB_READ_WRITE_TOKEN` 방식이라 Vercel 밖에서도 그대로 쓴다
 - `@neondatabase/serverless` 는 HTTP 드라이버라 어디서든 붙는다
 - `next/image` 를 쓰지 않아 `sharp`·`remotePatterns` 문제가 없다
 
@@ -37,7 +36,6 @@ package-lock.json 이 그대로면 node_modules 층을 다시 만들지 않는�
 그려지지 않는다. 이 앱은 지도가 본체라 사실상 배포 실패다.
 
 - **플랫폼 → Web → 사이트 도메인**: `https://uiwanginside.kimserv.com` 추가
-- **카카오 로그인 → Redirect URI**: `https://uiwanginside.kimserv.com/api/auth/callback/kakao` 추가
 
 Vercel 을 대체하므로 기존 Vercel 도메인은 지워도 된다.
 
@@ -64,11 +62,12 @@ scp deploy/.env.pi <파이>:~/uiwanginside/.env
 값의 출처는 **`.env.local`** 이다. Vercel 은 참고만 한다.
 
 `vercel env pull` 을 그대로 쓸 수 없다. Sensitive 로 표시된 변수를 실제 값이 아니라
-`[SENSITIVE]` 로 내려주는데, 이 프로젝트에서는 13개가 그렇다 — 지도 키·카카오
-로그인·모든 공공데이터 키가 거기에 든다. 그대로 올리면 화면은 뜨는데 아무 데이터도
+`[SENSITIVE]` 로 내려주는데, 이 프로젝트에서는 13개가 그렇다 — 지도 키·모든 공공데이터
+키가 거기에 든다. 그대로 올리면 화면은 뜨는데 아무 데이터도
 안 나오고, 원인이 어디인지도 보이지 않는다. 스크립트가 자리표시자를 거부한다.
 
-`AUTH_URL` 만 새 도메인으로 바꾼다. `VERCEL_*`·`NX_*`·`TURBO_*` 는 파이에서 의미가
+`PUBLIC_URL` 만 새 도메인으로 정한다. 로그인을 쓰던 시절의 `AUTH_*`·`KAKAO_CLIENT_*`·
+`BLOB_READ_WRITE_TOKEN` 은 더 쓰지 않아 걸러낸다. `VERCEL_*`·`NX_*`·`TURBO_*` 는 파이에서 의미가
 없어 걸러낸다. 필수 값이 빠지면 파일을 쓰지 않고 멈춘다.
 
 **비밀값이므로 저장소에 넣지 않는다** — `deploy/.env.pi` 는 `.gitignore` 에 있다.
@@ -124,7 +123,7 @@ tls-alpn-01 로 확인했으니, 그 성공 자체가 포트 포워딩이 된다
 
 - `linux/arm64` 이미지 빌드 — 성공, 452MB
 - 그 이미지를 띄워 파이에 올라갈 `.env` 그대로 실행 — 홈·`/status` 200,
-  `/gallery`·`/lists` 는 307(로그인 필요, 정상), 날씨·미세먼지·의료·교통 API 200
+  날씨·미세먼지·의료·교통 API 200
 - `_next/static` 의 CSS·JS 가 404 가 아닌지 — 정상 (standalone 이 빼먹는 부분)
 - 지도 키가 클라이언트 번들에 박혔는지 — 박혀 있다
 - Neon 쓰기 — `/api/visit` 204
@@ -214,7 +213,7 @@ ssh <파이> 'cd ~/uiwanginside && docker compose logs -f app'
 
 1. `https://uiwanginside.kimserv.com` — 자물쇠가 잠기고 **지도가 그려지는지** (안 그려지면 1번 도메인 등록)
 2. 상단 요약줄에 날씨·미세먼지·사고·진료 값이 들어오는지 (안 들어오면 `.env` 의 키)
-3. 카카오 로그인 (실패하면 Redirect URI 또는 `AUTH_URL`)
+3. `https://uiwanginside.kimserv.com/opendata` — 공공데이터 안내 화면이 뜨는지
 4. `https://uiwanginside.kimserv.com/status` — 외부 API 6개의 키 상태를 한 화면에서 진단
 
 ## 남는 것

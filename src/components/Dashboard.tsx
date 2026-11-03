@@ -6,13 +6,12 @@ import dynamic from "next/dynamic";
 import useSWR from "swr";
 import { swrFetcher } from "@/lib/fetcher";
 import { useDebounced } from "@/lib/useDebounced";
-import { parseUrlState, useSyncUrl, shareUrl } from "@/lib/urlState";
+import { parseUrlState, useSyncUrl } from "@/lib/urlState";
 import { UIWANG, DONGS, LANDMARKS } from "@/lib/uiwang";
 import { UIWANG_BBOX } from "@/lib/uiwang-boundary";
 import { DONG_BBOX, type LatLngBox } from "@/lib/dong-boundaries";
 import { MODES, MODE_MAP, type ModeId, type CardId } from "@/lib/modes";
 import type { CategoryKey } from "@/lib/uiwang";
-import { getDeviceId } from "@/lib/deviceId";
 import type { LatLng } from "@/lib/busPath";
 import { pickFleet, EMPTY_FLEET } from "@/lib/busFleet";
 import { useMyLocation } from "@/lib/useMyLocation";
@@ -22,7 +21,6 @@ import {
   LEVEL_LABEL,
   type TrafficSegment,
 } from "@/lib/traffic";
-import type { Photo, PhotosPayload } from "@/lib/photoTypes";
 import type { Cctv, CctvPayload } from "@/lib/cctvTypes";
 import { timeAgo } from "@/components/ui";
 import type {
@@ -37,13 +35,13 @@ import type {
   NewsPayload,
   TrafficPayload,
   TransitPayload,
-  RatingsPayload,
   BusPositionsPayload,
   BusFleetPayload,
   RoadsPayload,
 } from "@/lib/types";
 import Link from "next/link";
 import Logo from "@/components/Logo";
+import Icon from "@/components/Icon";
 import SummaryStrip from "@/components/SummaryStrip";
 import PlaceDetailCard from "@/components/PlaceDetailCard";
 import StopCard from "@/components/StopCard";
@@ -51,7 +49,6 @@ import CctvCard from "@/components/CctvCard";
 import SearchOverlay from "@/components/SearchOverlay";
 import InfoOverlay, { type InfoTab } from "@/components/InfoOverlay";
 import DongCard from "@/components/DongCard";
-import AccountMenu, { type HeaderUser } from "@/components/AccountMenu";
 import MapCard from "@/components/MapCard";
 import PlacesPanel from "@/components/panels/PlacesPanel";
 import WeatherPanel from "@/components/panels/WeatherPanel";
@@ -63,8 +60,6 @@ import CctvPanel from "@/components/panels/CctvPanel";
 import NewsPanel from "@/components/panels/NewsPanel";
 import WastePanel from "@/components/panels/WastePanel";
 import PopulationPanel from "@/components/panels/PopulationPanel";
-import RatingPanel from "@/components/panels/RatingPanel";
-import { SHOW_PHOTOS, SHOW_MAP_SHARE } from "@/lib/features";
 
 const KakaoMap = dynamic(() => import("@/components/KakaoMap"), { ssr: false });
 
@@ -79,7 +74,6 @@ const NO_INCIDENTS: Incident[] = [];
 const NO_STOPS: BusStop[] = [];
 const NO_MEDICAL: MedicalPayload["places"] = [];
 const NO_LANDMARKS: typeof LANDMARKS = [];
-const NO_PHOTOS: Photo[] = [];
 const NO_SEGMENTS: TrafficSegment[] = [];
 const NO_CCTVS: Cctv[] = [];
 const NO_BUSES: BusPositionsPayload[] = [];
@@ -104,14 +98,7 @@ const POLL = {
  * 남짓이었다. 지도 중심 포털에서 지도를 양쪽에서 누르고 있었던 셈이다.
  * 지금은 지도가 전면이고 상단 바·모드 알약·시트가 그 위에 떠 있다.
  */
-export default function Dashboard({
-  appKey,
-  user,
-}: {
-  appKey?: string;
-  /** 서버에서 넘겨받은 로그인 상태. 클라이언트에서 다시 물어볼 이유가 없다. */
-  user: HeaderUser | null;
-}) {
+export default function Dashboard({ appKey }: { appKey?: string }) {
   const initial = parseUrlState(useSearchParams());
 
   /** null = 둘러보기. 지도만 보이는 기본 상태다. */
@@ -158,7 +145,6 @@ export default function Dashboard({
   );
   /** 검색으로 고른 곳 — 지금 목록에 없어도 지도와 카드에 남는다 */
   const [pinned, setPinned] = useState<Place | null>(null);
-  const [copied, setCopied] = useState(false);
 
   const def = mode ? MODE_MAP[mode] : null;
 
@@ -239,18 +225,6 @@ export default function Dashboard({
   );
   useSyncUrl(urlState);
 
-  const share = useCallback(async () => {
-    const url = shareUrl(urlState);
-    try {
-      if (navigator.share) await navigator.share({ title: "의왕 인사이드", url });
-      else await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    } catch {
-      /* 사용자가 공유를 취소한 경우 */
-    }
-  }, [urlState]);
-
   // ── 데이터 ────────────────────────────────────────────
   const needs = (c: CardId) => !!def?.cards.includes(c);
 
@@ -296,17 +270,6 @@ export default function Dashboard({
   );
 
   const placeList = useMemo(() => places.data?.data.places ?? [], [places.data]);
-
-  const ratings = useSWR<ApiEnvelope<RatingsPayload>>(
-    mode === "food" && placeList.length > 0
-      ? `/api/ratings?placeIds=${placeList
-          .slice(0, 120)
-          .map((p) => p.id)
-          .join(",")}&deviceId=${encodeURIComponent(getDeviceId())}`
-      : null,
-    swrFetcher,
-    { keepPreviousData: true, revalidateOnFocus: false },
-  );
 
   /**
    * 근처에 곧 오는 노선들 — 후보.
@@ -369,21 +332,9 @@ export default function Dashboard({
     { refreshInterval: POLL.busPositions, keepPreviousData: true },
   );
 
-  /** 내 사진. 로그인하지 않았으면 서버가 빈 목록을 준다. */
-  const myPhotos = useSWR<ApiEnvelope<PhotosPayload>>(
-    // 감춰 둔 동안에는 받아오지도 않는다 — 안 그리는 것을 매번 조회할 이유가 없다
-    SHOW_PHOTOS ? "/api/photos" : null,
-    swrFetcher,
-    { revalidateOnFocus: false },
-  );
-  const mapPhotos = myPhotos.data?.data.photos ?? NO_PHOTOS;
-  const [photo, setPhoto] = useState<Photo | null>(null);
-
   const refreshAll = useCallback(() => {
-    [places, weather, air, traffic, medical, transit, news, ratings].forEach((s) =>
-      s.mutate(),
-    );
-  }, [places, weather, air, traffic, medical, transit, news, ratings]);
+    [places, weather, air, traffic, medical, transit, news].forEach((s) => s.mutate());
+  }, [places, weather, air, traffic, medical, transit, news]);
 
   // ── 동작 ──────────────────────────────────────────────
   /**
@@ -502,21 +453,6 @@ export default function Dashboard({
     [revealMap, focus],
   );
 
-  /** 등록 결과를 SWR 캐시에 바로 반영한다 (재조회 없이) */
-  const applyRating = useCallback(
-    (placeId: string, r: RatingsPayload["ratings"][string]) => {
-      ratings.mutate(
-        (cur) =>
-          cur && {
-            ...cur,
-            data: { ...cur.data, ratings: { ...cur.data.ratings, [placeId]: r } },
-          },
-        { revalidate: false },
-      );
-    },
-    [ratings],
-  );
-
   const selectStop = useCallback(
     (stop: BusStop) => {
       setSelectedPlaceId(null);
@@ -570,7 +506,7 @@ export default function Dashboard({
   );
 
   /** 화면 아래에 카드가 떠 있는가 — 범례를 비켜 주는 판단에 쓴다 */
-  const bottomCard = !!(selectedPlaceId || marker || photo);
+  const bottomCard = !!(selectedPlaceId || marker);
 
   const basePlaces = def?.layers.places ? placeList : NO_PLACES;
   const mapPlaces = useMemo(() => {
@@ -660,16 +596,6 @@ export default function Dashboard({
   // ── 시트 내용 ─────────────────────────────────────────
   const card = (id: CardId) => {
     switch (id) {
-      case "rating":
-        return (
-          <RatingPanel
-            key={id}
-            ratings={ratings.data?.data.ratings ?? {}}
-            places={placeList}
-            selectedId={selectedPlaceId}
-            onSelectPlace={handleSelectPlace}
-          />
-        );
       case "weather":
         return <WeatherPanel key={id} res={weather.data} isLoading={weather.isLoading} />;
       case "air":
@@ -737,10 +663,7 @@ export default function Dashboard({
   };
 
   /** 지도 위에 떠 있는 버튼 공통 스타일 */
-  const mapBtn =
-    "grid h-10 w-10 place-items-center rounded-[var(--radius)] border border-[var(--border)] " +
-    "bg-[var(--surface)]/92 text-[var(--text-base)] font-bold shadow-[var(--shadow-md)] " +
-    "backdrop-blur transition hover:border-[var(--brand)] hover:text-[var(--brand)]";
+  const mapBtn = "glass map-btn";
 
   return (
     <div className="relative h-dvh overflow-hidden bg-[var(--bg)]">
@@ -754,8 +677,6 @@ export default function Dashboard({
           incidents={mapIncidents}
           busStops={mapStops}
           medicalOpen={medicalMarkers}
-          photos={SHOW_PHOTOS ? mapPhotos : NO_PHOTOS}
-          onSelectPhoto={setPhoto}
           busPositions={mapBusPositions}
           busPaths={busRoutePaths.data?.data.paths ?? NO_PATHS}
           landmarks={mapLandmarks}
@@ -791,20 +712,18 @@ export default function Dashboard({
       */}
       <header className="pointer-events-none absolute inset-x-0 top-0 z-40 p-3">
         <div className="flex items-center gap-2">
-        <div className="pointer-events-auto flex min-w-0 flex-1 items-center gap-2 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)]/92 px-3 py-2 shadow-[var(--shadow-md)] backdrop-blur">
+        <div className="glass pointer-events-auto flex h-11 min-w-0 flex-1 items-center gap-2.5 rounded-[var(--radius-full)] pl-2 pr-3">
           <button
             type="button"
             onClick={() => {
               setMode(null);
               setSheetOpen(false);
             }}
-            className="flex shrink-0 items-center gap-1.5"
+            className="press flex shrink-0 items-center gap-2 rounded-[var(--radius-full)] py-1 pl-1 pr-2"
             title="둘러보기로"
           >
-            <Logo size={24} />
-            <span className="text-[var(--text-base)] font-extrabold tracking-tight">
-              의왕
-            </span>
+            <Logo size={26} />
+            <span className="text-[length:var(--text-base)] font-bold tracking-tight">의왕 인사이드</span>
           </button>
           {/*
             좁은 화면에서는 이 자리에 두지 않는다. 실측하면 요약에 남는
@@ -832,20 +751,17 @@ export default function Dashboard({
           aria-label="이름으로 찾기"
           className={`pointer-events-auto ${mapBtn}`}
         >
-          🔍
+          <Icon name="search" />
         </button>
-        <AccountMenu user={user} className={mapBtn} />
-        {SHOW_MAP_SHARE && (
-          <button
-            type="button"
-            onClick={share}
-            title="현재 화면 공유"
-            aria-label="현재 화면 공유"
-            className={`pointer-events-auto ${mapBtn}`}
-          >
-            {copied ? "✓" : "↗"}
-          </button>
-        )}
+        {/* 화면에 보이는 숫자가 어디서 왔는지 — 공공데이터 출처와 갱신 주기 */}
+        <Link
+          href="/opendata"
+          title="공공데이터 안내"
+          aria-label="공공데이터 안내"
+          className={`pointer-events-auto ${mapBtn}`}
+        >
+          <Icon name="info" />
+        </Link>
         <button
           type="button"
           onClick={refreshAll}
@@ -853,7 +769,7 @@ export default function Dashboard({
           aria-label="새로고침"
           className={`pointer-events-auto ${mapBtn}`}
         >
-          ↻
+          <Icon name="refresh" />
         </button>
         </div>
 
@@ -863,7 +779,7 @@ export default function Dashboard({
           기온만 보였다. 폭을 다 쓰는 자기 줄을 주면 미세먼지·사고·
           진료중·특보가 함께 들어온다. 지도를 46px 내주는 대신이다.
         */}
-        <div className="pointer-events-auto mt-1.5 flex h-10 items-center overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)]/92 px-2 shadow-[var(--shadow-md)] backdrop-blur sm:hidden">
+        <div className="glass pointer-events-auto mt-1.5 flex h-10 items-center overflow-hidden rounded-[var(--radius-full)] px-2 sm:hidden">
           <SummaryStrip
             weather={weather.data}
             air={air.data}
@@ -881,7 +797,7 @@ export default function Dashboard({
         className="pointer-events-none absolute inset-x-0 top-[104px] z-40 flex justify-center px-3 sm:top-[64px]"
         aria-label="보기 모드"
       >
-        <div className="pointer-events-auto flex gap-1 rounded-[var(--radius-full)] border border-[var(--border)] bg-[var(--surface)]/92 p-1 shadow-[var(--shadow-md)] backdrop-blur">
+        <div className="glass pointer-events-auto flex gap-0.5 rounded-[var(--radius-full)] p-1">
           {MODES.map((m) => {
             const on = m.id === mode;
             return (
@@ -890,12 +806,9 @@ export default function Dashboard({
                 type="button"
                 onClick={() => toggleMode(m.id)}
                 aria-pressed={on}
-                className="min-h-[36px] rounded-[var(--radius-full)] px-3.5 text-[var(--text-sm)] font-bold transition"
-                style={
-                  on
-                    ? { background: "var(--brand)", color: "var(--on-brand)" }
-                    : { color: "var(--text-muted)" }
-                }
+                className={`press min-h-[36px] rounded-[var(--radius-full)] px-4 text-[length:var(--text-sm)] font-semibold ${
+                  on ? "brand-fill" : "text-[var(--text-muted)] hover:text-[var(--text)]"
+                }`}
               >
                 {m.label}
               </button>
@@ -926,13 +839,13 @@ export default function Dashboard({
             동
           </button>
           {dongMenu && (
-            <div className="fade-up absolute right-12 top-0 w-32 overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)]">
+            <div className="glass fade-up absolute right-14 top-0 w-36 overflow-hidden rounded-[var(--radius-lg)] p-1">
               {DONGS.map((d) => (
                 <button
                   key={d.name}
                   type="button"
                   onClick={() => toggleDong(d)}
-                  className="block min-h-[40px] w-full px-3 text-left text-[var(--text-sm)] font-semibold transition hover:bg-[var(--surface-2)]"
+                  className="block min-h-[40px] w-full rounded-[var(--radius)] px-3 text-left text-[length:var(--text-sm)] font-semibold transition hover:bg-[var(--surface-2)]"
                   style={activeDong === d.name ? { color: "var(--info)" } : undefined}
                 >
                   {d.name}
@@ -945,7 +858,7 @@ export default function Dashboard({
                   setFitBounds({ ...UIWANG_BBOX });
                   setDongMenu(false);
                 }}
-                className="block min-h-[40px] w-full border-t border-[var(--border)] px-3 text-left text-[var(--text-sm)] font-semibold text-[var(--text-muted)] transition hover:bg-[var(--surface-2)]"
+                className="block min-h-[40px] w-full rounded-[var(--radius)] px-3 text-left text-[length:var(--text-sm)] font-semibold text-[var(--text-muted)] transition hover:bg-[var(--surface-2)]"
               >
                 의왕시 전체
               </button>
@@ -956,7 +869,7 @@ export default function Dashboard({
                   focus(UIWANG.center.lat, UIWANG.center.lng, 1500);
                   setDongMenu(false);
                 }}
-                className="block min-h-[40px] w-full border-t border-[var(--border)] px-3 text-left text-[var(--text-sm)] font-semibold text-[var(--text-muted)] transition hover:bg-[var(--surface-2)]"
+                className="block min-h-[40px] w-full rounded-[var(--radius)] px-3 text-left text-[length:var(--text-sm)] font-semibold text-[var(--text-muted)] transition hover:bg-[var(--surface-2)]"
               >
                 의왕시청
               </button>
@@ -981,7 +894,7 @@ export default function Dashboard({
               : undefined
           }
         >
-          {myLocation.state.status === "asking" ? "…" : "⌖"}
+          {myLocation.state.status === "asking" ? "…" : <Icon name="locate" />}
         </button>
         <button
           type="button"
@@ -989,7 +902,7 @@ export default function Dashboard({
           aria-label="확대"
           className={mapBtn}
         >
-          +
+          <Icon name="plus" />
         </button>
         <button
           type="button"
@@ -997,7 +910,7 @@ export default function Dashboard({
           aria-label="축소"
           className={mapBtn}
         >
-          −
+          <Icon name="minus" />
         </button>
       </div>
 
@@ -1010,7 +923,7 @@ export default function Dashboard({
           <button
             type="button"
             onClick={() => setLocNotice(null)}
-            className="pointer-events-auto max-w-[420px] rounded-[var(--radius-full)] border border-[var(--border)] bg-[var(--surface)]/95 px-3.5 py-2 text-[var(--text-xs)] font-semibold shadow-[var(--shadow-md)] backdrop-blur"
+            className="glass fade-up pointer-events-auto max-w-[420px] rounded-[var(--radius-full)] px-4 py-2 text-[length:var(--text-xs)] font-semibold"
           >
             {locNotice} <span className="text-[var(--text-faint)]">✕</span>
           </button>
@@ -1019,8 +932,8 @@ export default function Dashboard({
 
       {/* 색만 칠해두고 뜻을 안 알려주면 읽을 수 없다 */}
       {trafficSegments.length > 0 && !bottomCard && (
-        <div className="absolute bottom-3 left-3 z-10 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)]/92 px-2.5 py-2 shadow-[var(--shadow-md)] backdrop-blur">
-          <p className="mb-1 text-[var(--text-2xs)] font-bold text-[var(--text-muted)]">
+        <div className="glass absolute bottom-3 left-3 z-10 rounded-[var(--radius-lg)] px-3 py-2">
+          <p className="mb-1 text-[length:var(--text-2xs)] font-bold text-[var(--text-muted)]">
             도로 소통
           </p>
           <div className="flex gap-2.5">
@@ -1031,7 +944,7 @@ export default function Dashboard({
                   className="h-[3px] w-4 rounded-full"
                   style={{ background: LEVEL_COLOR[lv] }}
                 />
-                <span className="text-[var(--text-2xs)] font-semibold">
+                <span className="text-[length:var(--text-2xs)] font-semibold">
                   {LEVEL_LABEL[lv]}
                 </span>
               </span>
@@ -1060,10 +973,10 @@ export default function Dashboard({
           subtitle={marker.incident.road || "돌발상황"}
           onClose={() => setMarker(null)}
         >
-          <p className="mt-3 text-[var(--text-sm)] leading-relaxed">
+          <p className="mt-3 text-[length:var(--text-sm)] leading-relaxed">
             {marker.incident.message}
           </p>
-          <p className="mt-2 text-[var(--text-2xs)] text-[var(--text-faint)]">
+          <p className="mt-2 text-[length:var(--text-2xs)] text-[var(--text-faint)]">
             {timeAgo(marker.incident.startedAt)} 접수
           </p>
         </MapCard>
@@ -1077,44 +990,13 @@ export default function Dashboard({
         />
       )}
 
-      {photo && (
-        <MapCard
-          key={photo.id}
-          title={photo.caption || "내 사진"}
-          subtitle={new Date(photo.takenAt ?? photo.createdAt).toLocaleDateString("ko-KR", {
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-            timeZone: "Asia/Seoul",
-          })}
-          onClose={() => setPhoto(null)}
-        >
-          {/* 원본을 그대로 쓴다 — Blob URL 은 next/image 최적화 대상이 아니다 */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={photo.url}
-            alt={photo.caption ?? "내 사진"}
-            className="mt-3 max-h-[40vh] w-full rounded-[var(--radius)] object-contain"
-          />
-          <Link
-            href="/gallery"
-            className="mt-3 inline-flex min-h-[40px] items-center text-[var(--text-xs)] font-bold text-[var(--brand)] underline underline-offset-4"
-          >
-            갤러리에서 관리
-          </Link>
-        </MapCard>
-      )}
-
       {selectedPlace && (
         <PlaceDetailCard
           key={selectedPlace.id}
           place={selectedPlace}
-          rating={ratings.data?.data.ratings[selectedPlace.id]}
-          showRating={mode === "food"}
           medical={medical.data?.data.places ?? NO_MEDICAL}
           medicalDay={medical.data?.data.day ?? 0}
           onClose={() => setSelectedPlaceId(null)}
-          onRated={applyRating}
         />
       )}
 
@@ -1178,8 +1060,12 @@ export default function Dashboard({
            * 화면을 통째로 덮으면 지금 날씨가 어떤지, 어느 모드를 보고
            * 있는지가 시트에 가려 보이지 않는다.
            */
-          className={`absolute bottom-0 left-0 top-[152px] z-30 flex w-full flex-col sm:top-[112px] rounded-tr-[var(--radius-lg)] border-r border-t border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)] transition-transform duration-200 sm:w-[360px] ${
-            sheetOpen ? "translate-x-0" : "-translate-x-full"
+          /*
+           * 넓은 화면에서는 가장자리에 붙이지 않고 띄운다. 지도가 시트 둘레로
+           * 비쳐 보여 화면이 둘로 갈라져 보이지 않는다.
+           */
+          className={`absolute bottom-0 left-0 top-[152px] z-30 flex w-full flex-col overflow-hidden rounded-t-[var(--radius-xl)] bg-[var(--surface)] shadow-[var(--shadow-lg)] ring-1 ring-[var(--glass-ring)] transition-transform duration-300 ease-[var(--ease-out)] sm:bottom-3 sm:left-3 sm:top-[116px] sm:w-[372px] sm:rounded-[var(--radius-xl)] ${
+            sheetOpen ? "translate-x-0" : "-translate-x-[105%] sm:-translate-x-[110%]"
           }`}
         >
           {/*
@@ -1190,10 +1076,10 @@ export default function Dashboard({
             무엇인지 알아야 하고, 아래 패널들의 소제목이 매달릴 자리도
             있어야 한다.
           */}
-          <header className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-1.5">
+          <header className="flex items-center gap-3 border-b border-[var(--border)] py-3 pl-5 pr-2">
             <div className="min-w-0 flex-1">
-              <h1 className="sr-only">{def.label}</h1>
-              <p className="truncate text-[var(--text-xs)] text-[var(--text-muted)]">
+              <h1 className="text-[length:var(--text-lg)] font-bold leading-tight">{def.label}</h1>
+              <p className="truncate text-[length:var(--text-xs)] text-[var(--text-muted)]">
                 {def.hint}
               </p>
             </div>
@@ -1201,9 +1087,9 @@ export default function Dashboard({
               type="button"
               onClick={() => setSheetOpen(false)}
               aria-label="목록 닫기"
-              className="grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius)] text-[var(--text-base)] text-[var(--text-muted)] transition hover:bg-[var(--surface-2)]"
+              className="press grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius-full)] text-[var(--text-muted)] hover:text-[var(--text)]"
             >
-              ✕
+              <Icon name="close" size={18} />
             </button>
           </header>
 
@@ -1231,9 +1117,10 @@ export default function Dashboard({
           type="button"
           onClick={() => setSheetOpen(true)}
           aria-label={`${def.label} 목록 열기`}
-          className="absolute left-0 top-1/2 z-20 -translate-y-1/2 rounded-r-[var(--radius)] border border-l-0 border-[var(--border)] bg-[var(--surface)]/92 px-2 py-5 text-[var(--text-sm)] font-bold shadow-[var(--shadow-md)] backdrop-blur"
+          className={`glass press fade-up absolute bottom-6 left-1/2 z-20 min-h-[44px] ${bottomCard ? "hidden sm:flex" : "flex"} -translate-x-1/2 items-center gap-1.5 rounded-[var(--radius-full)] px-4 text-[length:var(--text-sm)] font-bold sm:bottom-auto sm:left-3 sm:top-[124px] sm:translate-x-0`}
         >
-          ›
+          {def.label} 목록 보기
+
         </button>
       )}
     </div>

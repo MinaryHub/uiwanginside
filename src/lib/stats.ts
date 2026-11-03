@@ -6,13 +6,10 @@ import type { StatsPayload, StatsSummary, Bucket, NamedCount } from "@/lib/stats
 /**
  * 접속 통계 집계.
  *
- * 보는 길이 둘이라 여기 모아 둔다 — 카카오로 로그인한 관리자(/admin)와,
- * 로그인 없이 비밀 주소로 여는 길(/stats/<토큰>)이다. 같은 숫자를 봐야 하므로
- * 질의를 두 벌 두지 않는다.
- *
- * 누가 볼 자격이 있는지는 여기서 따지지 않는다. 부르는 쪽의 몫이다.
+ * 비밀 주소(/stats/<토큰>)로만 연다. 누가 볼 자격이 있는지는 여기서
+ * 따지지 않는다. 부르는 쪽의 몫이다.
  */
-const EMPTY_SUM: StatsSummary = { views: 0, visitors: 0, sessions: 0, memberViews: 0 };
+const EMPTY_SUM: StatsSummary = { views: 0, visitors: 0, sessions: 0 };
 export const EMPTY_STATS: StatsPayload = {
   now: 0,
   today: EMPTY_SUM,
@@ -25,7 +22,6 @@ export const EMPTY_STATS: StatsPayload = {
   paths: [],
   referrers: [],
   devices: [],
-  content: { members: 0, photos: 0, ratings: 0, lists: 0, sharedLists: 0 },
   since: null,
   updatedAt: "",
 };
@@ -41,7 +37,6 @@ interface SumRow {
   views: number;
   visitors: number;
   sessions: number;
-  member_views: number;
 }
 
 function toSummary(r?: SumRow): StatsSummary {
@@ -50,7 +45,6 @@ function toSummary(r?: SumRow): StatsSummary {
     views: Number(r.views ?? 0),
     visitors: Number(r.visitors ?? 0),
     sessions: Number(r.sessions ?? 0),
-    memberViews: Number(r.member_views ?? 0),
   };
 }
 
@@ -61,8 +55,7 @@ export async function collectStats(): Promise<StatsPayload> {
   const span = (from: string, to: string) => sql`
     SELECT COUNT(*)::int                                    AS views,
            COUNT(DISTINCT visitor_id)::int                  AS visitors,
-           COUNT(DISTINCT session_id)::int                  AS sessions,
-           COUNT(*) FILTER (WHERE member)::int              AS member_views
+           COUNT(DISTINCT session_id)::int                  AS sessions
       FROM visits
      WHERE at >= ${from}::timestamptz AND at < ${to}::timestamptz
   `;
@@ -92,7 +85,6 @@ export async function collectStats(): Promise<StatsPayload> {
     refRows,
     devRows,
     sinceRows,
-    content,
   ] = await Promise.all([
     span(bounds.today, bounds.now),
     span(bounds.yesterday, bounds.today),
@@ -165,15 +157,6 @@ export async function collectStats(): Promise<StatsPayload> {
        GROUP BY 1 ORDER BY count DESC
     `,
     sql`SELECT MIN(at) AS since FROM visits`,
-    sql`
-      SELECT (SELECT COUNT(DISTINCT user_id)::int FROM photos)        AS photo_members,
-             (SELECT COUNT(*)::int FROM photos)                       AS photos,
-             (SELECT COUNT(*)::int FROM place_ratings)                AS ratings,
-             (SELECT COUNT(*)::int FROM place_lists)                  AS lists,
-             (SELECT COUNT(*)::int FROM place_lists
-               WHERE share_slug IS NOT NULL)                          AS shared_lists,
-             (SELECT COUNT(DISTINCT user_id)::int FROM place_lists)   AS list_members
-    `,
   ]);
 
   const rows = <T>(v: unknown) => v as T[];
@@ -189,15 +172,6 @@ export async function collectStats(): Promise<StatsPayload> {
       count: Number(r.count),
       visitors: Number(r.visitors),
     }));
-
-  const c = rows<{
-    photo_members: number;
-    photos: number;
-    ratings: number;
-    lists: number;
-    shared_lists: number;
-    list_members: number;
-  }>(content)[0];
 
   return {
     now: Number(rows<{ n: number }>(liveRows)[0]?.n ?? 0),
@@ -215,15 +189,6 @@ export async function collectStats(): Promise<StatsPayload> {
     paths: named(pathRows),
     referrers: named(refRows),
     devices: named(devRows),
-    content: {
-      // 사진이나 리스트를 남긴 사람 = 실제로 가입해서 쓴 사람.
-      // 로그인만 하고 아무것도 남기지 않은 사람은 DB 에 흔적이 없다.
-      members: Math.max(c?.photo_members ?? 0, c?.list_members ?? 0),
-      photos: c?.photos ?? 0,
-      ratings: c?.ratings ?? 0,
-      lists: c?.lists ?? 0,
-      sharedLists: c?.shared_lists ?? 0,
-    },
     since: rows<{ since: string | null }>(sinceRows)[0]?.since
       ? new Date(rows<{ since: string }>(sinceRows)[0].since).toISOString()
       : null,

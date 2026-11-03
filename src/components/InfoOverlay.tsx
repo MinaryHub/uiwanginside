@@ -102,7 +102,7 @@ export default function InfoOverlay({
     <div className="pointer-events-none absolute inset-x-0 top-[104px] z-50 flex justify-center px-3 sm:top-[64px]">
       <div
         ref={boxRef}
-        className="fade-up pointer-events-auto flex max-h-[72vh] w-full max-w-[520px] flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)]"
+        className="fade-up pointer-events-auto flex max-h-[72vh] w-full max-w-[520px] flex-col overflow-hidden rounded-[var(--radius-xl)] bg-[var(--surface)] shadow-[var(--shadow-lg)] ring-1 ring-[var(--glass-ring)]"
       >
         <div className="flex items-center gap-1 border-b border-[var(--border)] pl-2 pr-1">
           <div className="thin-scroll flex flex-1 gap-0.5 overflow-x-auto py-1.5">
@@ -114,12 +114,9 @@ export default function InfoOverlay({
                   type="button"
                   onClick={() => onTabChange(t.id)}
                   aria-pressed={on}
-                  className="min-h-[36px] shrink-0 rounded-[var(--radius-full)] px-3 text-[var(--text-sm)] font-bold transition"
-                  style={
-                    on
-                      ? { background: "var(--brand)", color: "var(--on-brand)" }
-                      : { color: "var(--text-muted)" }
-                  }
+                  className={`press min-h-[36px] shrink-0 rounded-[var(--radius-full)] px-3.5 text-[length:var(--text-sm)] font-bold ${
+                    on ? "brand-fill" : "text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
+                  }`}
                 >
                   {t.label}
                 </button>
@@ -130,7 +127,7 @@ export default function InfoOverlay({
             type="button"
             onClick={onClose}
             aria-label="닫기"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius)] text-[var(--text-muted)] transition hover:bg-[var(--surface-2)]"
+            className="press grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius-full)] text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
           >
             ✕
           </button>

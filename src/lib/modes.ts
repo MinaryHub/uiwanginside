@@ -16,7 +16,6 @@ export type ModeId = "food" | "life" | "medical" | "transit";
 
 /** 시트에 띄울 내용 */
 export type CardId =
-  | "rating"
   | "weather"
   | "air"
   | "medical"
@@ -58,10 +57,10 @@ export const MODES: ModeDef[] = [
   {
     id: "food",
     label: "맛집",
-    hint: "음식점·카페 — 시민이 매긴 별점",
+    hint: "음식점·카페",
     categories: ["FD6", "CE7"],
     layers: { ...NO_LAYERS, places: true },
-    cards: ["rating"],
+    cards: [],
   },
   {
     id: "life",

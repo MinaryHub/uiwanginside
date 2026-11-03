@@ -7,8 +7,7 @@ import { isModeId, type ModeId } from "./modes";
 
 /**
  * 지도·필터 상태를 URL 쿼리로 주고받는다.
- * 시민 포털에서는 "청계동 병원" 같은 화면을 링크로 공유하는 게 주 유입 경로라
- * 상태가 컴포넌트 안에만 있으면 공유·북마크가 불가능하다.
+ * 상태가 컴포넌트 안에만 있으면 새로고침이나 북마크 때 보던 화면을 잃는다.
  */
 
 export interface UrlState {
@@ -74,11 +73,4 @@ export function useSyncUrl(state: UrlState, delay = 600) {
     }, delay);
     return () => clearTimeout(t);
   }, [state, delay]);
-}
-
-/** 현재 화면을 가리키는 공유용 절대 URL */
-export function shareUrl(state: UrlState): string {
-  const qs = toQuery(state);
-  const { origin, pathname } = window.location;
-  return qs ? `${origin}${pathname}?${qs}` : `${origin}${pathname}`;
 }

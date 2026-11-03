@@ -88,10 +88,10 @@ export default function PlacesPanel({
               onOnlyChange(null);
               setLimit(20);
             }}
-            className="rounded-full px-2 py-1 text-[var(--text-xs)] font-bold transition"
+            className="press rounded-full px-3 py-1.5 text-[length:var(--text-xs)] font-bold"
             style={
               only === null
-                ? { background: "var(--brand)", color: "#fff" }
+                ? { background: "var(--text)", color: "var(--surface)" }
                 : { background: "var(--surface-2)", color: "var(--text-muted)" }
             }
           >
@@ -108,7 +108,7 @@ export default function PlacesPanel({
                   onOnlyChange(on ? null : c);
                   setLimit(20);
                 }}
-                className="flex items-center gap-1 rounded-full px-2 py-1 text-[var(--text-xs)] font-bold transition"
+                className="flex items-center gap-1 press rounded-full px-3 py-1.5 text-[length:var(--text-xs)] font-bold"
                 style={
                   on
                     ? { background: def.color, color: "#fff" }
@@ -129,7 +129,7 @@ export default function PlacesPanel({
             setLimit(20);
           }}
           placeholder="이름·주소로 찾기"
-          className="mb-2 w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-1.5 text-[var(--text-sm)] outline-none focus:border-[var(--brand)]"
+          className="mb-2 min-h-[42px] w-full rounded-[var(--radius-full)] border border-transparent bg-[var(--surface-2)] px-4 text-[length:var(--text-sm)] outline-none transition focus:border-[var(--brand-2)] focus:bg-[var(--surface)]"
         />
 
         {/*
@@ -144,7 +144,7 @@ export default function PlacesPanel({
         <button
           type="button"
           onClick={onSearchHere}
-          className="min-h-[40px] w-full rounded-[var(--radius)] border border-[var(--border-strong)] text-[var(--text-xs)] font-bold transition hover:border-[var(--brand)] hover:text-[var(--brand)]"
+          className="press min-h-[42px] w-full rounded-[var(--radius-full)] border border-[var(--border-strong)] text-[length:var(--text-xs)] font-bold hover:border-[var(--brand)] hover:text-[var(--brand)]"
         >
           이 화면에서 다시 찾기
         </button>
@@ -158,14 +158,14 @@ export default function PlacesPanel({
             {res?.ok === false && <Notice>{res?.notice}</Notice>}
 
             <div className="mb-1.5 flex items-center">
-              <p className="text-[var(--text-2xs)] font-semibold text-[var(--text-muted)]">
+              <p className="text-[length:var(--text-2xs)] font-semibold text-[var(--text-muted)]">
                 {filtered.length}곳 · 가까운 순
               </p>
               {/* 다 가져오지 못했으면 숨기지 않고 그대로 알린다 */}
               {truncated && (
                 <span
                   title="카카오 로컬은 조회 한 번에 45곳까지만 줍니다. 화면을 격자로 나눠 여러 번 조회해 채우지만, 아주 촘촘한 곳은 전부 담기지 않습니다. 지도를 확대하면 남김없이 보입니다."
-                  className="ml-1.5 text-[var(--text-2xs)] font-semibold text-[var(--text-faint)]"
+                  className="ml-1.5 text-[length:var(--text-2xs)] font-semibold text-[var(--text-faint)]"
                 >
                   / 화면 안 {res?.data.total}곳
                 </span>
@@ -173,7 +173,7 @@ export default function PlacesPanel({
               {source && (
                 <span
                   title={SOURCE_META[source].title}
-                  className="ml-auto text-[var(--text-2xs)] font-bold"
+                  className="ml-auto text-[length:var(--text-2xs)] font-bold"
                   style={{ color: SOURCE_META[source].color }}
                 >
                   {SOURCE_META[source].label}
@@ -193,27 +193,20 @@ export default function PlacesPanel({
                       <button
                         type="button"
                         onClick={() => onSelectPlace(p)}
-                        className="w-full rounded-[var(--radius)] px-2 py-2 text-left transition hover:bg-[var(--surface-2)]"
-                        style={
-                          active
-                            ? {
-                                background: "var(--brand-soft)",
-                                outline: `1px solid ${def.color}`,
-                              }
-                            : undefined
-                        }
+                        className="press w-full rounded-[var(--radius)] px-2 py-2.5 text-left hover:bg-[var(--surface-2)]"
+                        style={active ? { background: "var(--surface-2)" } : undefined}
                       >
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-2.5">
                           <span
                             aria-hidden
                             className="h-1.5 w-1.5 shrink-0 rounded-full"
                             style={{ background: def.color }}
                           />
-                          <span className="flex-1 truncate text-[var(--text-sm)] font-semibold">
+                          <span className="flex-1 truncate text-[length:var(--text-sm)] font-semibold">
                             {p.name}
                           </span>
                           {p.distance != null && (
-                            <span className="shrink-0 text-[var(--text-2xs)] font-semibold text-[var(--text-muted)]">
+                            <span className="shrink-0 text-[length:var(--text-2xs)] font-semibold text-[var(--text-muted)]">
                               {p.distance >= 1000
                                 ? `${(p.distance / 1000).toFixed(1)}km`
                                 : `${p.distance}m`}
@@ -221,8 +214,8 @@ export default function PlacesPanel({
                           )}
                         </div>
                         {active && (
-                          <div className="mt-1 pl-[18px]">
-                            <p className="truncate text-[var(--text-xs)] text-[var(--text-muted)]">
+                          <div className="mt-1 pl-4">
+                            <p className="truncate text-[length:var(--text-xs)] text-[var(--text-muted)]">
                               {p.roadAddress || p.address}
                             </p>
                             <div className="mt-1 flex gap-1.5">
@@ -230,9 +223,9 @@ export default function PlacesPanel({
                                 <a
                                   href={`tel:${p.phone}`}
                                   onClick={(e) => e.stopPropagation()}
-                                  className="rounded border border-[var(--border)] px-1.5 py-0.5 text-[var(--text-2xs)] font-semibold"
+                                  className="rounded-full border border-[var(--border-strong)] px-2.5 py-1 text-[length:var(--text-2xs)] font-medium"
                                 >
-                                  📞 {p.phone}
+                                  {p.phone}
                                 </a>
                               )}
                               {p.url && (
@@ -241,7 +234,7 @@ export default function PlacesPanel({
                                   target="_blank"
                                   rel="noreferrer noopener"
                                   onClick={(e) => e.stopPropagation()}
-                                  className="rounded border border-[var(--border)] px-1.5 py-0.5 text-[var(--text-2xs)] font-semibold"
+                                  className="rounded-full border border-[var(--border-strong)] px-2.5 py-1 text-[length:var(--text-2xs)] font-medium"
                                 >
                                   상세 ↗
                                 </a>
@@ -260,7 +253,7 @@ export default function PlacesPanel({
               <button
                 type="button"
                 onClick={() => setLimit((n) => n + 40)}
-                className="mt-2 min-h-[40px] w-full rounded-[var(--radius)] border border-[var(--border-strong)] text-[var(--text-xs)] font-bold transition hover:border-[var(--brand)] hover:text-[var(--brand)]"
+                className="mt-2 min-h-[40px] w-full rounded-[var(--radius)] border border-[var(--border-strong)] text-[length:var(--text-xs)] font-bold transition hover:border-[var(--brand)] hover:text-[var(--brand)]"
               >
                 {more}곳 더 보기
               </button>

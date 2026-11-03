@@ -41,14 +41,14 @@ export default function CctvCard({ cctv, onClose }: { cctv: Cctv; onClose: () =>
   }, [live]);
 
   return (
-    <div className="fade-up absolute inset-x-3 bottom-3 z-30 mx-auto max-w-[440px] overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)]">
+    <div className="fade-up absolute inset-x-3 bottom-3 z-30 mx-auto max-w-[440px] overflow-hidden rounded-[var(--radius-xl)] bg-[var(--surface)] shadow-[var(--shadow-lg)] ring-1 ring-[var(--glass-ring)]">
       <div className="flex items-center gap-2 px-3 py-2">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[var(--text-sm)] font-extrabold">
+          <p className="truncate text-[length:var(--text-sm)] font-bold">
             📹 {cctv.name}
           </p>
           {cctv.road && (
-            <p className="truncate text-[var(--text-2xs)] text-[var(--text-muted)]">
+            <p className="truncate text-[length:var(--text-2xs)] text-[var(--text-muted)]">
               {cctv.road}
             </p>
           )}
@@ -84,13 +84,13 @@ export default function CctvCard({ cctv, onClose }: { cctv: Cctv; onClose: () =>
           onError={() => setState("error")}
         />
         {state !== "ok" && (
-          <p className="absolute inset-0 grid place-items-center text-[var(--text-xs)] font-semibold text-white/80">
+          <p className="absolute inset-0 grid place-items-center text-[length:var(--text-xs)] font-semibold text-white/80">
             {state === "loading" ? "받는 중…" : "지금은 영상을 받을 수 없습니다"}
           </p>
         )}
       </div>
 
-      <p className="px-3 py-1.5 text-[var(--text-2xs)] text-[var(--text-faint)]">
+      <p className="px-3 py-1.5 text-[length:var(--text-2xs)] text-[var(--text-faint)]">
         {REFRESH_MS / 1000}초마다 자동 갱신 · 국가교통정보센터 제공 정지영상
       </p>
     </div>

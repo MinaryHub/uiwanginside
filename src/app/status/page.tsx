@@ -32,26 +32,25 @@ export default async function StatusPage() {
     <main className="mx-auto max-w-3xl px-5 py-10">
       <div className="mb-6 flex items-center gap-3">
         <Logo size={26} />
-        <h1 className="text-[var(--text-lg)] font-extrabold tracking-tight">연동 상태</h1>
-        <Link href="/" className="text-[var(--text-xs)] font-semibold text-[var(--brand)]">
+        <h1 className="text-[length:var(--text-lg)] font-bold tracking-tight">연동 상태</h1>
+        <Link href="/" className="text-[length:var(--text-xs)] font-semibold text-[var(--brand)]">
           ← 포털로
         </Link>
-        {/* 관리자만 열리지만, 어디 있는지는 알 수 있어야 한다 */}
         <Link
-          href="/admin"
-          className="ml-auto text-[var(--text-xs)] font-semibold text-[var(--brand)]"
+          href="/opendata"
+          className="ml-auto text-[length:var(--text-xs)] font-semibold text-[var(--brand)]"
         >
-          접속 통계 →
+          공공데이터 안내 →
         </Link>
       </div>
 
       {error && (
-        <p className="rounded-[var(--radius)] bg-[var(--danger-soft)] p-3 text-[var(--text-sm)] text-[var(--danger)]">{error}</p>
+        <p className="rounded-[var(--radius)] bg-[var(--danger-soft)] p-3 text-[length:var(--text-sm)] text-[var(--danger)]">{error}</p>
       )}
 
       {data && (
         <>
-          <p className="mb-5 text-[var(--text-sm)] text-[var(--text-muted)]">
+          <p className="mb-5 text-[length:var(--text-sm)] text-[var(--text-muted)]">
             <strong className="text-[var(--text)]">
               {data.summary.live} / {data.summary.total}
             </strong>{" "}
@@ -68,33 +67,33 @@ export default async function StatusPage() {
                   style={{ borderLeft: `3px solid ${m.color}` }}
                 >
                   <div className="mb-1 flex flex-wrap items-center gap-2">
-                    <span className="text-[var(--text-base)] font-bold">{c.label}</span>
+                    <span className="text-[length:var(--text-base)] font-bold">{c.label}</span>
                     <span
-                      className="rounded px-1.5 py-0.5 text-[var(--text-2xs)] font-bold text-[var(--surface)]"
+                      className="rounded px-1.5 py-0.5 text-[length:var(--text-2xs)] font-bold text-[var(--surface)]"
                       style={{ background: m.color }}
                     >
                       {m.emoji} {m.label}
                     </span>
                     {c.latencyMs != null && (
-                      <span className="text-[var(--text-2xs)] text-[var(--text-muted)]">
+                      <span className="text-[length:var(--text-2xs)] text-[var(--text-muted)]">
                         {c.latencyMs}ms
                       </span>
                     )}
-                    <code className="ml-auto text-[var(--text-2xs)] text-[var(--text-muted)]">
+                    <code className="ml-auto text-[length:var(--text-2xs)] text-[var(--text-muted)]">
                       {c.envVars.join(", ")}
                     </code>
                   </div>
 
-                  <p className="text-[var(--text-sm)] leading-snug">{c.detail}</p>
+                  <p className="text-[length:var(--text-sm)] leading-snug">{c.detail}</p>
 
                   {c.fallback && (
-                    <p className="mt-1 text-[var(--text-xs)] font-semibold text-[var(--info)]">
+                    <p className="mt-1 text-[length:var(--text-xs)] font-semibold text-[var(--info)]">
                       대체 소스: {c.fallback}
                     </p>
                   )}
 
                   {c.status !== "live" && (
-                    <p className="mt-1.5 rounded-md bg-[var(--surface-2)] px-2 py-1 text-[var(--text-xs)] text-[var(--text-muted)]">
+                    <p className="mt-1.5 rounded-md bg-[var(--surface-2)] px-2 py-1 text-[length:var(--text-xs)] text-[var(--text-muted)]">
                       발급: {c.howTo}
                     </p>
                   )}
@@ -103,7 +102,7 @@ export default async function StatusPage() {
             })}
           </ul>
 
-          <p className="mt-5 text-[var(--text-xs)] text-[var(--text-muted)]">
+          <p className="mt-5 text-[length:var(--text-xs)] text-[var(--text-muted)]">
             진단 시각 {new Date(data.checkedAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}{" "}
             · 키 변경 후에는 개발 서버를 재시작해야 반영됩니다.
           </p>

@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import { swrFetcher } from "@/lib/fetcher";
@@ -46,19 +47,19 @@ function Row({ p, onPick }: { p: Place; onPick: (p: Place) => void }) {
     >
       <span
         aria-hidden
-        className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[var(--text-xs)]"
+        className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[length:var(--text-xs)]"
         style={{ background: "var(--surface-2)", color: def?.color }}
       >
         {def?.emoji ?? "📍"}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[var(--text-sm)] font-semibold">{p.name}</span>
-        <span className="block truncate text-[var(--text-2xs)] text-[var(--text-muted)]">
+        <span className="block truncate text-[length:var(--text-sm)] font-semibold">{p.name}</span>
+        <span className="block truncate text-[length:var(--text-2xs)] text-[var(--text-muted)]">
           {p.roadAddress || p.address}
         </span>
       </span>
       {p.distance != null && (
-        <span className="shrink-0 text-[var(--text-2xs)] font-semibold tabular-nums text-[var(--text-faint)]">
+        <span className="shrink-0 text-[length:var(--text-2xs)] font-semibold tabular-nums text-[var(--text-faint)]">
           {p.distance >= 1000 ? `${(p.distance / 1000).toFixed(1)}km` : `${p.distance}m`}
         </span>
       )}
@@ -121,11 +122,11 @@ export default function SearchOverlay({
   }, []);
 
   return (
-    <div className="absolute inset-0 z-50 flex flex-col bg-[var(--bg)]/70 backdrop-blur-sm">
+    <div className="scrim fade-up absolute inset-0 z-50 flex flex-col">
       <div className="mx-auto flex max-h-full w-full max-w-[520px] flex-col p-3">
-        <div className="flex items-center gap-2 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] px-3 shadow-[var(--shadow-lg)]">
-          <span aria-hidden className="text-[var(--text-muted)]">
-            🔍
+        <div className="flex items-center gap-2 rounded-[var(--radius-full)] bg-[var(--surface)] pl-4 pr-1.5 shadow-[var(--shadow-lg)] ring-1 ring-[var(--glass-ring)] focus-within:ring-[var(--text)]">
+          <span className="text-[var(--text-muted)]">
+            <Icon name="search" size={18} />
           </span>
           <input
             ref={inputRef}
@@ -136,30 +137,30 @@ export default function SearchOverlay({
               if (e.key === "Enter" && results[0]) pick(results[0]);
             }}
             placeholder="의왕시 안에서 찾기 — 도서관, 우체국, 가게 이름"
-            className="min-h-[48px] min-w-0 flex-1 bg-transparent text-[var(--text-base)] outline-none"
+            className="min-h-[48px] min-w-0 flex-1 bg-transparent text-[length:var(--text-base)] outline-none focus-visible:outline-none"
           />
           <button
             type="button"
             onClick={onClose}
             aria-label="검색 닫기"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius)] text-[var(--text-muted)] transition hover:bg-[var(--surface-2)]"
+            className="press grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius-full)] text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
           >
-            ✕
+            <Icon name="close" size={18} />
           </button>
         </div>
 
-        <div className="thin-scroll mt-2 min-h-0 flex-1 overflow-y-auto rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-1.5 shadow-[var(--shadow-lg)]">
+        <div className="thin-scroll mt-2 min-h-0 flex-1 overflow-y-auto rounded-[var(--radius-xl)] bg-[var(--surface)] p-2 shadow-[var(--shadow-lg)] ring-1 ring-[var(--glass-ring)]">
           {q.trim().length < 2 ? (
             recent.length > 0 ? (
               <>
                 <div className="flex items-center px-2 pb-1 pt-1.5">
-                  <p className="text-[var(--text-2xs)] font-bold text-[var(--text-muted)]">
+                  <p className="text-[length:var(--text-2xs)] font-bold text-[var(--text-muted)]">
                     최근 본 곳
                   </p>
                   <button
                     type="button"
                     onClick={clearRecent}
-                    className="ml-auto text-[var(--text-2xs)] font-semibold text-[var(--text-faint)] underline underline-offset-2"
+                    className="ml-auto text-[length:var(--text-2xs)] font-semibold text-[var(--text-faint)] underline underline-offset-2"
                   >
                     지우기
                   </button>
@@ -172,7 +173,7 @@ export default function SearchOverlay({
               <Empty>두 글자 이상 입력하면 찾습니다.</Empty>
             )
           ) : isLoading && results.length === 0 ? (
-            <p className="px-2.5 py-4 text-[var(--text-sm)] text-[var(--text-muted)]">
+            <p className="px-2.5 py-4 text-[length:var(--text-sm)] text-[var(--text-muted)]">
               찾는 중…
             </p>
           ) : results.length === 0 ? (

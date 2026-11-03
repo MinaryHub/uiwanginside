@@ -6,7 +6,6 @@ import { UIWANG_BOUNDARY } from "@/lib/uiwang-boundary";
 import { DONG_BOUNDARIES } from "@/lib/dong-boundaries";
 import { LEVEL_COLOR, type TrafficLevel, type TrafficSegment } from "@/lib/traffic";
 import { planRun, walk, type LatLng, type PathRun } from "@/lib/busPath";
-import type { Photo } from "@/lib/photoTypes";
 import type { Cctv } from "@/lib/cctvTypes";
 import type {
   Place,
@@ -74,25 +73,6 @@ function pinEl(
     font-family:Pretendard,-apple-system,"Apple SD Gothic Neo",sans-serif;`;
   if (opts.pulse) el.classList.add("pulse");
   el.innerHTML = `<span style="font-size:${active ? 12 : 11}px">${emoji}</span><span>${label}</span>`;
-  return el;
-}
-
-/** 내가 등록한 사진 — 지도 위에 작게 */
-function photoEl(p: Photo, onClick: () => void) {
-  const el = document.createElement("button");
-  el.type = "button";
-  el.title = p.caption ?? "내 사진";
-  el.style.cssText = `
-    display:block;width:38px;height:38px;padding:0;border-radius:9px;
-    border:2px solid #fff;overflow:hidden;cursor:pointer;
-    box-shadow:0 2px 8px rgba(16,32,43,.32);background:#fff;`;
-  const img = document.createElement("img");
-  img.src = p.url;
-  img.alt = "";
-  img.loading = "lazy";
-  img.style.cssText = "width:100%;height:100%;object-fit:cover;display:block;";
-  el.appendChild(img);
-  el.addEventListener("click", onClick);
   return el;
 }
 
@@ -252,9 +232,6 @@ export interface KakaoMapProps {
   busPositions: BusPositionsPayload[];
   /** 노선별 실제 주행 경로 — 버스를 그 위로 움직인다 */
   busPaths: Record<string, LatLng[]>;
-  /** 로그인한 사용자가 등록한 사진 */
-  photos: Photo[];
-  onSelectPhoto: (p: Photo) => void;
   /** 랜드마크 (둘러보기 모드) */
   landmarks: { name: string; lat: number; lng: number; desc: string }[];
   /** 도로 소통상태 — 도로 형상에 ITS 속도를 입힌 조각들 */
@@ -298,8 +275,6 @@ export default function KakaoMap({
   incidents,
   busStops,
   medicalOpen,
-  photos,
-  onSelectPhoto,
   busPositions,
   busPaths,
   landmarks,
@@ -364,7 +339,6 @@ export default function KakaoMap({
     >(),
   );
   const busRaf = useRef<number | null>(null);
-  const photoOv = useRef<kakao.maps.CustomOverlay[]>([]);
   const meRef = useRef<kakao.maps.CustomOverlay | null>(null);
   const boundaryRef = useRef<kakao.maps.Polygon[]>([]);
   const dongRef = useRef<kakao.maps.Polygon[]>([]);
@@ -623,31 +597,6 @@ export default function KakaoMap({
   // 큰 점선 원이 "이 밖은 없음" 처럼 읽혀 화면이 제한된 구역처럼 보였다.
   // 반경은 시트의 슬라이더로 조절하고, 결과는 마커 자체로 드러난다.
 
-  /** 오버레이를 특정 목록에 추가하는 공통 헬퍼 */
-  const makeAdder = (bucket: React.RefObject<kakao.maps.CustomOverlay[]>) => {
-    const map = mapRef.current!;
-    bucket.current.forEach((o) => o.setMap(null));
-    bucket.current = [];
-    return (
-      lat: number,
-      lng: number,
-      el: HTMLElement,
-      zIndex: number,
-      onClick?: () => void,
-    ) => {
-      if (onClick) el.addEventListener("click", onClick);
-      const ov = new window.kakao.maps.CustomOverlay({
-        position: new window.kakao.maps.LatLng(lat, lng),
-        content: el,
-        yAnchor: 1,
-        zIndex,
-        clickable: true,
-      });
-      ov.setMap(map);
-      bucket.current.push(ov);
-    };
-  };
-
   /**
    * 장소·병원·랜드마크 마커.
    *
@@ -683,8 +632,6 @@ export default function KakaoMap({
       want.set(`p:${p.id}`, {
         lat: p.lat,
         lng: p.lng,
-        // 별점은 이름표에 넣지 않는다. 뒤늦게 도착하면 겉모습이 바뀌며
-        // 배지가 튀어나오는 것처럼 보인다. 상세 카드에서 보여준다.
         sig: `${pin ? "pin" : "dot"}|${active}|${p.category}|${p.name}`,
         zIndex: active ? 90 : 10,
         el: () =>
@@ -908,15 +855,6 @@ export default function KakaoMap({
     onSelectStop,
     onSelectIncident,
   ]);
-
-  /** 내 사진 — 등록·삭제할 때만 바뀐다 */
-  useEffect(() => {
-    if (!ready || !mapRef.current) return;
-    const add = makeAdder(photoOv);
-    for (const p of photos) {
-      add(p.lat, p.lng, photoEl(p, () => onSelectPhoto(p)), 70);
-    }
-  }, [ready, photos, onSelectPhoto]);
 
   /**
    * 운행 중인 버스.

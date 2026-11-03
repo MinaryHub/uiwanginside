@@ -19,37 +19,37 @@ function Row({ p, onFocus }: { p: MedicalPlace; onFocus: (p: MedicalPlace) => vo
   return (
     <li className="rounded-[var(--radius)] px-2 py-1.5 transition hover:bg-[var(--surface-2)]">
       <div className="flex items-center gap-1.5">
-        <span className="shrink-0 text-[var(--text-xs)]">
+        <span className="shrink-0 text-[length:var(--text-xs)]">
           {p.kind === "hospital" ? "병원" : "약국"}
         </span>
         <button
           type="button"
           onClick={() => onFocus(p)}
           disabled={p.lat == null}
-          className="min-w-0 flex-1 truncate text-left text-[var(--text-sm)] font-bold disabled:cursor-default"
+          className="min-w-0 flex-1 truncate text-left text-[length:var(--text-sm)] font-bold disabled:cursor-default"
         >
           {p.name}
         </button>
         {p.openNow === true && (
-          <span className="shrink-0 rounded bg-[var(--ok-soft)] px-1 text-[var(--text-2xs)] font-bold text-[var(--ok)]">
+          <span className="shrink-0 rounded bg-[var(--ok-soft)] px-1 text-[length:var(--text-2xs)] font-bold text-[var(--ok)]">
             진료중
           </span>
         )}
         {p.openNow === false && (
-          <span className="shrink-0 rounded bg-[var(--surface-2)] px-1 text-[var(--text-2xs)] font-bold text-[var(--text-muted)]">
+          <span className="shrink-0 rounded bg-[var(--surface-2)] px-1 text-[length:var(--text-2xs)] font-bold text-[var(--text-muted)]">
             종료
           </span>
         )}
       </div>
       <div className="mt-0.5 flex items-center gap-1.5 pl-5">
-        <span className="text-[var(--text-2xs)] text-[var(--text-muted)]">{hours}</span>
+        <span className="text-[length:var(--text-2xs)] text-[var(--text-muted)]">{hours}</span>
         {p.category && (
-          <span className="truncate text-[var(--text-2xs)] text-[var(--text-muted)]">· {p.category}</span>
+          <span className="truncate text-[length:var(--text-2xs)] text-[var(--text-muted)]">· {p.category}</span>
         )}
         {p.phone && (
           <a
             href={`tel:${p.phone}`}
-            className="ml-auto shrink-0 rounded border border-[var(--border)] px-1.5 text-[var(--text-2xs)] font-semibold"
+            className="ml-auto shrink-0 rounded border border-[var(--border)] px-1.5 text-[length:var(--text-2xs)] font-semibold"
           >
             📞
           </a>
@@ -100,7 +100,7 @@ export default function MedicalPanel({
       ) : (
         <>
           <div className="mb-2 flex items-center gap-1.5">
-            <span className="text-[var(--text-xs)] font-bold">
+            <span className="text-[length:var(--text-xs)] font-bold">
               지금 <span className="text-[var(--brand)]">{openCount}</span>곳 진료중
             </span>
             <span className="ml-auto flex gap-1">
@@ -109,10 +109,10 @@ export default function MedicalPanel({
                   key={k}
                   type="button"
                   onClick={() => setFilter(k)}
-                  className="rounded px-1.5 py-0.5 text-[var(--text-2xs)] font-bold transition"
+                  className="rounded px-1.5 py-0.5 text-[length:var(--text-2xs)] font-bold transition"
                   style={
                     filter === k
-                      ? { background: "var(--brand)", color: "#fff" }
+                      ? { background: "var(--text)", color: "var(--surface)" }
                       : { color: "var(--text-muted)" }
                   }
                 >
@@ -140,7 +140,7 @@ export default function MedicalPanel({
             </ul>
           )}
 
-          <p className="mt-2 text-[var(--text-2xs)] leading-relaxed text-[var(--text-muted)]">
+          <p className="mt-2 text-[length:var(--text-2xs)] leading-relaxed text-[var(--text-muted)]">
             국립중앙의료원 제공 진료시간 기준입니다. 실제 운영은 다를 수 있으니 방문 전
             전화로 확인하세요. 응급 상황은 <strong>119</strong>.
           </p>

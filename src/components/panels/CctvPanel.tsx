@@ -33,8 +33,8 @@ export default function CctvPanel({
 
   return (
     <section className="border-t border-[var(--border)] px-4 py-3.5">
-      <h2 className="text-[var(--text-sm)] font-extrabold">도로 CCTV</h2>
-      <p className="mb-2 mt-0.5 text-[var(--text-2xs)] text-[var(--text-muted)]">
+      <h2 className="text-[length:var(--text-sm)] font-bold">도로 CCTV</h2>
+      <p className="mb-2 mt-0.5 text-[length:var(--text-2xs)] text-[var(--text-muted)]">
         의왕을 지나는 고속도로 · 누르면 지금 모습이 뜹니다
       </p>
 
@@ -48,7 +48,7 @@ export default function CctvPanel({
         <div className="space-y-2.5">
           {byRoad.map(([road, cams]) => (
             <div key={road}>
-              <p className="mb-1 text-[var(--text-2xs)] font-bold text-[var(--text-faint)]">
+              <p className="mb-1 text-[length:var(--text-2xs)] font-bold text-[var(--text-faint)]">
                 {road}
               </p>
               <div className="flex flex-wrap gap-1">
@@ -57,7 +57,7 @@ export default function CctvPanel({
                     key={c.id}
                     type="button"
                     onClick={() => onSelect(c)}
-                    className="min-h-[36px] rounded-[var(--radius)] border border-[var(--border)] px-2.5 text-[var(--text-xs)] font-semibold transition hover:border-[var(--brand)] hover:text-[var(--brand)]"
+                    className="min-h-[36px] rounded-[var(--radius)] border border-[var(--border)] px-2.5 text-[length:var(--text-xs)] font-semibold transition hover:border-[var(--brand)] hover:text-[var(--brand)]"
                   >
                     📹 {c.name}
                   </button>

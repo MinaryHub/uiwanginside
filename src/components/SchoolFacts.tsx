@@ -23,7 +23,7 @@ export default function SchoolFacts({ name }: { name: string }) {
 
   if (isLoading && !data) {
     return (
-      <p className="mt-3 border-t border-[var(--border)] pt-3 text-[var(--text-xs)] text-[var(--text-muted)]">
+      <p className="mt-3 border-t border-[var(--border)] pt-3 text-[length:var(--text-xs)] text-[var(--text-muted)]">
         학교 정보를 불러오는 중…
       </p>
     );
@@ -41,7 +41,7 @@ export default function SchoolFacts({ name }: { name: string }) {
         {tags.map((t) => (
           <span
             key={t}
-            className="rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-[var(--text-2xs)] font-bold text-[var(--text-muted)]"
+            className="rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-[length:var(--text-2xs)] font-bold text-[var(--text-muted)]"
           >
             {t}
           </span>
@@ -50,14 +50,14 @@ export default function SchoolFacts({ name }: { name: string }) {
 
       {s.classes && s.classes.length > 0 && (
         <div className="mt-2">
-          <p className="text-[var(--text-2xs)] font-bold text-[var(--text-muted)]">
+          <p className="text-[length:var(--text-2xs)] font-bold text-[var(--text-muted)]">
             학급 {s.classTotal}개
           </p>
           <div className="mt-1 flex flex-wrap gap-1">
             {s.classes.map((c) => (
               <span
                 key={c.grade}
-                className="rounded-[var(--radius)] bg-[var(--surface-2)] px-2 py-1 text-[var(--text-2xs)] font-semibold tabular-nums"
+                className="rounded-[var(--radius)] bg-[var(--surface-2)] px-2 py-1 text-[length:var(--text-2xs)] font-semibold tabular-nums"
               >
                 {c.grade}학년 <b>{c.count}</b>반
               </span>
@@ -67,7 +67,7 @@ export default function SchoolFacts({ name }: { name: string }) {
       )}
 
       {s.foundedAt && (
-        <p className="mt-2 text-[var(--text-2xs)] text-[var(--text-faint)]">
+        <p className="mt-2 text-[length:var(--text-2xs)] text-[var(--text-faint)]">
           {s.foundedAt} 개교
           {s.officialName !== name && ` · 정식 명칭 ${s.officialName}`}
         </p>
@@ -75,11 +75,11 @@ export default function SchoolFacts({ name }: { name: string }) {
 
       {s.meal && (
         <div className="mt-2 rounded-[var(--radius)] bg-[var(--surface-2)] p-2.5">
-          <p className="text-[var(--text-2xs)] font-bold text-[var(--text-muted)]">
+          <p className="text-[length:var(--text-2xs)] font-bold text-[var(--text-muted)]">
             {s.meal.when === "today" ? "오늘 급식" : `다음 급식 ${s.meal.date}`}
             {s.meal.kcal && ` · ${s.meal.kcal}`}
           </p>
-          <p className="mt-1 text-[var(--text-xs)] leading-relaxed">
+          <p className="mt-1 text-[length:var(--text-xs)] leading-relaxed">
             {s.meal.dishes.join(" · ")}
           </p>
         </div>
@@ -91,7 +91,7 @@ export default function SchoolFacts({ name }: { name: string }) {
             href={s.homepage}
             target="_blank"
             rel="noreferrer noopener"
-            className="inline-flex min-h-[36px] items-center rounded-[var(--radius)] border border-[var(--border)] px-2.5 text-[var(--text-2xs)] font-semibold"
+            className="inline-flex min-h-[36px] items-center rounded-[var(--radius)] border border-[var(--border)] px-2.5 text-[length:var(--text-2xs)] font-semibold"
           >
             학교 홈페이지 ↗
           </a>
@@ -105,7 +105,7 @@ export default function SchoolFacts({ name }: { name: string }) {
           href="https://www.schoolinfo.go.kr/ei/ss/pneiss_a03_s0.do"
           target="_blank"
           rel="noreferrer noopener"
-          className="inline-flex min-h-[36px] items-center rounded-[var(--radius)] border border-[var(--border)] px-2.5 text-[var(--text-2xs)] font-semibold"
+          className="inline-flex min-h-[36px] items-center rounded-[var(--radius)] border border-[var(--border)] px-2.5 text-[length:var(--text-2xs)] font-semibold"
         >
           학생수·진학률 ↗
         </a>

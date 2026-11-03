@@ -31,10 +31,10 @@ export default function NewsPanel({
                 key={p}
                 type="button"
                 onClick={() => onQueryChange(p)}
-                className="shrink-0 rounded-full border px-2 py-0.5 text-[var(--text-xs)] font-semibold transition"
+                className="shrink-0 rounded-full border px-2 py-0.5 text-[length:var(--text-xs)] font-semibold transition"
                 style={
                   query === p
-                    ? { background: "var(--brand)", borderColor: "var(--brand)", color: "#fff" }
+                    ? { background: "var(--text)", borderColor: "var(--text)", color: "var(--surface)" }
                     : { borderColor: "var(--border)", color: "var(--text-muted)" }
                 }
               >
@@ -55,13 +55,13 @@ export default function NewsPanel({
                     rel="noreferrer noopener"
                     className="block py-2 transition hover:opacity-70"
                   >
-                    <p className="line-clamp-2 text-[var(--text-sm)] font-semibold leading-snug">
+                    <p className="line-clamp-2 text-[length:var(--text-sm)] font-semibold leading-snug">
                       {n.title}
                     </p>
-                    <p className="mt-0.5 line-clamp-1 text-[var(--text-xs)] text-[var(--text-muted)]">
+                    <p className="mt-0.5 line-clamp-1 text-[length:var(--text-xs)] text-[var(--text-muted)]">
                       {n.description}
                     </p>
-                    <p className="mt-1 flex items-center gap-1.5 text-[var(--text-2xs)] text-[var(--text-muted)]">
+                    <p className="mt-1 flex items-center gap-1.5 text-[length:var(--text-2xs)] text-[var(--text-muted)]">
                       <span className="font-semibold">{n.source}</span>
                       <span>·</span>
                       <span>{timeAgo(n.publishedAt)}</span>
