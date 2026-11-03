@@ -59,7 +59,7 @@ export default function TrafficPanel({
                   >
                     {counts[lv] ?? 0}
                   </span>
-                  <span className="mt-0.5 text-[var(--text-2xs)] font-semibold text-[var(--text-muted)]">
+                  <span className="mt-0.5 text-[length:var(--text-2xs)] font-semibold text-[var(--text-muted)]">
                     {LEVEL_META[lv].label}
                   </span>
                 </div>
@@ -67,7 +67,7 @@ export default function TrafficPanel({
             </div>
           )}
 
-          <h3 className="mb-1.5 text-[var(--text-xs)] font-bold text-[var(--text-muted)]">돌발상황</h3>
+          <h3 className="mb-1.5 text-[length:var(--text-xs)] font-bold text-[var(--text-muted)]">돌발상황</h3>
           {incidents.length === 0 ? (
             <Empty>현재 보고된 사고·통제가 없습니다 👍</Empty>
           ) : (
@@ -87,14 +87,14 @@ export default function TrafficPanel({
                         <Badge tone={m.tone} filled>
                           {m.emoji} {m.label}
                         </Badge>
-                        <span className="truncate text-[var(--text-xs)] font-semibold text-[var(--text-muted)]">
+                        <span className="truncate text-[length:var(--text-xs)] font-semibold text-[var(--text-muted)]">
                           {inc.road}
                         </span>
-                        <span className="ml-auto shrink-0 text-[var(--text-2xs)] text-[var(--text-muted)]">
+                        <span className="ml-auto shrink-0 text-[length:var(--text-2xs)] text-[var(--text-muted)]">
                           {timeAgo(inc.startedAt)}
                         </span>
                       </div>
-                      <p className="line-clamp-2 text-[var(--text-xs)] leading-snug">{inc.message}</p>
+                      <p className="line-clamp-2 text-[length:var(--text-xs)] leading-snug">{inc.message}</p>
                     </button>
                   </li>
                 );
@@ -104,7 +104,7 @@ export default function TrafficPanel({
 
           {links.length > 0 && (
             <>
-              <h3 className="mb-1.5 mt-3 text-[var(--text-xs)] font-bold text-[var(--text-muted)]">
+              <h3 className="mb-1.5 mt-3 text-[length:var(--text-xs)] font-bold text-[var(--text-muted)]">
                 느린 도로 {Math.min(6, links.length)}곳
               </h3>
               <ul className="space-y-1">
@@ -117,13 +117,13 @@ export default function TrafficPanel({
                       className="h-1.5 w-1.5 shrink-0 rounded-full"
                       style={{ background: LEVEL_META[l.level].color }}
                     />
-                    <span className="flex-1 truncate text-[var(--text-xs)]">{l.name}</span>
+                    <span className="flex-1 truncate text-[length:var(--text-xs)]">{l.name}</span>
                     <span
-                      className="shrink-0 text-[var(--text-xs)] font-bold"
+                      className="shrink-0 text-[length:var(--text-xs)] font-bold"
                       style={{ color: LEVEL_META[l.level].color }}
                     >
                       {l.speed}
-                      <span className="text-[var(--text-2xs)] font-medium">km/h</span>
+                      <span className="text-[length:var(--text-2xs)] font-medium">km/h</span>
                     </span>
                   </li>
                 ))}

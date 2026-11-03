@@ -61,15 +61,15 @@ export default function PlaceHours({
   if (med && (med.todayStart || med.todayClose)) {
     return (
       <div className="mt-2 flex items-center gap-2">
-        <span className="text-[var(--text-2xs)] font-bold text-[var(--text-muted)]">
+        <span className="text-[length:var(--text-2xs)] font-bold text-[var(--text-muted)]">
           {DAY_KO[day] ? `${DAY_KO[day]}요일 진료` : "진료시간"}
         </span>
-        <span className="text-[var(--text-xs)] font-semibold tabular-nums">
+        <span className="text-[length:var(--text-xs)] font-semibold tabular-nums">
           {med.todayStart || "?"} ~ {med.todayClose || "?"}
         </span>
         {med.openNow !== null && (
           <span
-            className="rounded-full px-2 py-0.5 text-[var(--text-2xs)] font-bold"
+            className="rounded-full px-2 py-0.5 text-[length:var(--text-2xs)] font-bold"
             style={
               med.openNow
                 ? { background: "var(--ok)", color: "#fff" }
@@ -87,13 +87,13 @@ export default function PlaceHours({
   if (osm) {
     return (
       <div className="mt-2 flex items-baseline gap-2">
-        <span className="shrink-0 text-[var(--text-2xs)] font-bold text-[var(--text-muted)]">
+        <span className="shrink-0 text-[length:var(--text-2xs)] font-bold text-[var(--text-muted)]">
           영업시간
         </span>
-        <span className="text-[var(--text-xs)] font-semibold">{osm.text}</span>
+        <span className="text-[length:var(--text-xs)] font-semibold">{osm.text}</span>
         <span
           title="OpenStreetMap 기여자가 적어둔 정보입니다 (ODbL). 실제와 다를 수 있습니다."
-          className="shrink-0 text-[var(--text-2xs)] text-[var(--text-faint)]"
+          className="shrink-0 text-[length:var(--text-2xs)] text-[var(--text-faint)]"
         >
           OSM
         </span>
@@ -121,10 +121,10 @@ export default function PlaceHours({
       rel="noreferrer noopener"
       className="mt-2 flex items-baseline gap-2"
     >
-      <span className="shrink-0 text-[var(--text-2xs)] font-bold text-[var(--text-muted)]">
+      <span className="shrink-0 text-[length:var(--text-2xs)] font-bold text-[var(--text-muted)]">
         영업시간
       </span>
-      <span className="text-[var(--text-xs)] font-semibold text-[var(--brand)] underline underline-offset-2">
+      <span className="text-[length:var(--text-xs)] font-semibold text-[var(--brand)] underline underline-offset-2">
         카카오맵에서 보기 ↗
       </span>
     </a>

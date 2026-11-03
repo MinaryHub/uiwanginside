@@ -54,17 +54,17 @@ function Card({
 }) {
   return (
     <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-3.5">
-      <p className="text-[var(--text-2xs)] font-bold text-[var(--text-muted)]">{label}</p>
-      <p className="mt-1 flex items-baseline gap-1.5 text-[var(--text-2xl)] font-extrabold tabular-nums leading-none">
+      <p className="text-[length:var(--text-2xs)] font-bold text-[var(--text-muted)]">{label}</p>
+      <p className="mt-1 flex items-baseline gap-1.5 text-[length:var(--text-2xl)] font-bold tabular-nums leading-none">
         {num(sum.visitors)}
-        <span className="text-[var(--text-2xs)] font-bold text-[var(--text-muted)]">명</span>
+        <span className="text-[length:var(--text-2xs)] font-bold text-[var(--text-muted)]">명</span>
         {before && (
-          <span className="ml-auto text-[var(--text-2xs)] font-bold">
+          <span className="ml-auto text-[length:var(--text-2xs)] font-bold">
             <Delta now={sum.visitors} before={before.visitors} />
           </span>
         )}
       </p>
-      <p className="mt-1.5 text-[var(--text-2xs)] text-[var(--text-muted)] tabular-nums">
+      <p className="mt-1.5 text-[length:var(--text-2xs)] text-[var(--text-muted)] tabular-nums">
         {num(sum.views)}회 열람 · {num(sum.sessions)}번 방문
       </p>
     </div>
@@ -96,7 +96,7 @@ function Bars({ data, empty }: { data: Bucket[]; empty: string }) {
             적는다 ("08/15 16시" → "16시"). 타이포 스케일 밖의 크기를
             쓰지 않으려면 글자를 줄이는 대신 개수를 줄여야 한다.
           */}
-          <span className="mt-1 truncate text-center text-[var(--text-2xs)] text-[var(--text-faint)]">
+          <span className="mt-1 truncate text-center text-[length:var(--text-2xs)] text-[var(--text-faint)]">
             {data.indexOf(d) % Math.max(1, Math.ceil(data.length / 6)) === 0
               ? d.label.split(" ").pop()
               : ""}
@@ -123,10 +123,10 @@ function Ranking({
       {rows.map((r) => (
         <li key={r.name || "(없음)"}>
           <div className="flex items-baseline gap-2">
-            <span className="flex-1 truncate text-[var(--text-sm)] font-semibold">
+            <span className="flex-1 truncate text-[length:var(--text-sm)] font-semibold">
               {label ? label(r.name) : r.name || "(없음)"}
             </span>
-            <span className="shrink-0 text-[var(--text-2xs)] tabular-nums text-[var(--text-muted)]">
+            <span className="shrink-0 text-[length:var(--text-2xs)] tabular-nums text-[var(--text-muted)]">
               {num(r.visitors)}명 · {num(r.count)}회
             </span>
           </div>
@@ -145,9 +145,9 @@ function Ranking({
 function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
     <section className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-4">
-      <h2 className="text-[var(--text-base)] font-extrabold">{title}</h2>
+      <h2 className="text-[length:var(--text-base)] font-bold">{title}</h2>
       {hint && (
-        <p className="mb-2.5 mt-0.5 text-[var(--text-2xs)] text-[var(--text-muted)]">{hint}</p>
+        <p className="mb-2.5 mt-0.5 text-[length:var(--text-2xs)] text-[var(--text-muted)]">{hint}</p>
       )}
       <div className={hint ? "" : "mt-2.5"}>{children}</div>
     </section>
@@ -187,10 +187,10 @@ export default function AdminClient({
           className="h-2 w-2 rounded-full"
           style={{ background: s.now > 0 ? "var(--ok)" : "var(--border-strong)" }}
         />
-        <p className="text-[var(--text-sm)] font-bold">
+        <p className="text-[length:var(--text-sm)] font-bold">
           지금 보고 있는 사람 {num(s.now)}명
         </p>
-        <span className="text-[var(--text-2xs)] text-[var(--text-faint)]">최근 5분</span>
+        <span className="text-[length:var(--text-2xs)] text-[var(--text-faint)]">최근 5분</span>
       </div>
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -231,7 +231,7 @@ export default function AdminClient({
         </Section>
       </div>
 
-      <p className="px-1 text-[var(--text-2xs)] leading-relaxed text-[var(--text-faint)]">
+      <p className="px-1 text-[length:var(--text-2xs)] leading-relaxed text-[var(--text-faint)]">
         {s.since
           ? `${new Date(s.since).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}부터 기록`
           : "아직 기록 없음"}

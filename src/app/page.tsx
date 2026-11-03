@@ -9,7 +9,7 @@ function Loading() {
     // --background·--muted 라는 토큰은 없다. 이름이 틀려 배경이 칠해지지
     // 않고 글자색도 기본값이라, 첫 화면이 흰 바탕으로 한 번 번쩍였다.
     <div className="grid h-dvh place-items-center bg-[var(--bg)]">
-      <span className="text-[var(--text-sm)] text-[var(--text-muted)]">불러오는 중…</span>
+      <span className="text-[length:var(--text-sm)] text-[var(--text-muted)]">불러오는 중…</span>
     </div>
   );
 }

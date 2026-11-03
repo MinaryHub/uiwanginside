@@ -4,14 +4,14 @@
 @import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 
 /* ─────────────────────────────────────────────────────────────
-   의왕 인사이드 디자인 토큰 — 2026-11 개편
+   의왕 인사이드 디자인 토큰 — 미니멀
 
-   방향: 지도 위에 떠 있는 유리 패널. 지도가 주인공이고 나머지는 그 위에
-   가볍게 얹힌다. 표면은 반투명 + 흐림으로 지도를 비쳐 보이게 하고,
-   그림자는 여러 겹으로 부드럽게 깐다. 모서리는 크게 둥글린다.
-
-   신뢰가 우선인 공공데이터 서비스라 강조색은 하나(청록)로 아껴 쓰고,
-   위계는 크기·굵기·여백으로 만든다.
+   덜어낼 수 있는 것은 모두 덜어낸다.
+   - 색은 무채색이 기본이고, 강조색 하나(짙은 청록)만 아껴 쓴다.
+     그라데이션·유리 흐림·장식용 아이콘은 쓰지 않는다.
+   - 구분은 얇은 선(1px)과 여백으로 한다. 그림자는 지도 위에 떠 있는
+     것을 지도와 떼어 보일 만큼만, 아주 옅게.
+   - 위계는 크기와 굵기로 만든다.
 
    글자 크기는 본문 14px 기준. 버스를 기다리며 한 손으로 보는 상황과
    고령 이용자를 생각해 가독성을 앞에 둔다. 터치 영역은 최소 44px.
@@ -20,94 +20,91 @@
 :root {
   color-scheme: light;
 
-  /* 표면 — 차가운 중성색. 카드는 순백, 배경은 살짝 푸른 회색 */
-  --bg: #eef1f5;
+  --bg: #f7f7f5;
   --surface: #ffffff;
-  --surface-2: #f3f5f8;
-  --surface-3: #e7ebf0;
+  --surface-2: #f4f4f2;
+  --surface-3: #ebebe8;
 
-  /* 지도 위 유리 패널 */
-  --glass: rgba(255, 255, 255, 0.78);
-  --glass-strong: rgba(255, 255, 255, 0.9);
-  --glass-border: rgba(255, 255, 255, 0.65);
-  --glass-ring: rgba(15, 23, 42, 0.07);
+  /* 지도 위 패널 — 흐림 없이 거의 불투명한 흰 면 */
+  --glass: rgba(255, 255, 255, 0.96);
+  --glass-strong: #ffffff;
+  --glass-border: #e6e6e3;
+  --glass-ring: #e6e6e3;
 
-  --text: #0f1729;
-  --text-muted: #556274;
-  --text-faint: #8693a4;
+  --text: #111111;
+  --text-muted: #5f5f5b;
+  --text-faint: #9a9a95;
 
-  --border: #e2e7ee;
-  --border-strong: #cbd3de;
+  --border: #e6e6e3;
+  --border-strong: #cfcfcb;
 
-  /* 강조 — 맑은 청록. 링크·선택·핵심 수치에만 쓴다 */
-  --brand: #0b7a6c;
-  --brand-2: #14b8a6;
-  --brand-soft: #e3f5f2;
+  /* 강조는 하나뿐. 선택·링크·핵심 수치에만 */
+  --brand: #0e6b5e;
+  --brand-2: #0e6b5e;
+  --brand-soft: #eef4f2;
   --on-brand: #ffffff;
-  --brand-grad: linear-gradient(135deg, #0b7a6c 0%, #14a394 55%, #2dd4bf 100%);
+  /* 예전 그라데이션 자리 — 이제는 단색이다 */
+  --brand-grad: var(--brand);
 
-  /* 상태 */
-  --danger: #d0303a;
-  --danger-soft: #fdecee;
-  --warn: #b45d00;
-  --warn-soft: #fff3e2;
-  --ok: #13805a;
-  --ok-soft: #e4f5ed;
-  --info: #2563c9;
+  --danger: #c4312b;
+  --danger-soft: #fbeeed;
+  --warn: #a35a00;
+  --warn-soft: #fbf2e6;
+  --ok: #18774f;
+  --ok-soft: #ecf5f0;
+  --info: #2b5fb3;
 
-  /* 높이감 — 얕은 접촉 그림자 + 넓게 퍼지는 그림자 두 겹 */
-  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
-  --shadow-md: 0 1px 2px rgba(15, 23, 42, 0.05), 0 6px 18px -4px rgba(15, 23, 42, 0.12);
-  --shadow-lg: 0 2px 6px rgba(15, 23, 42, 0.06), 0 18px 44px -10px rgba(15, 23, 42, 0.22);
+  --shadow-sm: none;
+  --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.07);
 
-  --radius: 12px;
-  --radius-lg: 20px;
-  --radius-xl: 28px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
   --radius-full: 999px;
 
-  /* 움직임 — 살짝 튕기며 멈추는 곡선 */
-  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-spring: cubic-bezier(0.2, 0, 0, 1);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
 
-    --bg: #0a0e14;
-    --surface: #121821;
-    --surface-2: #19212c;
-    --surface-3: #222c38;
+    --bg: #0f0f0f;
+    --surface: #171717;
+    --surface-2: #1e1e1e;
+    --surface-3: #282828;
 
-    --glass: rgba(18, 24, 33, 0.72);
-    --glass-strong: rgba(18, 24, 33, 0.88);
-    --glass-border: rgba(255, 255, 255, 0.08);
-    --glass-ring: rgba(0, 0, 0, 0.4);
+    --glass: rgba(23, 23, 23, 0.96);
+    --glass-strong: #171717;
+    --glass-border: #2a2a2a;
+    --glass-ring: #2a2a2a;
 
-    --text: #eef2f7;
-    --text-muted: #a1aebd;
-    --text-faint: #738194;
+    --text: #f2f2f0;
+    --text-muted: #a3a39e;
+    --text-faint: #6f6f6b;
 
-    --border: #243040;
-    --border-strong: #334155;
+    --border: #2a2a2a;
+    --border-strong: #3a3a3a;
 
-    --brand: #3fd8c2;
-    --brand-2: #5eead4;
-    --brand-soft: #0f2f2b;
-    --on-brand: #04211d;
-    --brand-grad: linear-gradient(135deg, #2dd4bf 0%, #5eead4 60%, #99f6e4 100%);
+    --brand: #5ccbb7;
+    --brand-2: #5ccbb7;
+    --brand-soft: #14231f;
+    --on-brand: #06201b;
+    --brand-grad: var(--brand);
 
-    --danger: #ff8a8f;
-    --danger-soft: #3a191c;
-    --warn: #f5b759;
-    --warn-soft: #3a2b14;
-    --ok: #67dfa8;
-    --ok-soft: #112e22;
-    --info: #86b6f5;
+    --danger: #ff8a84;
+    --danger-soft: #2e1817;
+    --warn: #e8b05a;
+    --warn-soft: #2d2415;
+    --ok: #6fd3a3;
+    --ok-soft: #13261d;
+    --info: #8ab4f0;
 
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 22px -6px rgba(0, 0, 0, 0.6);
-    --shadow-lg: 0 2px 6px rgba(0, 0, 0, 0.4), 0 22px 50px -12px rgba(0, 0, 0, 0.75);
+    --shadow-sm: none;
+    --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.5);
   }
 }
 
@@ -159,7 +156,7 @@ body {
 }
 
 ::selection {
-  background: color-mix(in srgb, var(--brand-2) 30%, transparent);
+  background: color-mix(in srgb, var(--brand) 22%, transparent);
 }
 
 /* 숫자는 폭을 고정해 갱신될 때 흔들리지 않게 한다 */
@@ -171,14 +168,18 @@ body {
 h1,
 h2,
 h3 {
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
   line-height: 1.35;
 }
 
-/* 키보드 사용자에게만 초점 링을 보여준다 */
-:focus-visible {
-  outline: 2px solid var(--brand);
-  outline-offset: 2px;
+/* 키보드 사용자에게만 초점 링을 보여준다.
+   base 층에 둬야 한다 — 층 밖에 두면 어떤 유틸리티보다도 세서, 둘레로 이미
+   초점을 보여주는 입력칸에서도 끌 수 없었다 (검색창에 상자가 이중으로 떴다). */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+  }
 }
 
 button,
@@ -186,25 +187,16 @@ a {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* ── 유리 패널 ─────────────────────────────────────────────
-   지도 위에 떠 있는 모든 것(상단 바·모드·지도 버튼·시트)에 쓴다.
-   흐림을 지원하지 않는 브라우저에서는 거의 불투명한 면으로 떨어진다. */
+/* ── 지도 위 패널 ──────────────────────────────────────────
+   상단 바·모드·지도 버튼처럼 지도 위에 떠 있는 것. 흰 면에 얇은 선,
+   지도와 떼어 보일 만큼의 옅은 그림자만 둔다. (이름은 예전 그대로 둔다) */
 .glass {
-  background: var(--glass-strong);
+  background: var(--glass);
   border: 1px solid var(--glass-border);
-  box-shadow:
-    0 0 0 1px var(--glass-ring),
-    var(--shadow-md);
-}
-@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .glass {
-    background: var(--glass);
-    -webkit-backdrop-filter: blur(18px) saturate(1.6);
-    backdrop-filter: blur(18px) saturate(1.6);
-  }
+  box-shadow: var(--shadow-md);
 }
 
-/* 지도 위 동그란 버튼 */
+/* 지도 위 버튼 */
 .map-btn {
   display: grid;
   place-items: center;
@@ -212,34 +204,26 @@ a {
   height: 44px;
   border-radius: var(--radius-full);
   color: var(--text);
-  font-weight: 700;
+  font-weight: 600;
   font-size: var(--text-base);
-  transition:
-    transform 0.18s var(--ease-spring),
-    color 0.15s,
-    box-shadow 0.15s;
+  transition: color 0.15s, border-color 0.15s;
 }
 .map-btn:hover {
   color: var(--brand);
-  transform: translateY(-1px);
-}
-.map-btn:active {
-  transform: scale(0.94);
+  border-color: var(--border-strong);
 }
 
-/* 강조 배경 — 선택된 모드·주요 버튼 */
+/* 선택된 것 — 단색. 미니멀에서 강조는 색 하나로 충분하다 */
 .brand-fill {
-  background: var(--brand-grad);
-  color: var(--on-brand);
-  box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--brand) 70%, transparent);
+  background: var(--text);
+  color: var(--surface);
 }
 
-/* 눌렀을 때 살짝 들어가는 느낌 */
 .press {
-  transition: transform 0.18s var(--ease-spring), background-color 0.15s, color 0.15s;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s, opacity 0.15s;
 }
 .press:active {
-  transform: scale(0.97);
+  opacity: 0.7;
 }
 
 /* 스크롤바 — 존재감을 줄인다 */
@@ -286,7 +270,7 @@ a {
 @keyframes fade-up {
   from {
     opacity: 0;
-    transform: translateY(10px) scale(0.985);
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
@@ -294,7 +278,7 @@ a {
   }
 }
 .fade-up {
-  animation: fade-up 0.32s var(--ease-out) both;
+  animation: fade-up 0.2s var(--ease-out) both;
 }
 
 /* 목록 항목이 차례로 떠오른다 — 처음 몇 개만, 늦게 뜨면 답답하다 */
@@ -309,9 +293,7 @@ a {
 
 /* 오버레이 배경 */
 .scrim {
-  background: color-mix(in srgb, #0a0e14 38%, transparent);
-  -webkit-backdrop-filter: blur(4px);
-  backdrop-filter: blur(4px);
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
 }
 
 /* 로딩 자리표시 */

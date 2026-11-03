@@ -32,7 +32,7 @@ export default function DongCard({
   return (
     <div className="fade-up absolute inset-x-3 bottom-3 z-30 mx-auto max-w-[440px] overflow-hidden rounded-[var(--radius-xl)] bg-[var(--surface)] shadow-[var(--shadow-lg)] ring-1 ring-[var(--glass-ring)]">
       <div className="flex items-center gap-2 px-3.5 pt-3">
-        <h2 className="min-w-0 flex-1 truncate text-[var(--text-base)] font-extrabold">
+        <h2 className="min-w-0 flex-1 truncate text-[length:var(--text-base)] font-bold">
           {d.name}
         </h2>
         <button
@@ -52,12 +52,12 @@ export default function DongCard({
           ["인구밀도", perKm.toLocaleString("ko-KR"), "명/km²"],
         ].map(([label, v, unit]) => (
           <div key={label} className="rounded-[var(--radius)] bg-[var(--surface-2)] px-2.5 py-2">
-            <dt className="text-[var(--text-2xs)] font-semibold text-[var(--text-muted)]">
+            <dt className="text-[length:var(--text-2xs)] font-semibold text-[var(--text-muted)]">
               {label}
             </dt>
-            <dd className="mt-0.5 truncate text-[var(--text-base)] font-extrabold tabular-nums">
+            <dd className="mt-0.5 truncate text-[length:var(--text-base)] font-bold tabular-nums">
               {v}
-              <span className="ml-0.5 text-[var(--text-2xs)] font-bold text-[var(--text-muted)]">
+              <span className="ml-0.5 text-[length:var(--text-2xs)] font-bold text-[var(--text-muted)]">
                 {unit}
               </span>
             </dd>
@@ -65,7 +65,7 @@ export default function DongCard({
         ))}
       </dl>
 
-      <p className="px-3.5 pt-2 text-[var(--text-xs)] leading-relaxed text-[var(--text-muted)]">
+      <p className="px-3.5 pt-2 text-[length:var(--text-xs)] leading-relaxed text-[var(--text-muted)]">
         의왕시 인구의 <b className="text-[var(--text)]">{share}%</b> · 법정동{" "}
         {d.legalDongs.join(", ")}
       </p>
@@ -75,7 +75,7 @@ export default function DongCard({
         <button
           type="button"
           onClick={onOpenWaste}
-          className="mt-2 flex w-full items-center gap-1.5 border-t border-[var(--border)] px-3.5 py-2.5 text-left text-[var(--text-xs)] transition hover:bg-[var(--surface-2)]"
+          className="mt-2 flex w-full items-center gap-1.5 border-t border-[var(--border)] px-3.5 py-2.5 text-left text-[length:var(--text-xs)] transition hover:bg-[var(--surface-2)]"
         >
           <span aria-hidden>🗑️</span>
           <span className="flex-1 text-[var(--text-muted)]">
@@ -85,7 +85,7 @@ export default function DongCard({
         </button>
       )}
 
-      <p className="px-3.5 pb-2.5 pt-1.5 text-[var(--text-2xs)] text-[var(--text-faint)]">
+      <p className="px-3.5 pb-2.5 pt-1.5 text-[length:var(--text-2xs)] text-[var(--text-faint)]">
         인구 {POPULATION_AS_OF} 기준 · 행정안전부 주민등록인구통계
       </p>
     </div>

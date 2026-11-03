@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import type { ReactNode } from "react";
 
 /**
@@ -26,14 +27,18 @@ export default function MapCard({
     <div
       className="fade-up absolute inset-x-3 bottom-3 z-30 mx-auto max-w-[440px] overflow-hidden rounded-[var(--radius-xl)] bg-[var(--surface)] shadow-[var(--shadow-lg)] ring-1 ring-[var(--glass-ring)]"
     >
-      {/* 종류 색 — 왼쪽 띠 대신 위쪽 얇은 선. 둥근 모서리와 어울린다 */}
-      {accent && <div aria-hidden className="h-1 w-full" style={{ background: accent }} />}
-      <div className="max-h-[52vh] overflow-y-auto p-4 thin-scroll">
+      {/* 종류 색은 제목 앞 작은 점 하나로만 */}
+      <div className="max-h-[52vh] overflow-y-auto p-5 thin-scroll">
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
-            <h3 className="truncate text-[var(--text-base)] font-extrabold">{title}</h3>
+            <h3 className="flex items-center gap-2 truncate text-[length:var(--text-lg)] font-bold">
+              {accent && (
+                <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: accent }} />
+              )}
+              {title}
+            </h3>
             {subtitle && (
-              <div className="mt-0.5 text-[var(--text-xs)] text-[var(--text-muted)]">
+              <div className="mt-0.5 text-[length:var(--text-xs)] text-[var(--text-muted)]">
                 {subtitle}
               </div>
             )}
@@ -42,9 +47,9 @@ export default function MapCard({
             type="button"
             onClick={onClose}
             aria-label="닫기"
-            className="press grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius-full)] bg-[var(--surface-2)] text-[var(--text-sm)] text-[var(--text-muted)] hover:bg-[var(--surface-3)]"
+            className="press grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius-full)] text-[length:var(--text-sm)] text-[var(--text-muted)] hover:text-[var(--text)]"
           >
-            ✕
+            <Icon name="close" size={18} />
           </button>
         </div>
         {children}

@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import SchoolFacts from "@/components/SchoolFacts";
 import PlaceHours from "@/components/PlaceHours";
 import { CATEGORY_MAP } from "@/lib/uiwang";
@@ -40,26 +41,15 @@ export default function PlaceDetailCard({
 
   return (
     <div className="pointer-events-auto fade-up absolute inset-x-3 bottom-3 z-30 mx-auto max-w-[440px] overflow-hidden rounded-[var(--radius-xl)] bg-[var(--surface)] shadow-[var(--shadow-lg)] ring-1 ring-[var(--glass-ring)]">
-      <div className="p-4">
+      <div className="p-5">
         <div className="flex items-start gap-2">
-          <span
-            aria-hidden
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-[var(--radius)] text-[1.2rem]"
-            style={{
-              background: `linear-gradient(140deg, color-mix(in srgb, ${def.color} 24%, transparent), color-mix(in srgb, ${def.color} 8%, transparent))`,
-            }}
-          >
-            {def.emoji}
-          </span>
-
           <div className="min-w-0 flex-1">
-            <h3 className="truncate text-[var(--text-base)] font-extrabold">
+            <h3 className="truncate text-[length:var(--text-lg)] font-bold">
               {place.name}
             </h3>
-            <p className="mt-0.5 flex items-center gap-1.5 text-[var(--text-xs)] text-[var(--text-muted)]">
-              <span style={{ color: def.color }} className="font-bold">
-                {def.label}
-              </span>
+            <p className="mt-0.5 flex items-center gap-1.5 text-[length:var(--text-xs)] text-[var(--text-muted)]">
+              <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ background: def.color }} />
+              <span className="font-medium">{def.label}</span>
               {distance && <span>· {distance}</span>}
             </p>
           </div>
@@ -68,16 +58,16 @@ export default function PlaceDetailCard({
             type="button"
             onClick={onClose}
             aria-label="닫기"
-            className="press grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius-full)] bg-[var(--surface-2)] text-[var(--text-sm)] text-[var(--text-muted)] hover:bg-[var(--surface-3)]"
+            className="press grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius-full)] text-[length:var(--text-sm)] text-[var(--text-muted)] hover:text-[var(--text)]"
           >
-            ✕
+            <Icon name="close" size={18} />
           </button>
         </div>
 
         <PlaceHours place={place} medical={medical} day={medicalDay} />
 
         {(place.roadAddress || place.address) && (
-          <p className="mt-2 text-[var(--text-xs)] leading-relaxed text-[var(--text-muted)]">
+          <p className="mt-2 text-[length:var(--text-xs)] leading-relaxed text-[var(--text-muted)]">
             {place.roadAddress || place.address}
           </p>
         )}
@@ -87,25 +77,25 @@ export default function PlaceDetailCard({
           {place.phone && (
             <a
               href={`tel:${place.phone}`}
-              className="brand-fill press inline-flex min-h-[46px] flex-1 items-center justify-center gap-1.5 rounded-[var(--radius-full)] text-[var(--text-sm)] font-bold"
+              className="brand-fill press inline-flex min-h-[46px] flex-1 items-center justify-center rounded-[var(--radius-full)] text-[length:var(--text-sm)] font-semibold"
             >
-              📞 전화
+              전화
             </a>
           )}
           <a
             href={directionsUrl}
             target="_blank"
             rel="noreferrer noopener"
-            className="press inline-flex min-h-[46px] flex-1 items-center justify-center gap-1.5 rounded-[var(--radius-full)] bg-[var(--surface-2)] text-[var(--text-sm)] font-bold hover:bg-[var(--surface-3)]"
+            className="press inline-flex min-h-[46px] flex-1 items-center justify-center rounded-[var(--radius-full)] border border-[var(--border-strong)] text-[length:var(--text-sm)] font-semibold hover:border-[var(--text)]"
           >
-            🧭 길찾기
+            길찾기
           </a>
           {place.url && (
             <a
               href={place.url}
               target="_blank"
               rel="noreferrer noopener"
-              className="press inline-flex min-h-[46px] min-w-[46px] items-center justify-center rounded-[var(--radius-full)] bg-[var(--surface-2)] px-3 text-[var(--text-sm)] font-bold hover:bg-[var(--surface-3)]"
+              className="press inline-flex min-h-[46px] min-w-[46px] items-center justify-center rounded-[var(--radius-full)] border border-[var(--border-strong)] px-3 text-[length:var(--text-sm)] font-semibold hover:border-[var(--text)]"
               title="카카오맵에서 보기"
             >
               ↗

@@ -78,27 +78,27 @@ export default function StopCard({
                   style={on ? { background: "var(--brand-soft)" } : undefined}
                 >
                   <div className="flex items-center gap-2">
-                    <span className="w-12 shrink-0 truncate text-[var(--text-sm)] font-extrabold text-[var(--info)]">
+                    <span className="w-12 shrink-0 truncate text-[length:var(--text-sm)] font-bold text-[var(--info)]">
                       {a.routeName}
                     </span>
                     {a.destName && (
-                      <span className="min-w-0 flex-1 truncate text-[var(--text-2xs)] text-[var(--text-muted)]">
+                      <span className="min-w-0 flex-1 truncate text-[length:var(--text-2xs)] text-[var(--text-muted)]">
                         {a.destName} 방면
                       </span>
                     )}
                     <span
-                      className="tnum ml-auto shrink-0 text-[var(--text-base)] font-extrabold"
+                      className="tnum ml-auto shrink-0 text-[length:var(--text-base)] font-bold"
                       style={{ color: first.color }}
                     >
                       {first.text}
                     </span>
-                    <span className="tnum w-9 shrink-0 text-right text-[var(--text-2xs)] text-[var(--text-faint)]">
+                    <span className="tnum w-9 shrink-0 text-right text-[length:var(--text-2xs)] text-[var(--text-faint)]">
                       {a.predictSec2 != null ? second.text : ""}
                     </span>
                   </div>
 
                   {(a.stationsLeft || a.crowded || a.lowPlate || on) && (
-                    <div className="mt-1 flex items-center gap-2 pl-[56px] text-[var(--text-2xs)] text-[var(--text-muted)]">
+                    <div className="mt-1 flex items-center gap-2 pl-[56px] text-[length:var(--text-2xs)] text-[var(--text-muted)]">
                       {a.stationsLeft != null && a.stationsLeft > 0 && (
                         <span>{a.stationsLeft}번째 전</span>
                       )}

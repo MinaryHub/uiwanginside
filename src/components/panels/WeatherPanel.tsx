@@ -51,11 +51,11 @@ export default function WeatherPanel({
                     {d.now.temp ?? "-"}
                   </span>
                   <span className="text-lg text-[var(--text-muted)]">°C</span>
-                  <span className="ml-1 text-[var(--text-xs)] text-[var(--text-muted)]">
+                  <span className="ml-1 text-[length:var(--text-xs)] text-[var(--text-muted)]">
                     {d.now.precipitation !== "없음" ? d.now.precipitation : d.now.sky}
                   </span>
                 </div>
-                <div className="mt-0.5 flex gap-3 text-[var(--text-xs)] text-[var(--text-muted)]">
+                <div className="mt-0.5 flex gap-3 text-[length:var(--text-xs)] text-[var(--text-muted)]">
                   <span>습도 {d.now.humidity ?? "-"}%</span>
                   <span>바람 {d.now.windSpeed ?? "-"}m/s</span>
                   <span>강수 {d.now.rain1h ?? 0}mm</span>
@@ -71,14 +71,14 @@ export default function WeatherPanel({
                   key={f.time}
                   className="flex min-w-[62px] shrink-0 flex-col items-center gap-1 rounded-[var(--radius)] bg-[var(--surface-2)] px-2 py-2"
                 >
-                  <span className="text-[var(--text-2xs)] font-semibold text-[var(--text-muted)]">
+                  <span className="text-[length:var(--text-2xs)] font-semibold text-[var(--text-muted)]">
                     {hhmm(f.time)}
                   </span>
                   <span className="text-lg leading-none">
                     {icon(f.sky, f.precipitation)}
                   </span>
-                  <span className="text-[var(--text-sm)] font-bold">{f.temp ?? "-"}°</span>
-                  <span className="text-[var(--text-2xs)] text-blue-500">
+                  <span className="text-[length:var(--text-sm)] font-bold">{f.temp ?? "-"}°</span>
+                  <span className="text-[length:var(--text-2xs)] text-blue-500">
                     {f.pop != null && f.pop > 0 ? `${f.pop}%` : " "}
                   </span>
                 </div>

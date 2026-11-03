@@ -26,10 +26,9 @@ export function Section({
   children: ReactNode;
 }) {
   return (
-    <section className="border-t border-[var(--border)] px-4 py-4 first:border-t-0">
+    <section className="border-t border-[var(--border)] px-5 py-5 first:border-t-0">
       <header className="mb-3 flex items-center gap-2">
-        <span aria-hidden className="h-3.5 w-1 rounded-full bg-[var(--brand-2)]" />
-        <h2 className="text-[var(--text-sm)] font-extrabold tracking-tight text-[var(--text)]">
+        <h2 className="text-[length:var(--text-xs)] font-semibold text-[var(--text-muted)]">
           {title}
         </h2>
         {right && <div className="ml-auto flex items-center">{right}</div>}
@@ -60,17 +59,17 @@ export function Stat({
   return (
     <div className="flex flex-col">
       <span
-        className="tnum text-[var(--text-xl)] font-extrabold leading-none"
+        className="tnum text-[length:var(--text-xl)] font-bold leading-none"
         style={{ color }}
       >
         {value}
         {unit && (
-          <span className="ml-0.5 text-[var(--text-2xs)] font-semibold text-[var(--text-faint)]">
+          <span className="ml-0.5 text-[length:var(--text-2xs)] font-semibold text-[var(--text-faint)]">
             {unit}
           </span>
         )}
       </span>
-      <span className="mt-1 text-[var(--text-2xs)] text-[var(--text-muted)]">{label}</span>
+      <span className="mt-1 text-[length:var(--text-2xs)] text-[var(--text-muted)]">{label}</span>
     </div>
   );
 }
@@ -91,7 +90,7 @@ export function Badge({
       : `color-mix(in srgb, ${color} 14%, transparent)`;
   return (
     <span
-      className="inline-flex shrink-0 items-center gap-1 rounded-[var(--radius-full)] px-2 py-0.5 text-[var(--text-2xs)] font-bold"
+      className="inline-flex shrink-0 items-center gap-1 rounded-[var(--radius-full)] px-2 py-0.5 text-[length:var(--text-2xs)] font-bold"
       style={
         filled ? { background: color, color: "var(--surface)" } : { background: soft, color }
       }
@@ -135,7 +134,7 @@ export function Button({
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className={`press inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-[var(--radius-full)] px-4 text-[var(--text-sm)] font-bold disabled:opacity-45 ${
+      className={`press inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-[var(--radius-full)] px-4 text-[length:var(--text-sm)] font-bold disabled:opacity-45 ${
         full ? "w-full" : ""
       } ${variant === "primary" ? "brand-fill" : ""} ${
         disabled ? "cursor-not-allowed" : "hover:brightness-[0.97]"
@@ -158,7 +157,7 @@ export function Notice({
   const color = `var(--${tone})`;
   return (
     <p
-      className="mb-3 rounded-[var(--radius)] px-3.5 py-2.5 text-[var(--text-xs)] font-medium leading-relaxed"
+      className="mb-3 rounded-[var(--radius)] px-3.5 py-2.5 text-[length:var(--text-xs)] font-medium leading-relaxed"
       style={{ background: `color-mix(in srgb, ${color} 12%, transparent)`, color }}
     >
       {children}
@@ -168,7 +167,7 @@ export function Notice({
 
 export function Empty({ children }: { children: ReactNode }) {
   return (
-    <p className="py-6 text-[var(--text-sm)] leading-relaxed text-[var(--text-muted)]">
+    <p className="py-6 text-[length:var(--text-sm)] leading-relaxed text-[var(--text-muted)]">
       {children}
     </p>
   );
@@ -211,13 +210,10 @@ export function LiveDot({ live }: { live: boolean }) {
   if (!live) return null;
   return (
     <span
-      className="inline-flex items-center gap-1.5 text-[var(--text-2xs)] font-bold text-[var(--ok)]"
+      className="inline-flex items-center gap-1.5 text-[length:var(--text-2xs)] font-medium text-[var(--text-muted)]"
       title="실시간 데이터"
     >
-      <span className="relative flex h-2 w-2">
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--ok)] opacity-50" />
-        <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--ok)]" />
-      </span>
+      <span className="h-1.5 w-1.5 rounded-full bg-[var(--ok)]" />
       실시간
     </span>
   );
@@ -227,17 +223,17 @@ export function LiveDot({ live }: { live: boolean }) {
 export function Unavailable({ reason }: { reason?: string }) {
   return (
     <div className="py-4">
-      <p className="text-[var(--text-sm)] font-semibold text-[var(--text-muted)]">
+      <p className="text-[length:var(--text-sm)] font-semibold text-[var(--text-muted)]">
         아직 연동되지 않았습니다
       </p>
       {reason && (
-        <p className="mt-1 text-[var(--text-xs)] leading-relaxed text-[var(--text-faint)]">
+        <p className="mt-1 text-[length:var(--text-xs)] leading-relaxed text-[var(--text-faint)]">
           {reason}
         </p>
       )}
       <a
         href="/status"
-        className="mt-2 inline-flex min-h-[36px] items-center text-[var(--text-xs)] font-bold text-[var(--brand)] underline underline-offset-4"
+        className="mt-2 inline-flex min-h-[36px] items-center text-[length:var(--text-xs)] font-bold text-[var(--brand)] underline underline-offset-4"
       >
         연동 상태 보기
       </a>

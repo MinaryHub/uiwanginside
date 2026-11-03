@@ -31,9 +31,9 @@ export default async function StatsLinkPage({ params }: Props) {
       <header className="mb-4 flex items-center gap-2">
         <Link href="/" className="flex items-center gap-2">
           <Logo size={26} />
-          <span className="text-[var(--text-base)] font-extrabold">접속 통계</span>
+          <span className="text-[length:var(--text-base)] font-bold">접속 통계</span>
         </Link>
-        <span className="ml-auto text-[var(--text-2xs)] font-bold text-[var(--text-muted)]">
+        <span className="ml-auto text-[length:var(--text-2xs)] font-bold text-[var(--text-muted)]">
           비밀 주소
         </span>
       </header>

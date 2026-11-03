@@ -114,7 +114,7 @@ export default function InfoOverlay({
                   type="button"
                   onClick={() => onTabChange(t.id)}
                   aria-pressed={on}
-                  className={`press min-h-[36px] shrink-0 rounded-[var(--radius-full)] px-3.5 text-[var(--text-sm)] font-bold ${
+                  className={`press min-h-[36px] shrink-0 rounded-[var(--radius-full)] px-3.5 text-[length:var(--text-sm)] font-bold ${
                     on ? "brand-fill" : "text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
                   }`}
                 >
