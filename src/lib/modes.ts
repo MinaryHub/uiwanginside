@@ -16,6 +16,7 @@ export type ModeId = "food" | "life" | "medical" | "transit";
 
 /** 시트에 띄울 내용 */
 export type CardId =
+  | "emergency"
   | "weather"
   | "air"
   | "medical"
@@ -78,10 +79,11 @@ export const MODES: ModeDef[] = [
   {
     id: "medical",
     label: "의료",
-    hint: "지금 진료 중인 병원·약국",
+    hint: "응급실 병상 · 지금 진료 중인 병원·약국",
     categories: ["HP8", "PM9"],
     layers: { ...NO_LAYERS, places: true },
-    cards: ["medical"],
+    // 급한 사람이 먼저 봐야 할 것이 위로 온다
+    cards: ["emergency", "medical"],
   },
   {
     id: "transit",

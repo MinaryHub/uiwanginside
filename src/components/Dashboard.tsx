@@ -32,6 +32,7 @@ import type {
   WeatherPayload,
   AirPayload,
   MedicalPayload,
+  EmergencyPayload,
   NewsPayload,
   TrafficPayload,
   TransitPayload,
@@ -54,6 +55,7 @@ import PlacesPanel from "@/components/panels/PlacesPanel";
 import WeatherPanel from "@/components/panels/WeatherPanel";
 import AirPanel from "@/components/panels/AirPanel";
 import MedicalPanel from "@/components/panels/MedicalPanel";
+import EmergencyPanel from "@/components/panels/EmergencyPanel";
 import TrafficPanel from "@/components/panels/TrafficPanel";
 import TransitPanel from "@/components/panels/TransitPanel";
 import CctvPanel from "@/components/panels/CctvPanel";
@@ -84,6 +86,8 @@ const POLL = {
   weather: 10 * 60_000,
   air: 10 * 60_000,
   medical: 10 * 60_000,
+  // 응급실 병상은 기관이 몇 분마다 올린다
+  emergency: 60_000,
   traffic: 60_000,
   transit: 30_000,
   news: 5 * 60_000,
@@ -253,6 +257,11 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     refreshInterval: POLL.medical,
     keepPreviousData: true,
   });
+  const emergency = useSWR<ApiEnvelope<EmergencyPayload>>(
+    needs("emergency") ? "/api/emergency" : null,
+    swrFetcher,
+    { refreshInterval: POLL.emergency, keepPreviousData: true },
+  );
   const transit = useSWR<ApiEnvelope<TransitPayload>>(
     def?.layers.bus || needs("transit") ? `/api/transit?${geo}` : null,
     swrFetcher,
@@ -333,8 +342,10 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
   );
 
   const refreshAll = useCallback(() => {
-    [places, weather, air, traffic, medical, transit, news].forEach((s) => s.mutate());
-  }, [places, weather, air, traffic, medical, transit, news]);
+    [places, weather, air, traffic, medical, emergency, transit, news].forEach((s) =>
+      s.mutate(),
+    );
+  }, [places, weather, air, traffic, medical, emergency, transit, news]);
 
   // ── 동작 ──────────────────────────────────────────────
   /**
@@ -596,6 +607,8 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
   // ── 시트 내용 ─────────────────────────────────────────
   const card = (id: CardId) => {
     switch (id) {
+      case "emergency":
+        return <EmergencyPanel key={id} res={emergency.data} isLoading={emergency.isLoading} />;
       case "weather":
         return <WeatherPanel key={id} res={weather.data} isLoading={weather.isLoading} />;
       case "air":
@@ -1094,6 +1107,8 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           </header>
 
           <div className="thin-scroll min-h-0 flex-1 overflow-y-auto">
+            {/* 응급실은 장소 목록보다 먼저 — 급한 사람이 스크롤할 여유는 없다 */}
+            {def.cards.filter((c) => c === "emergency").map(card)}
             {def.categories.length > 0 && (
               <PlacesPanel
                 res={places.data}
@@ -1106,7 +1121,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
                 onSelectPlace={handleSelectPlace}
               />
             )}
-            {def.cards.map(card)}
+            {def.cards.filter((c) => c !== "emergency").map(card)}
           </div>
         </aside>
       )}
