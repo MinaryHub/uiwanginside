@@ -57,29 +57,36 @@ function Row({ r, at }: { r: EmergencyRoom; at: string }) {
         <Beds r={r} />
       </div>
 
-      <div className="mt-2 flex items-center gap-3 text-[length:var(--text-xs)]">
+      {(gear.length > 0 || r.reportedAt) && (
+        <p className="mt-1 text-[length:var(--text-2xs)] text-[var(--text-faint)]">
+          {gear.length > 0 && gear.join(" · ")}
+          {r.reportedAt && (
+            <span style={stale ? { color: "var(--warn)", fontWeight: 700 } : undefined}>
+              {gear.length > 0 && " · "}
+              {timeAgo(r.reportedAt)} 갱신
+            </span>
+          )}
+        </p>
+      )}
+
+      {/* 급할 때 누를 것 둘. 큼직하게 */}
+      <div className="mt-2.5 flex gap-2">
         {r.phone && (
-          <a href={`tel:${r.phone}`} className="font-medium text-[var(--brand)]">
-            {r.phone}
+          <a
+            href={`tel:${r.phone}`}
+            className="brand-fill press flex min-h-[44px] flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-[var(--radius-full)] border-2 text-[length:var(--text-sm)] font-extrabold shadow-[var(--shadow-sm)]"
+          >
+            <span aria-hidden>📞</span> 전화
           </a>
         )}
         <a
           href={directions}
           target="_blank"
           rel="noreferrer noopener"
-          className="font-medium text-[var(--text-muted)] hover:text-[var(--text)]"
+          className="press flex min-h-[44px] flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-[var(--radius-full)] border-2 border-[var(--ink)] bg-[var(--surface)] text-[length:var(--text-sm)] font-extrabold shadow-[var(--shadow-sm)]"
         >
-          길찾기
+          <span aria-hidden>🧭</span> 길찾기
         </a>
-        <span className="ml-auto truncate text-[length:var(--text-2xs)] text-[var(--text-faint)]">
-          {gear.length > 0 && gear.join(" · ")}
-          {r.reportedAt && (
-            <span style={stale ? { color: "var(--warn)" } : undefined}>
-              {gear.length > 0 && " · "}
-              {timeAgo(r.reportedAt)}
-            </span>
-          )}
-        </span>
       </div>
     </li>
   );

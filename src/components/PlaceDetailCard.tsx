@@ -40,7 +40,7 @@ export default function PlaceDetailCard({
   )},${place.lat},${place.lng}`;
 
   return (
-    <div className="pointer-events-auto fade-up absolute inset-x-3 bottom-3 z-30 mx-auto max-w-[440px] overflow-hidden rounded-[var(--radius-xl)] bg-[var(--surface)] shadow-[var(--shadow-lg)] ring-1 ring-[var(--glass-ring)]">
+    <div className="pointer-events-auto pop-in absolute inset-x-3 bottom-[calc(var(--dock-h)+8px)] z-30 mx-auto max-w-[440px] overflow-hidden rounded-[var(--radius-xl)] bg-[var(--surface)] shadow-[var(--shadow-lg)] border-2 border-[var(--ink)]">
       <div className="p-5">
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
@@ -77,7 +77,7 @@ export default function PlaceDetailCard({
           {place.phone && (
             <a
               href={`tel:${place.phone}`}
-              className="brand-fill press inline-flex min-h-[46px] flex-1 items-center justify-center rounded-[var(--radius-full)] text-[length:var(--text-sm)] font-semibold"
+              className="brand-fill press border-2 shadow-[var(--shadow-sm)] inline-flex min-h-[46px] flex-1 items-center justify-center rounded-[var(--radius-full)] text-[length:var(--text-sm)] font-semibold"
             >
               전화
             </a>
@@ -86,7 +86,7 @@ export default function PlaceDetailCard({
             href={directionsUrl}
             target="_blank"
             rel="noreferrer noopener"
-            className="press inline-flex min-h-[46px] flex-1 items-center justify-center rounded-[var(--radius-full)] border border-[var(--border-strong)] text-[length:var(--text-sm)] font-semibold hover:border-[var(--text)]"
+            className="press inline-flex min-h-[46px] flex-1 items-center justify-center rounded-[var(--radius-full)] border-2 border-[var(--ink)] shadow-[var(--shadow-sm)] text-[length:var(--text-sm)] font-semibold "
           >
             길찾기
           </a>
@@ -95,7 +95,7 @@ export default function PlaceDetailCard({
               href={place.url}
               target="_blank"
               rel="noreferrer noopener"
-              className="press inline-flex min-h-[46px] min-w-[46px] items-center justify-center rounded-[var(--radius-full)] border border-[var(--border-strong)] px-3 text-[length:var(--text-sm)] font-semibold hover:border-[var(--text)]"
+              className="press inline-flex min-h-[46px] min-w-[46px] items-center justify-center rounded-[var(--radius-full)] border-2 border-[var(--ink)] shadow-[var(--shadow-sm)] px-3 text-[length:var(--text-sm)] font-semibold "
               title="카카오맵에서 보기"
             >
               ↗

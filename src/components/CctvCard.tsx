@@ -41,7 +41,7 @@ export default function CctvCard({ cctv, onClose }: { cctv: Cctv; onClose: () =>
   }, [live]);
 
   return (
-    <div className="fade-up absolute inset-x-3 bottom-3 z-30 mx-auto max-w-[440px] overflow-hidden rounded-[var(--radius-xl)] bg-[var(--surface)] shadow-[var(--shadow-lg)] ring-1 ring-[var(--glass-ring)]">
+    <div className="pop-in absolute inset-x-3 bottom-[calc(var(--dock-h)+8px)] z-30 mx-auto max-w-[440px] overflow-hidden rounded-[var(--radius-xl)] bg-[var(--surface)] shadow-[var(--shadow-lg)] border-2 border-[var(--ink)]">
       <div className="flex items-center gap-2 px-3 py-2">
         <div className="min-w-0 flex-1">
           <p className="truncate text-[length:var(--text-sm)] font-bold">

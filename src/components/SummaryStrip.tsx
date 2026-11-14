@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { InfoTab } from "@/components/InfoOverlay";
+/** 요약줄 칸. 누르면 하단 메뉴의 같은 항목이 열린다 */
+export type InfoTab = "news" | "weather" | "air" | "traffic" | "medical" | "waste" | "population";
 
 import type {
   ApiEnvelope,
@@ -87,7 +88,7 @@ function Item({
       title={title}
       aria-pressed={active}
       className={`${cls} ${active ? "" : "hover:bg-[var(--surface-2)]"}`}
-      style={active ? { background: "var(--text)", color: "var(--surface)" } : undefined}
+      style={active ? { background: "var(--brand-2)", color: "var(--ink)", border: "2px solid var(--ink)", boxShadow: "var(--shadow-sm)" } : undefined}
     >
       {body}
     </button>

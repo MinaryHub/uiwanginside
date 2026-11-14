@@ -91,8 +91,8 @@ export default function PlacesPanel({
             className="press rounded-full px-3 py-1.5 text-[length:var(--text-xs)] font-bold"
             style={
               only === null
-                ? { background: "var(--text)", color: "var(--surface)" }
-                : { background: "var(--surface-2)", color: "var(--text-muted)" }
+                ? { background: "var(--brand-2)", color: "var(--ink)", border: "2px solid var(--ink)", boxShadow: "var(--shadow-sm)" }
+                : { background: "var(--surface)", color: "var(--text)", border: "2px solid var(--border)" }
             }
           >
             전체 {places.length}
@@ -111,8 +111,8 @@ export default function PlacesPanel({
                 className="flex items-center gap-1 press rounded-full px-3 py-1.5 text-[length:var(--text-xs)] font-bold"
                 style={
                   on
-                    ? { background: def.color, color: "#fff" }
-                    : { background: "var(--surface-2)", color: "var(--text-muted)" }
+                    ? { background: def.color, color: "#fff", border: "2px solid var(--ink)", boxShadow: "var(--shadow-sm)" }
+                    : { background: "var(--surface)", color: "var(--text)", border: "2px solid var(--border)" }
                 }
               >
                 {def.label}
@@ -144,7 +144,7 @@ export default function PlacesPanel({
         <button
           type="button"
           onClick={onSearchHere}
-          className="press min-h-[42px] w-full rounded-[var(--radius-full)] border border-[var(--border-strong)] text-[length:var(--text-xs)] font-bold hover:border-[var(--brand)] hover:text-[var(--brand)]"
+          className="press min-h-[42px] w-full rounded-[var(--radius-full)] border-2 border-[var(--ink)] shadow-[var(--shadow-sm)] text-[length:var(--text-xs)] font-bold hover:border-[var(--brand)] hover:text-[var(--brand)]"
         >
           이 화면에서 다시 찾기
         </button>

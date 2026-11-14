@@ -26,9 +26,9 @@ export function Section({
   children: ReactNode;
 }) {
   return (
-    <section className="border-t border-[var(--border)] px-5 py-5 first:border-t-0">
+    <section className="border-t-2 border-dashed border-[var(--border)] px-4 py-5 first:border-t-0">
       <header className="mb-3 flex items-center gap-2">
-        <h2 className="text-[length:var(--text-xs)] font-semibold text-[var(--text-muted)]">
+        <h2 className="text-[length:var(--text-base)] font-extrabold text-[var(--text)]">
           {title}
         </h2>
         {right && <div className="ml-auto flex items-center">{right}</div>}
@@ -125,7 +125,8 @@ export function Button({
         ? {
             background: "transparent",
             color: "var(--text)",
-            border: "1px solid var(--border-strong)",
+            border: "2px solid var(--ink)",
+            boxShadow: "var(--shadow-sm)",
           }
         : { color: "var(--text-muted)" };
   return (
@@ -136,7 +137,7 @@ export function Button({
       title={title}
       className={`press inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-[var(--radius-full)] px-4 text-[length:var(--text-sm)] font-bold disabled:opacity-45 ${
         full ? "w-full" : ""
-      } ${variant === "primary" ? "brand-fill" : ""} ${
+      } ${variant === "primary" ? "brand-fill border-2 shadow-[var(--shadow-sm)]" : ""} ${
         disabled ? "cursor-not-allowed" : "hover:brightness-[0.97]"
       }`}
       style={style}

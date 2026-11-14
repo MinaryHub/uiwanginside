@@ -124,7 +124,7 @@ export default function SearchOverlay({
   return (
     <div className="scrim fade-up absolute inset-0 z-50 flex flex-col">
       <div className="mx-auto flex max-h-full w-full max-w-[520px] flex-col p-3">
-        <div className="flex items-center gap-2 rounded-[var(--radius-full)] bg-[var(--surface)] pl-4 pr-1.5 shadow-[var(--shadow-lg)] ring-1 ring-[var(--glass-ring)] focus-within:ring-[var(--text)]">
+        <div className="flex items-center gap-2 rounded-[var(--radius-full)] bg-[var(--surface)] pl-4 pr-1.5 shadow-[var(--shadow-lg)] border-2 border-[var(--ink)] focus-within:ring-[var(--text)]">
           <span className="text-[var(--text-muted)]">
             <Icon name="search" size={18} />
           </span>
@@ -149,7 +149,7 @@ export default function SearchOverlay({
           </button>
         </div>
 
-        <div className="thin-scroll mt-2 min-h-0 flex-1 overflow-y-auto rounded-[var(--radius-xl)] bg-[var(--surface)] p-2 shadow-[var(--shadow-lg)] ring-1 ring-[var(--glass-ring)]">
+        <div className="thin-scroll mt-2 min-h-0 flex-1 overflow-y-auto rounded-[var(--radius-xl)] bg-[var(--surface)] p-2 shadow-[var(--shadow-lg)] border-2 border-[var(--ink)]">
           {q.trim().length < 2 ? (
             recent.length > 0 ? (
               <>

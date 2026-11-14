@@ -25,7 +25,7 @@ export default function MapCard({
 }) {
   return (
     <div
-      className="fade-up absolute inset-x-3 bottom-3 z-30 mx-auto max-w-[440px] overflow-hidden rounded-[var(--radius-xl)] bg-[var(--surface)] shadow-[var(--shadow-lg)] ring-1 ring-[var(--glass-ring)]"
+      className="pop-in absolute inset-x-3 bottom-[calc(var(--dock-h)+8px)] z-30 mx-auto max-w-[440px] overflow-hidden rounded-[var(--radius-xl)] bg-[var(--surface)] shadow-[var(--shadow-lg)] border-2 border-[var(--ink)]"
     >
       {/* 종류 색은 제목 앞 작은 점 하나로만 */}
       <div className="max-h-[52vh] overflow-y-auto p-5 thin-scroll">
