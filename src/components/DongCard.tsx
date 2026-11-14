@@ -30,7 +30,7 @@ export default function DongCard({
   const share = ((d.population / TOTAL_POPULATION) * 100).toFixed(1);
 
   return (
-    <div className="fade-up absolute inset-x-3 bottom-3 z-30 mx-auto max-w-[440px] overflow-hidden rounded-[var(--radius-xl)] bg-[var(--surface)] shadow-[var(--shadow-lg)] ring-1 ring-[var(--glass-ring)]">
+    <div className="pop-in absolute inset-x-3 bottom-[calc(var(--dock-h)+8px)] z-30 mx-auto max-w-[440px] overflow-hidden rounded-[var(--radius-xl)] bg-[var(--surface)] shadow-[var(--shadow-lg)] border-2 border-[var(--ink)]">
       <div className="flex items-center gap-2 px-3.5 pt-3">
         <h2 className="min-w-0 flex-1 truncate text-[length:var(--text-base)] font-bold">
           {d.name}

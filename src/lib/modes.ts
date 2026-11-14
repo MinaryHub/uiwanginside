@@ -6,16 +6,29 @@ import type { CategoryKey } from "./uiwang";
  * 시민은 "전부" 가 아니라 "지금 필요한 것" 을 찾으러 온다. 목적을 고르면
  * 지도 레이어와 시트 내용이 함께 정해진다.
  *
- * 넷으로 줄였다. 예전에는 여섯이었는데 '둘러보기' 는 아무것도 고르지 않은
- * 기본 상태로 두는 게 자연스럽고(모드를 해제하면 그게 둘러보기다),
- * '교육·문화' 는 학교·도서관·공공기관이라 생활 범주에 넣어도 어색하지 않다.
- * 고를 것이 적을수록 무엇을 고를지 고민하는 시간이 준다.
+ * 예전에는 지도 위 모드 넷과, 요약줄에서 여는 탭 창(뉴스·날씨·미세먼지·
+ * 사고·진료·쓰레기·인구), 동 고르기 메뉴가 따로 있었다. 들어가는 길이
+ * 여러 갈래라 어디에 무엇이 있는지 외워야 했다. 지금은 하단 메뉴 한 줄이
+ * 전부다. 아무것도 고르지 않은 상태가 '둘러보기' 다.
  */
 
-export type ModeId = "food" | "life" | "medical" | "transit";
+/**
+ * 하단 메뉴 하나하나가 곧 모드다. 메뉴는 한 단계뿐이다 — 누르면 바로 내용이
+ * 나오고, 그 안에 또 고를 탭이나 하위 메뉴를 두지 않는다.
+ */
+export type ModeId =
+  | "weather"
+  | "medical"
+  | "transit"
+  | "food"
+  | "life"
+  | "waste"
+  | "dong"
+  | "news";
 
 /** 시트에 띄울 내용 */
 export type CardId =
+  | "emergency"
   | "weather"
   | "air"
   | "medical"
@@ -38,6 +51,10 @@ export interface MapLayers {
 export interface ModeDef {
   id: ModeId;
   label: string;
+  /** 메뉴 그림. 글자를 못 읽어도 알아볼 수 있어야 한다 */
+  icon: string;
+  /** 메뉴 칸 바탕색 — 메뉴마다 다르게 해 위치로도 기억되게 한다 */
+  tint: string;
   /** 시트 상단 한 줄 설명 */
   hint: string;
   categories: CategoryKey[];
@@ -55,9 +72,43 @@ const NO_LAYERS: MapLayers = {
 
 export const MODES: ModeDef[] = [
   {
+    id: "weather",
+    label: "날씨",
+    icon: "☀️",
+    tint: "#ffe27a",
+    hint: "지금 날씨와 미세먼지",
+    categories: [],
+    layers: NO_LAYERS,
+    cards: ["weather", "air"],
+  },
+  {
+    id: "medical",
+    label: "병원·약국",
+    icon: "🏥",
+    tint: "#ffb3b3",
+    hint: "응급실 병상 · 지금 문 연 병원·약국",
+    categories: ["HP8", "PM9"],
+    layers: { ...NO_LAYERS, places: true },
+    // 급한 사람이 먼저 봐야 할 것이 위로 온다
+    cards: ["emergency", "medical"],
+  },
+  {
+    id: "transit",
+    label: "버스·교통",
+    icon: "🚌",
+    tint: "#a8d8ff",
+    hint: "버스 도착 · 사고·정체 · CCTV · 주차장",
+    // 주차장은 카카오(PK6) 대신 표준데이터(PKG)를 쓴다 — 요금과 운영시간이 있다
+    categories: ["SW8", "PKG"],
+    layers: { places: true, bus: true, incidents: true, traffic: true, cctv: true },
+    cards: ["transit", "traffic", "cctv"],
+  },
+  {
     id: "food",
     label: "맛집",
-    hint: "음식점·카페",
+    icon: "🍜",
+    tint: "#ffc98a",
+    hint: "음식점 · 카페",
     categories: ["FD6", "CE7"],
     layers: { ...NO_LAYERS, places: true },
     cards: [],
@@ -65,32 +116,42 @@ export const MODES: ModeDef[] = [
   {
     id: "life",
     label: "생활",
-    hint: "마트·편의점·은행·학교·공원·화장실·방범CCTV",
+    icon: "🛒",
+    tint: "#b8efc0",
+    hint: "마트 · 편의점 · 은행 · 학교 · 공원 · 화장실",
     categories: ["MT1", "CS2", "BK9", "OL7", "SC4", "PO3", "CT1", "PARK", "WC", "SEC"],
     layers: { ...NO_LAYERS, places: true },
-    /*
-     * 지도와 무관한 정보(뉴스·날씨·미세먼지·쓰레기·인구)는 모두 상단
-     * 요약줄에서 펼친다. 여기 두면 장소 목록 아래에 묻힌다 — 뉴스가
-     * 그랬다. 시트는 지도에 찍히는 것만 다룬다.
-     */
     cards: [],
   },
   {
-    id: "medical",
-    label: "의료",
-    hint: "지금 진료 중인 병원·약국",
-    categories: ["HP8", "PM9"],
-    layers: { ...NO_LAYERS, places: true },
-    cards: ["medical"],
+    id: "waste",
+    label: "쓰레기",
+    icon: "♻️",
+    tint: "#c9f0e4",
+    hint: "버리는 날과 버리는 법",
+    categories: [],
+    layers: NO_LAYERS,
+    cards: ["waste"],
   },
   {
-    id: "transit",
-    label: "교통",
-    hint: "버스·정체·CCTV·주차장",
-    // 주차장은 카카오(PK6) 대신 표준데이터(PKG)를 쓴다 — 요금과 운영시간이 있다
-    categories: ["SW8", "PKG"],
-    layers: { places: true, bus: true, incidents: true, traffic: true, cctv: true },
-    cards: ["transit", "traffic", "cctv"],
+    id: "dong",
+    label: "우리 동네",
+    icon: "🏘️",
+    tint: "#d9c8ff",
+    hint: "동을 누르면 지도가 그 동으로 갑니다",
+    categories: [],
+    layers: NO_LAYERS,
+    cards: ["population"],
+  },
+  {
+    id: "news",
+    label: "소식",
+    icon: "📰",
+    tint: "#ffd1ec",
+    hint: "의왕 최신 뉴스",
+    categories: [],
+    layers: NO_LAYERS,
+    cards: ["news"],
   },
 ];
 

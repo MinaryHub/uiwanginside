@@ -245,6 +245,39 @@ export interface MedicalPayload {
   updatedAt: string;
 }
 
+/** 응급실 한 곳 — 국립중앙의료원 응급의료정보 조회서비스 */
+export interface EmergencyRoom {
+  id: string;
+  name: string;
+  /** 권역응급의료센터·지역응급의료센터·지역응급의료기관 등 */
+  level: string;
+  address: string;
+  /** 응급실 직통 번호. 없으면 대표 번호 */
+  phone: string;
+  lat: number;
+  lng: number;
+  /** 의왕시청에서 직선거리 (m) */
+  distance: number;
+  /**
+   * 응급실 일반 가용병상. 0 이하이면 포화다 (음수는 대기 환자 수만큼 넘친 것).
+   * null 은 기관이 실시간 값을 보내지 않은 경우다.
+   */
+  beds: number | null;
+  /** 응급실 기준 병상 수 */
+  totalBeds: number | null;
+  ct: boolean | null;
+  mri: boolean | null;
+  ventilator: boolean | null;
+  /** 기관이 값을 갱신한 시각 (ISO). 오래됐으면 화면에 그대로 알린다 */
+  reportedAt: string | null;
+}
+
+export interface EmergencyPayload {
+  rooms: EmergencyRoom[];
+  source: "nmc";
+  updatedAt: string;
+}
+
 export interface ApiEnvelope<T> {
   /** false = 데이터를 가져오지 못했다. 이때 data 는 비어 있다. */
   ok: boolean;

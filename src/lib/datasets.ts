@@ -143,6 +143,16 @@ export const DATASET_GROUPS: DatasetGroup[] = [
     emoji: "🏥",
     items: [
       {
+        id: "nmc-er",
+        name: "응급의료기관 정보 · 실시간 가용병상",
+        provider: "국립중앙의료원",
+        link: dataGoKr("국립중앙의료원_전국 응급의료기관 정보 조회 서비스"),
+        refresh: "1분",
+        shows: "의왕 근처 15km 응급실의 남은 병상·CT·MRI·전화번호",
+        mode: "medical",
+        kind: "live",
+      },
+      {
         id: "nmc",
         name: "병·의원 · 약국 찾기 서비스",
         provider: "국립중앙의료원",

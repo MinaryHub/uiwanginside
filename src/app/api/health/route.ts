@@ -321,6 +321,45 @@ async function checkEmergency(): Promise<Partial<HealthCheck>> {
   return { status: "live", detail: `정상 · 의왕시 의료기관 ${total}곳`, latencyMs };
 }
 
+/**
+ * 응급실 실시간 가용병상. 병·의원 찾기와는 다른 서비스라 활용신청을 따로
+ * 받는다. 응답 필드 이름(hvec 등)까지 살아 있는지 함께 본다 — 이름이 틀리면
+ * 화면에 "정보 없음" 만 줄줄이 뜨고 원인은 보이지 않는다.
+ */
+async function checkEmergencyRoom(): Promise<Partial<HealthCheck>> {
+  const key = process.env.EMERGENCY_SERVICE_KEY ?? process.env.KMA_SERVICE_KEY;
+  if (!key) return { status: "missing", detail: "키 없음 — 응급실 병상이 표시되지 않습니다" };
+  const [res, latencyMs, err] = await timed(() =>
+    timedFetch(
+      "https://apis.data.go.kr/B552657/ErmctInfoInqireService/getEmrrmRltmUsefulSckbdInfoInqire" +
+        `?serviceKey=${key}&STAGE1=${encodeURIComponent("경기도")}&pageNo=1&numOfRows=3`,
+    ),
+  );
+  if (err) return { status: "error", detail: msg(err), latencyMs };
+  const text = await res!.text();
+  if (text.includes("SERVICE_KEY_IS_NOT_REGISTERED")) {
+    return {
+      status: "error",
+      detail: "응급의료정보 조회서비스 활용신청이 안 되어 있습니다 (승인 후 1~2시간 반영)",
+      latencyMs,
+    };
+  }
+  const code = (text.match(/<resultCode>([^<]+)</) ?? [])[1];
+  if (code && code !== "00") {
+    const m = (text.match(/<resultMsg>([^<]+)</) ?? [])[1] ?? "";
+    return { status: "error", detail: `${code}: ${m}`, latencyMs };
+  }
+  const total = (text.match(/<totalCount>(\d+)</) ?? [])[1] ?? "?";
+  if (!text.includes("<hvec>")) {
+    return {
+      status: "error",
+      detail: `응답은 오지만 가용병상(hvec) 필드가 없습니다 — 명세 변경 확인 필요 (경기 ${total}곳)`,
+      latencyMs,
+    };
+  }
+  return { status: "live", detail: `정상 · 경기도 응급실 ${total}곳 실시간 병상`, latencyMs };
+}
+
 async function checkAir(): Promise<Partial<HealthCheck>> {
   const key = process.env.AIRKOREA_SERVICE_KEY ?? process.env.KMA_SERVICE_KEY;
   if (!key) return { status: "missing", detail: "키 없음 — 미세먼지가 표시되지 않습니다" };
@@ -393,6 +432,12 @@ const SPECS: Omit<HealthCheck, "status" | "detail" | "configured">[] = [
     howTo:
       "data.go.kr → 국립중앙의료원_전국 병·의원 찾기 서비스 + 약국정보 서비스 각각 활용신청. " +
       "키는 기존 것을 그대로 쓴다 (서비스별 신청이 따로 필요할 뿐)",
+  },
+  {
+    id: "emergency-room",
+    label: "응급실 실시간 가용병상",
+    envVars: ["KMA_SERVICE_KEY"],
+    howTo: "data.go.kr → 국립중앙의료원_전국 응급의료기관 정보 조회 서비스 활용신청. 키는 기존 것 그대로",
   },
   {
     id: "air",
@@ -487,6 +532,7 @@ export async function GET(req: Request) {
     "kakao-js": await checkKakaoJs(origin),
     "kakao-rest": kakaoRest,
     emergency: await checkEmergency(),
+    "emergency-room": await checkEmergencyRoom(),
     air: await checkAir(),
     neis: await checkNeis(),
     kma,

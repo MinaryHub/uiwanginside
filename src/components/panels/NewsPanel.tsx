@@ -34,7 +34,7 @@ export default function NewsPanel({
                 className="shrink-0 rounded-full border px-2 py-0.5 text-[length:var(--text-xs)] font-semibold transition"
                 style={
                   query === p
-                    ? { background: "var(--text)", borderColor: "var(--text)", color: "var(--surface)" }
+                    ? { background: "var(--brand-2)", borderColor: "var(--ink)", color: "var(--ink)" }
                     : { borderColor: "var(--border)", color: "var(--text-muted)" }
                 }
               >

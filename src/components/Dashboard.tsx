@@ -7,7 +7,7 @@ import useSWR from "swr";
 import { swrFetcher } from "@/lib/fetcher";
 import { useDebounced } from "@/lib/useDebounced";
 import { parseUrlState, useSyncUrl } from "@/lib/urlState";
-import { UIWANG, DONGS, LANDMARKS } from "@/lib/uiwang";
+import { LANDMARKS } from "@/lib/uiwang";
 import { UIWANG_BBOX } from "@/lib/uiwang-boundary";
 import { DONG_BBOX, type LatLngBox } from "@/lib/dong-boundaries";
 import { MODES, MODE_MAP, type ModeId, type CardId } from "@/lib/modes";
@@ -32,6 +32,7 @@ import type {
   WeatherPayload,
   AirPayload,
   MedicalPayload,
+  EmergencyPayload,
   NewsPayload,
   TrafficPayload,
   TransitPayload,
@@ -42,18 +43,18 @@ import type {
 import Link from "next/link";
 import Logo from "@/components/Logo";
 import Icon from "@/components/Icon";
-import SummaryStrip from "@/components/SummaryStrip";
+import SummaryStrip, { type InfoTab } from "@/components/SummaryStrip";
 import PlaceDetailCard from "@/components/PlaceDetailCard";
 import StopCard from "@/components/StopCard";
 import CctvCard from "@/components/CctvCard";
 import SearchOverlay from "@/components/SearchOverlay";
-import InfoOverlay, { type InfoTab } from "@/components/InfoOverlay";
 import DongCard from "@/components/DongCard";
 import MapCard from "@/components/MapCard";
 import PlacesPanel from "@/components/panels/PlacesPanel";
 import WeatherPanel from "@/components/panels/WeatherPanel";
 import AirPanel from "@/components/panels/AirPanel";
 import MedicalPanel from "@/components/panels/MedicalPanel";
+import EmergencyPanel from "@/components/panels/EmergencyPanel";
 import TrafficPanel from "@/components/panels/TrafficPanel";
 import TransitPanel from "@/components/panels/TransitPanel";
 import CctvPanel from "@/components/panels/CctvPanel";
@@ -84,6 +85,8 @@ const POLL = {
   weather: 10 * 60_000,
   air: 10 * 60_000,
   medical: 10 * 60_000,
+  // 응급실 병상은 기관이 몇 분마다 올린다
+  emergency: 60_000,
   traffic: 60_000,
   transit: 30_000,
   news: 5 * 60_000,
@@ -121,28 +124,12 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
   const [tracked, setTracked] = useState<{ id: string; name: string } | null>(null);
   const [newsQuery, setNewsQuery] = useState("의왕시");
   const [sheetOpen, setSheetOpen] = useState(!!initial.mode);
-  const [dongMenu, setDongMenu] = useState(false);
   /**
    * 좁히기 — 모드 안에서 한 종류만 볼 때.
    * 지도와 목록이 함께 좁혀져야 해서 여기서 들고 있는다.
    */
   const [only, setOnly] = useState<CategoryKey | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
-  /**
-   * 상단 요약줄에서 펼치는 생활 정보. 어느 탭을 열지 함께 들고 있는다 —
-   * 날씨를 눌렀는데 뉴스가 뜨면 누른 것과 다른 것이 열리는 셈이다.
-   */
-  const [infoTab, setInfoTab] = useState<InfoTab | null>(null);
-
-  /**
-   * 요약줄의 같은 칸을 다시 누르면 상세를 닫는다.
-   * 연 것과 닫는 것이 같은 자리에 있어야 손이 헤매지 않는다 —
-   * 닫으려고 바깥이나 ✕ 를 찾아 옮겨 다닐 이유가 없다.
-   */
-  const toggleInfo = useCallback(
-    (t: InfoTab) => setInfoTab((cur) => (cur === t ? null : t)),
-    [],
-  );
   /** 검색으로 고른 곳 — 지금 목록에 없어도 지도와 카드에 남는다 */
   const [pinned, setPinned] = useState<Place | null>(null);
 
@@ -253,6 +240,11 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     refreshInterval: POLL.medical,
     keepPreviousData: true,
   });
+  const emergency = useSWR<ApiEnvelope<EmergencyPayload>>(
+    needs("emergency") ? "/api/emergency" : null,
+    swrFetcher,
+    { refreshInterval: POLL.emergency, keepPreviousData: true },
+  );
   const transit = useSWR<ApiEnvelope<TransitPayload>>(
     def?.layers.bus || needs("transit") ? `/api/transit?${geo}` : null,
     swrFetcher,
@@ -332,10 +324,6 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     { refreshInterval: POLL.busPositions, keepPreviousData: true },
   );
 
-  const refreshAll = useCallback(() => {
-    [places, weather, air, traffic, medical, transit, news].forEach((s) => s.mutate());
-  }, [places, weather, air, traffic, medical, transit, news]);
-
   // ── 동작 ──────────────────────────────────────────────
   /**
    * 한 지점을 화면 가운데로.
@@ -377,7 +365,6 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
   }, []);
 
   const toggleDong = useCallback((d: { name: string }) => {
-    setDongMenu(false);
     setActiveDong((cur) => {
       if (cur === d.name) {
         setFitBounds(null);
@@ -596,6 +583,8 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
   // ── 시트 내용 ─────────────────────────────────────────
   const card = (id: CardId) => {
     switch (id) {
+      case "emergency":
+        return <EmergencyPanel key={id} res={emergency.data} isLoading={emergency.isLoading} />;
       case "weather":
         return <WeatherPanel key={id} res={weather.data} isLoading={weather.isLoading} />;
       case "air":
@@ -663,12 +652,46 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
   };
 
   /** 지도 위에 떠 있는 버튼 공통 스타일 */
-  const mapBtn = "glass map-btn";
+  const mapBtn = "glass map-btn press";
+
+  /** 요약줄 칸 → 메뉴. 요약줄은 메뉴로 가는 지름길일 뿐, 따로 열리는 창이 없다 */
+  const TAB_MODE: Record<InfoTab, ModeId> = {
+    weather: "weather",
+    air: "weather",
+    news: "news",
+    traffic: "transit",
+    medical: "medical",
+    waste: "waste",
+    population: "dong",
+  };
+  const openTab: InfoTab | null =
+    mode === "weather"
+      ? "weather"
+      : mode === "news"
+        ? "news"
+        : mode === "transit"
+          ? "traffic"
+          : mode === "medical"
+            ? "medical"
+            : null;
+  const openFromSummary = (t: InfoTab) => toggleMode(TAB_MODE[t]);
+
+  const summary = (
+    <SummaryStrip
+      weather={weather.data}
+      air={air.data}
+      traffic={traffic.data}
+      medical={medical.data}
+      news={news.data}
+      openTab={openTab}
+      onOpenInfo={openFromSummary}
+    />
+  );
 
   return (
     <div className="relative h-dvh overflow-hidden bg-[var(--bg)]">
       {/* 지도 — 화면 전체 */}
-      <div className="absolute inset-0">
+      <div className="dots absolute inset-0">
         <KakaoMap
           appKey={appKey}
           center={center}
@@ -703,179 +726,54 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
         />
       </div>
 
-      {/* 상단 바 — 이름과 오늘 요약만 */}
       {/*
-        상단 바와 모드 알약은 항상 맨 위에 둔다.
-        시트가 inset-y-0 으로 화면을 통째로 덮으면서 z 가 같아, 나중에
-        그려지는 쪽이 이겨 날씨·미세먼지 줄이 가려져 있었다. 시트는 이
-        영역 아래에서 시작한다 (아래 top-[112px]).
+        상단 — 이름, 오늘 요약, 찾기. 이것뿐이다.
+        요약 칸을 누르면 하단 메뉴의 같은 항목이 열린다. 따로 뜨는 창이
+        없으니 길을 잃을 일이 없다.
       */}
       <header className="pointer-events-none absolute inset-x-0 top-0 z-40 p-3">
         <div className="flex items-center gap-2">
-        <div className="glass pointer-events-auto flex h-11 min-w-0 flex-1 items-center gap-2.5 rounded-[var(--radius-full)] pl-2 pr-3">
+          <div className="glass pointer-events-auto flex h-12 min-w-0 flex-1 items-center gap-2 rounded-[var(--radius-full)] pl-1.5 pr-2">
+            <button
+              type="button"
+              onClick={() => {
+                setMode(null);
+                setSheetOpen(false);
+              }}
+              className="flex shrink-0 items-center gap-2 rounded-[var(--radius-full)] py-1 pl-1 pr-2"
+              title="처음 화면으로"
+            >
+              <Logo size={32} />
+              <span className="text-[length:var(--text-base)] font-extrabold tracking-tight">
+                의왕 인사이드
+              </span>
+            </button>
+            {/* 좁은 화면에서는 요약을 아래 자기 줄로 내린다 — 여기선 기온 하나만 들어간다 */}
+            <span className="hidden h-6 w-[2px] shrink-0 rounded-full bg-[var(--border)] sm:block" />
+            <div className="hidden min-w-0 flex-1 sm:block">{summary}</div>
+          </div>
+
           <button
             type="button"
-            onClick={() => {
-              setMode(null);
-              setSheetOpen(false);
-            }}
-            className="press flex shrink-0 items-center gap-2 rounded-[var(--radius-full)] py-1 pl-1 pr-2"
-            title="둘러보기로"
+            onClick={() => setSearchOpen(true)}
+            title="이름으로 찾기"
+            aria-label="이름으로 찾기"
+            className={`pointer-events-auto ${mapBtn}`}
           >
-            <Logo size={26} />
-            <span className="text-[length:var(--text-base)] font-bold tracking-tight">의왕 인사이드</span>
+            <Icon name="search" size={22} />
           </button>
-          {/*
-            좁은 화면에서는 이 자리에 두지 않는다. 실측하면 요약에 남는
-            폭이 109px 뿐이어서 기온 하나만 보이고 미세먼지·사고·진료중·
-            특보가 모두 옆으로 밀렸다. 아래 자기 줄로 내린다.
-          */}
-          <span className="hidden h-4 w-px shrink-0 bg-[var(--border)] sm:block" />
-          <div className="hidden min-w-0 flex-1 sm:block">
-            <SummaryStrip
-              weather={weather.data}
-              air={air.data}
-              traffic={traffic.data}
-              medical={medical.data}
-              news={news.data}
-              openTab={infoTab}
-              onOpenInfo={toggleInfo}
-            />
-          </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setSearchOpen(true)}
-          title="이름으로 찾기"
-          aria-label="이름으로 찾기"
-          className={`pointer-events-auto ${mapBtn}`}
-        >
-          <Icon name="search" />
-        </button>
-        {/* 화면에 보이는 숫자가 어디서 왔는지 — 공공데이터 출처와 갱신 주기 */}
-        <Link
-          href="/opendata"
-          title="공공데이터 안내"
-          aria-label="공공데이터 안내"
-          className={`pointer-events-auto ${mapBtn}`}
-        >
-          <Icon name="info" />
-        </Link>
-        <button
-          type="button"
-          onClick={refreshAll}
-          title="새로고침"
-          aria-label="새로고침"
-          className={`pointer-events-auto ${mapBtn}`}
-        >
-          <Icon name="refresh" />
-        </button>
-        </div>
-
-        {/*
-          좁은 화면 전용 요약 줄.
-          로고와 버튼 넷이 한 줄을 다 쓰는 바람에 요약이 109px 로 눌려
-          기온만 보였다. 폭을 다 쓰는 자기 줄을 주면 미세먼지·사고·
-          진료중·특보가 함께 들어온다. 지도를 46px 내주는 대신이다.
-        */}
-        <div className="glass pointer-events-auto mt-1.5 flex h-10 items-center overflow-hidden rounded-[var(--radius-full)] px-2 sm:hidden">
-          <SummaryStrip
-            weather={weather.data}
-            air={air.data}
-            traffic={traffic.data}
-            medical={medical.data}
-            news={news.data}
-            openTab={infoTab}
-            onOpenInfo={toggleInfo}
-          />
+        <div className="glass pointer-events-auto mt-2 flex h-11 items-center overflow-hidden rounded-[var(--radius-full)] px-1.5 sm:hidden">
+          {summary}
         </div>
       </header>
 
-      {/* 모드 — 탭 바를 없애고 지도 위 알약으로 */}
-      <nav
-        className="pointer-events-none absolute inset-x-0 top-[104px] z-40 flex justify-center px-3 sm:top-[64px]"
-        aria-label="보기 모드"
-      >
-        <div className="glass pointer-events-auto flex gap-0.5 rounded-[var(--radius-full)] p-1">
-          {MODES.map((m) => {
-            const on = m.id === mode;
-            return (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => toggleMode(m.id)}
-                aria-pressed={on}
-                className={`press min-h-[36px] rounded-[var(--radius-full)] px-4 text-[length:var(--text-sm)] font-semibold ${
-                  on ? "brand-fill" : "text-[var(--text-muted)] hover:text-[var(--text)]"
-                }`}
-              >
-                {m.label}
-              </button>
-            );
-          })}
-        </div>
-      </nav>
-
       {/*
-        지도 컨트롤.
-        예전에는 오른쪽 아래였는데, 장소·사고·CCTV 카드가 모두 화면
-        아래에 뜨고 휴대폰에서는 카드가 화면 폭을 다 쓴다. 카드가 열리면
-        확대·축소를 누를 수 없었다. 모드 알약 아래 오른쪽으로 옮겨
-        무엇이 떠 있든 늘 누를 수 있게 한다.
+        지도 컨트롤 — 내 위치와 확대·축소만. 동 고르기는 '우리 동네' 메뉴로
+        옮겼다. 메뉴 안에 또 메뉴를 두지 않는다.
       */}
-      <div className="absolute right-3 top-[160px] z-20 flex flex-col gap-1.5 sm:top-[120px]">
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setDongMenu((v) => !v)}
-            aria-expanded={dongMenu}
-            title="동으로 이동"
-            className={mapBtn}
-            style={
-              activeDong ? { color: "var(--info)", borderColor: "var(--info)" } : undefined
-            }
-          >
-            동
-          </button>
-          {dongMenu && (
-            <div className="glass fade-up absolute right-14 top-0 w-36 overflow-hidden rounded-[var(--radius-lg)] p-1">
-              {DONGS.map((d) => (
-                <button
-                  key={d.name}
-                  type="button"
-                  onClick={() => toggleDong(d)}
-                  className="block min-h-[40px] w-full rounded-[var(--radius)] px-3 text-left text-[length:var(--text-sm)] font-semibold transition hover:bg-[var(--surface-2)]"
-                  style={activeDong === d.name ? { color: "var(--info)" } : undefined}
-                >
-                  {d.name}
-                </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveDong(null);
-                  setFitBounds({ ...UIWANG_BBOX });
-                  setDongMenu(false);
-                }}
-                className="block min-h-[40px] w-full rounded-[var(--radius)] px-3 text-left text-[length:var(--text-sm)] font-semibold text-[var(--text-muted)] transition hover:bg-[var(--surface-2)]"
-              >
-                의왕시 전체
-              </button>
-              {/* ⌖ 자리를 내 위치에 내주고 시청은 이리로 왔다 */}
-              <button
-                type="button"
-                onClick={() => {
-                  focus(UIWANG.center.lat, UIWANG.center.lng, 1500);
-                  setDongMenu(false);
-                }}
-                className="block min-h-[40px] w-full rounded-[var(--radius)] px-3 text-left text-[length:var(--text-sm)] font-semibold text-[var(--text-muted)] transition hover:bg-[var(--surface-2)]"
-              >
-                의왕시청
-              </button>
-            </div>
-          )}
-        </div>
+      <div className="absolute right-3 top-[128px] z-20 flex flex-col gap-2.5 sm:top-[76px]">
         {/*
           내 위치.
           위치는 방문 즉시 묻지 않는다 — 그때 뜨는 권한 팝업은 대부분
@@ -890,11 +788,11 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           className={mapBtn}
           style={
             myLocation.state.status === "ok"
-              ? { color: "var(--brand)", borderColor: "var(--brand)" }
+              ? { background: "var(--brand-2)", color: "var(--ink)" }
               : undefined
           }
         >
-          {myLocation.state.status === "asking" ? "…" : <Icon name="locate" />}
+          {myLocation.state.status === "asking" ? "…" : <Icon name="locate" size={22} />}
         </button>
         <button
           type="button"
@@ -902,7 +800,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           aria-label="확대"
           className={mapBtn}
         >
-          <Icon name="plus" />
+          <Icon name="plus" size={22} />
         </button>
         <button
           type="button"
@@ -910,7 +808,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           aria-label="축소"
           className={mapBtn}
         >
-          <Icon name="minus" />
+          <Icon name="minus" size={22} />
         </button>
       </div>
 
@@ -919,11 +817,11 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
         되는 이야기라 잠깐 떴다 사라지는 자리에 둔다.
       */}
       {locNotice && (
-        <div className="pointer-events-none absolute inset-x-0 top-[156px] z-40 flex justify-center px-3 sm:top-[116px]">
+        <div className="pointer-events-none absolute inset-x-0 top-[128px] z-40 flex justify-center px-16 sm:top-[76px]">
           <button
             type="button"
             onClick={() => setLocNotice(null)}
-            className="glass fade-up pointer-events-auto max-w-[420px] rounded-[var(--radius-full)] px-4 py-2 text-[length:var(--text-xs)] font-semibold"
+            className="glass pop-in pointer-events-auto max-w-[420px] rounded-[var(--radius-lg)] px-4 py-2.5 text-[length:var(--text-sm)] font-bold"
           >
             {locNotice} <span className="text-[var(--text-faint)]">✕</span>
           </button>
@@ -931,22 +829,18 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
       )}
 
       {/* 색만 칠해두고 뜻을 안 알려주면 읽을 수 없다 */}
-      {trafficSegments.length > 0 && !bottomCard && (
-        <div className="glass absolute bottom-3 left-3 z-10 rounded-[var(--radius-lg)] px-3 py-2">
-          <p className="mb-1 text-[length:var(--text-2xs)] font-bold text-[var(--text-muted)]">
-            도로 소통
-          </p>
+      {trafficSegments.length > 0 && !bottomCard && !sheetOpen && (
+        <div className="glass absolute bottom-[calc(var(--dock-h)+8px)] left-3 z-10 rounded-[var(--radius-lg)] px-3 py-2">
+          <p className="mb-1 text-[length:var(--text-2xs)] font-extrabold">도로 소통</p>
           <div className="flex gap-2.5">
             {(["congested", "slow", "smooth"] as const).map((lv) => (
               <span key={lv} className="flex items-center gap-1">
                 <span
                   aria-hidden
-                  className="h-[3px] w-4 rounded-full"
+                  className="h-[5px] w-5 rounded-full"
                   style={{ background: LEVEL_COLOR[lv] }}
                 />
-                <span className="text-[length:var(--text-2xs)] font-semibold">
-                  {LEVEL_LABEL[lv]}
-                </span>
+                <span className="text-[length:var(--text-2xs)] font-bold">{LEVEL_LABEL[lv]}</span>
               </span>
             ))}
           </div>
@@ -983,11 +877,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
       )}
 
       {marker?.kind === "cctv" && (
-        <CctvCard
-          key={marker.cctv.id}
-          cctv={marker.cctv}
-          onClose={() => setMarker(null)}
-        />
+        <CctvCard key={marker.cctv.id} cctv={marker.cctv} onClose={() => setMarker(null)} />
       )}
 
       {selectedPlace && (
@@ -1005,7 +895,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
         다른 카드가 떠 있으면 비켜 준다 — 바닥에 카드 둘이 겹치면
         어느 것을 보고 있는지 알 수 없다.
       */}
-      {activeDong && !bottomCard && (
+      {activeDong && !bottomCard && !sheetOpen && (
         <DongCard
           key={activeDong}
           name={activeDong}
@@ -1014,86 +904,58 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             setFitBounds(null);
           }}
           onOpenWaste={() => {
-            setMode("life");
+            setMode("waste");
             setSheetOpen(true);
           }}
         />
       )}
 
-      {infoTab && (
-        <InfoOverlay
-          tab={infoTab}
-          onTabChange={setInfoTab}
-          news={{ res: news.data, isLoading: news.isLoading }}
-          weather={{ res: weather.data, isLoading: weather.isLoading }}
-          air={{ res: air.data, isLoading: air.isLoading }}
-          traffic={{ res: traffic.data, isLoading: traffic.isLoading }}
-          medical={{ res: medical.data, isLoading: medical.isLoading }}
-          /* 목록에서 한 곳을 고르면 지도를 옮기고 오버레이는 비켜준다 —
-             가리고 있으면 옮겨간 자리를 볼 수 없다 */
-          onFocus={(lat, lng, level) => {
-            focus(lat, lng, level);
-            setInfoTab(null);
-          }}
-          query={newsQuery}
-          onQueryChange={setNewsQuery}
-          activeDong={activeDong}
-          onSelectDong={toggleDong}
-          onClose={() => setInfoTab(null)}
-        />
-      )}
-
       {searchOpen && (
-        <SearchOverlay
-          center={center}
-          onPick={pickSearched}
-          onClose={() => setSearchOpen(false)}
-        />
+        <SearchOverlay center={center} onPick={pickSearched} onClose={() => setSearchOpen(false)} />
       )}
 
-      {/* 시트 — 좌우 두 패널을 하나로 합쳤다 */}
-      {def && (
+      {/*
+        내용 카드 — 메뉴를 누르면 바로 이것이 뜬다. 안에 탭이 없다.
+        위로는 상단 바, 아래로는 메뉴를 가리지 않는다. 지금 무엇을 보고
+        있는지(메뉴)와 오늘 날씨(상단)가 늘 보여야 한다.
+      */}
+      {def && sheetOpen && (
         <aside
-          aria-label={`${def.label} 목록`}
-          /*
-           * 상단 바(64px) 와 모드 알약(그 아래 44px) 밑에서 시작한다.
-           * 화면을 통째로 덮으면 지금 날씨가 어떤지, 어느 모드를 보고
-           * 있는지가 시트에 가려 보이지 않는다.
-           */
-          /*
-           * 넓은 화면에서는 가장자리에 붙이지 않고 띄운다. 지도가 시트 둘레로
-           * 비쳐 보여 화면이 둘로 갈라져 보이지 않는다.
-           */
-          className={`absolute bottom-0 left-0 top-[152px] z-30 flex w-full flex-col overflow-hidden rounded-t-[var(--radius-xl)] bg-[var(--surface)] shadow-[var(--shadow-lg)] ring-1 ring-[var(--glass-ring)] transition-transform duration-300 ease-[var(--ease-out)] sm:bottom-3 sm:left-3 sm:top-[116px] sm:w-[372px] sm:rounded-[var(--radius-xl)] ${
-            sheetOpen ? "translate-x-0" : "-translate-x-[105%] sm:-translate-x-[110%]"
-          }`}
+          key={def.id}
+          aria-label={def.label}
+          className="pop-in absolute inset-x-3 bottom-[calc(var(--dock-h)+6px)] top-[128px] z-30 flex flex-col overflow-hidden rounded-[var(--radius-xl)] border-2 border-[var(--ink)] bg-[var(--surface)] shadow-[var(--shadow-lg)] sm:right-auto sm:top-[76px] sm:w-[400px]"
         >
-          {/*
-            모드 이름은 바로 위 알약에 이미 켜져 있다. 4px 떨어진 자리에
-            같은 낱말을 한 번 더 크게 쓰면 자리만 먹고 읽히지도 않는다.
-            알약이 곧 탭이고 이 시트가 그 내용이다.
-            눈에는 안 보이지만 제목은 남긴다 — 화면 낭독기는 이 패널이
-            무엇인지 알아야 하고, 아래 패널들의 소제목이 매달릴 자리도
-            있어야 한다.
-          */}
-          <header className="flex items-center gap-3 border-b border-[var(--border)] py-3 pl-5 pr-2">
-            <div className="min-w-0 flex-1">
-              <h1 className="text-[length:var(--text-lg)] font-bold leading-tight">{def.label}</h1>
-              <p className="truncate text-[length:var(--text-xs)] text-[var(--text-muted)]">
+          <header
+            className="flex items-center gap-3 border-b-2 border-[var(--ink)] py-3 pl-3 pr-2"
+            style={{ background: def.tint }}
+          >
+            <span
+              aria-hidden
+              className="grid h-12 w-12 shrink-0 place-items-center rounded-[var(--radius)] border-2 border-[var(--ink)] bg-white text-[1.6rem] shadow-[var(--shadow-sm)]"
+            >
+              {def.icon}
+            </span>
+            <div className="min-w-0 flex-1 text-[#23201c]">
+              <h1 className="text-[length:var(--text-lg)] font-extrabold leading-tight">
+                {def.label}
+              </h1>
+              <p className="truncate text-[length:var(--text-xs)] font-semibold opacity-80">
                 {def.hint}
               </p>
             </div>
             <button
               type="button"
               onClick={() => setSheetOpen(false)}
-              aria-label="목록 닫기"
-              className="press grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius-full)] text-[var(--text-muted)] hover:text-[var(--text)]"
+              aria-label="닫기"
+              className="press grid h-11 w-11 shrink-0 place-items-center rounded-[var(--radius-full)] border-2 border-[var(--ink)] bg-white text-[#23201c] shadow-[var(--shadow-sm)]"
             >
-              <Icon name="close" size={18} />
+              <Icon name="close" size={20} />
             </button>
           </header>
 
           <div className="thin-scroll min-h-0 flex-1 overflow-y-auto">
+            {/* 응급실은 장소 목록보다 먼저 — 급한 사람이 스크롤할 여유는 없다 */}
+            {def.cards.filter((c) => c === "emergency").map(card)}
             {def.categories.length > 0 && (
               <PlacesPanel
                 res={places.data}
@@ -1106,23 +968,72 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
                 onSelectPlace={handleSelectPlace}
               />
             )}
-            {def.cards.map(card)}
+            {def.cards.filter((c) => c !== "emergency").map(card)}
+
+            {/* 숫자가 어디서 왔는지 — 메뉴가 아니라 내용 맨 아래의 안내 한 줄이다 */}
+            <p className="px-5 pb-6 pt-2 text-[length:var(--text-xs)] text-[var(--text-muted)]">
+              <Link href="/opendata" className="font-bold underline underline-offset-4">
+                이 정보는 어디서 왔나요?
+              </Link>
+            </p>
           </div>
         </aside>
       )}
 
-      {/* 시트를 닫아둔 상태에서 다시 여는 손잡이 */}
-      {def && !sheetOpen && (
+      {/* 내용을 닫아 지도만 보고 있을 때 다시 펼치는 단추 */}
+      {def && !sheetOpen && !bottomCard && (
         <button
           type="button"
           onClick={() => setSheetOpen(true)}
-          aria-label={`${def.label} 목록 열기`}
-          className={`glass press fade-up absolute bottom-6 left-1/2 z-20 min-h-[44px] ${bottomCard ? "hidden sm:flex" : "flex"} -translate-x-1/2 items-center gap-1.5 rounded-[var(--radius-full)] px-4 text-[length:var(--text-sm)] font-bold sm:bottom-auto sm:left-3 sm:top-[124px] sm:translate-x-0`}
+          className="glass press pop-in absolute bottom-[calc(var(--dock-h)+10px)] left-1/2 z-20 flex min-h-[48px] -translate-x-1/2 items-center gap-2 rounded-[var(--radius-full)] px-5 text-[length:var(--text-sm)] font-extrabold"
         >
-          {def.label} 목록 보기
-
+          <span aria-hidden>{def.icon}</span>
+          {def.label} 다시 보기
         </button>
       )}
+
+      {/*
+        하단 메뉴 — 이 앱의 메뉴는 이것이 전부다.
+        휴대폰에서는 4칸 두 줄로 여덟 개가 모두 한눈에 보인다. 옆으로 밀어야
+        나오는 메뉴는 없는 것과 같다. 넓은 화면에서는 한 줄.
+        같은 메뉴를 다시 누르면 닫히고 지도만 남는다.
+      */}
+      <nav
+        aria-label="메뉴"
+        className="pointer-events-none absolute inset-x-0 bottom-0 z-40 flex justify-center px-3 pb-[calc(12px+env(safe-area-inset-bottom,0px))]"
+      >
+        <ul className="glass pointer-events-auto grid w-full max-w-[640px] grid-cols-4 gap-1.5 rounded-[var(--radius-xl)] p-2 sm:w-auto sm:grid-cols-8">
+          {MODES.map((m) => {
+            const on = m.id === mode;
+            return (
+              <li key={m.id}>
+                <button
+                  type="button"
+                  onClick={() => toggleMode(m.id)}
+                  aria-pressed={on}
+                  className={`press flex h-[56px] w-full flex-col items-center justify-center gap-0.5 rounded-[var(--radius)] border-2 sm:h-[64px] sm:w-[68px] ${
+                    on
+                      ? "border-[var(--ink)] text-[#23201c] shadow-[var(--shadow-sm)]"
+                      : "border-transparent hover:bg-[var(--surface-2)]"
+                  }`}
+                  style={on ? { background: m.tint } : undefined}
+                >
+                  <span
+                    aria-hidden
+                    key={on ? "on" : "off"}
+                    className={`text-[1.45rem] leading-none sm:text-[1.6rem] ${on ? "wiggle" : ""}`}
+                  >
+                    {m.icon}
+                  </span>
+                  <span className="whitespace-nowrap text-[length:var(--text-2xs)] font-extrabold tracking-tight">
+                    {m.label}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
     </div>
   );
 }
