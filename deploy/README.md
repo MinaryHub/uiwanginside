@@ -32,7 +32,7 @@ package-lock.json 이 그대로면 node_modules 층을 다시 만들지 않는�
 
 ### 1. 지도 — 할 일 없음
 
-지도는 Leaflet 과 공개 타일(OpenStreetMap·CARTO)이라 키도 도메인 등록도 필요 없다.
+지도는 Leaflet 과 OpenStreetMap 타일이라 키도 도메인 등록도 필요 없다.
 예전 카카오맵 시절의 "플랫폼 → Web 에 도메인 등록" 단계는 더 하지 않는다.
 
 ### 2. 공유기 포트 포워딩

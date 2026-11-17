@@ -305,7 +305,7 @@ a {
   font-family: inherit;
 }
 /*
- * 지도 저작권 표시(© OpenStreetMap · CARTO)는 가리면 안 된다 — 이용 조건이다.
+ * 지도 저작권 표시(© OpenStreetMap)는 가리면 안 된다 — 이용 조건이다.
  * 하단 메뉴가 화면 아래를 덮으므로 그 위로 올린다.
  */
 /* leaflet.css 가 나중에 실려 같은 세기의 규칙을 덮는다 — 한 단계 더 세게 */
