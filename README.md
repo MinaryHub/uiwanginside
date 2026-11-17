@@ -35,7 +35,7 @@ npm run dev                  # http://localhost:3000
 
 > **키가 하나도 없어도 앱은 실행됩니다.** 키가 없는 영역은 샘플 데이터로 표시되고
 > 각 카드에 `SAMPLE` 뱃지와 안내 문구가 붙습니다. 키를 넣는 즉시 `LIVE` 로 바뀝니다.
-> (지도 렌더링만은 카카오 JS 키가 반드시 필요합니다.)
+> 지도는 **키 없는 공개 지도**(Leaflet + OpenStreetMap·CARTO 타일)라 키 없이도 그려집니다.
 
 ### 장소 데이터는 키 없이도 실제 데이터입니다
 
@@ -56,7 +56,7 @@ npm run dev                  # http://localhost:3000
 
 | 환경변수 | 발급처 | 용도 |
 | --- | --- | --- |
-| `NEXT_PUBLIC_KAKAO_JS_KEY` | [developers.kakao.com](https://developers.kakao.com) → 앱 키 → **JavaScript 키** | 지도 렌더링 |
+| `NEXT_PUBLIC_MAP_TILES` | (선택) `carto`(기본) · `osm` · 타일 URL | 지도 그림 바꾸기 — 키 없음 |
 | `KAKAO_REST_KEY` | 같은 앱의 **REST API 키** | 카테고리별 장소 검색 (로컬 API) |
 | `KMA_SERVICE_KEY` | [data.go.kr](https://www.data.go.kr) → *기상청\_단기예보 조회서비스* → 일반 인증키 **(Decoding)** | 날씨 |
 | `NAVER_CLIENT_ID` / `NAVER_CLIENT_SECRET` | [developers.naver.com](https://developers.naver.com) → 애플리케이션 등록 → **검색 API** | 뉴스 |
@@ -68,8 +68,9 @@ npm run dev                  # http://localhost:3000
 정류소를 찾을 수 없어 도착 시간이 뜨지 않습니다. 이 경우 정류소 위치는 OpenStreetMap
 데이터로 대체 표시되고, 패널에 `OSM 위치만` 뱃지가 붙습니다.
 
-**카카오 JS 키 주의:** 카카오 개발자 콘솔 → *앱 설정 → 플랫폼 → Web* 에
-`http://localhost:3000` (배포 시 실제 도메인도) 을 등록해야 지도가 뜹니다.
+**지도:** 카카오맵 SDK 대신 Leaflet 과 공개 타일을 씁니다. 카카오 JS 키와 도메인 등록이 필요 없어
+배포 주소가 바뀌어도(파이·Vercel) 지도가 그대로 뜹니다. 지도 아래 오른쪽의
+`© OpenStreetMap © CARTO` 표시는 이용 조건이라 가리지 않습니다.
 
 ## 구조
 
@@ -99,7 +100,7 @@ src/
    └─ fetcher.ts  타임아웃 fetch + ApiEnvelope 헬퍼
 ```
 
-모든 외부 API는 **서버 라우트에서만** 호출합니다 (`NEXT_PUBLIC_KAKAO_JS_KEY` 제외).
+모든 외부 API는 **서버 라우트에서만** 호출합니다. 브라우저가 직접 받는 것은 지도 타일뿐입니다.
 키가 브라우저로 노출되지 않고, 실패 시 8초 타임아웃 후 샘플로 폴백합니다.
 
 ### 공장 자료 갱신 (1년에 한 번)

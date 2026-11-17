@@ -30,10 +30,10 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# NEXT_PUBLIC_* 은 클라이언트 번들에 그대로 박히므로 런타임이 아니라 빌드 시점에
-# 있어야 한다. 없으면 지도가 키 없이 빌드되어 화면에서 조용히 실패한다.
-ARG NEXT_PUBLIC_KAKAO_JS_KEY
-ENV NEXT_PUBLIC_KAKAO_JS_KEY=${NEXT_PUBLIC_KAKAO_JS_KEY}
+# 지도는 키 없는 공개 타일(Leaflet)이라 빌드 때 넣을 지도 키가 없다.
+# 타일을 바꾸려면 NEXT_PUBLIC_MAP_TILES 를 빌드 인자로 넘긴다 (carto | osm | URL).
+ARG NEXT_PUBLIC_MAP_TILES
+ENV NEXT_PUBLIC_MAP_TILES=${NEXT_PUBLIC_MAP_TILES}
 
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build

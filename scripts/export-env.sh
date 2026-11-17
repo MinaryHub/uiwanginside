@@ -77,7 +77,7 @@ source['PUBLIC_URL'] = '이 스크립트'
 lost = [n for n in masked if n not in env]
 
 # 없으면 기능이 죽는 것들. AIRKOREA·EMERGENCY 는 KMA 키로 대체되므로 뺀다
-REQUIRED = ('DATABASE_URL', 'PUBLIC_URL', 'NEXT_PUBLIC_KAKAO_JS_KEY', 'KAKAO_REST_KEY',
+REQUIRED = ('DATABASE_URL', 'PUBLIC_URL', 'KAKAO_REST_KEY',
             'KMA_SERVICE_KEY', 'GBIS_SERVICE_KEY', 'GG_DATA_KEY')
 missing = [n for n in REQUIRED if not env.get(n)]
 

@@ -103,7 +103,7 @@ const POLL = {
  * 남짓이었다. 지도 중심 포털에서 지도를 양쪽에서 누르고 있었던 셈이다.
  * 지금은 지도가 전면이고 상단 바·모드 알약·시트가 그 위에 떠 있다.
  */
-export default function Dashboard({ appKey }: { appKey?: string }) {
+export default function Dashboard() {
   const initial = parseUrlState(useSearchParams());
 
   /** null = 둘러보기. 지도만 보이는 기본 상태다. */
@@ -697,10 +697,14 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
 
   return (
     <div className="relative h-dvh overflow-hidden bg-[var(--bg)]">
-      {/* 지도 — 화면 전체 */}
-      <div className="dots absolute inset-0">
+      {/*
+        지도 — 화면 전체.
+        isolate 로 지도 안의 겹침 순서를 이 상자 안에 가둔다. Leaflet 은 층마다
+        z-index 200~1000 을 쓰는데, 가두지 않으면 그 층들이 상단 바(z-40)와
+        메뉴 위로 올라와 화면에 지도만 남는다.
+      */}
+      <div className="dots absolute inset-0 isolate">
         <KakaoMap
-          appKey={appKey}
           center={center}
           level={level}
           places={mapPlaces}
