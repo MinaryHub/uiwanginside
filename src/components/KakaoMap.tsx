@@ -5,6 +5,7 @@ import { CATEGORY_MAP } from "@/lib/uiwang";
 import { UIWANG_BOUNDARY } from "@/lib/uiwang-boundary";
 import { DONG_BOUNDARIES } from "@/lib/dong-boundaries";
 import { LEVEL_COLOR, type TrafficLevel, type TrafficSegment } from "@/lib/traffic";
+import "leaflet/dist/leaflet.css";
 import { planRun, walk, type LatLng, type PathRun } from "@/lib/busPath";
 import type { Cctv } from "@/lib/cctvTypes";
 import type {
@@ -42,22 +43,21 @@ function busEase(t: number): number {
 
 let sdkPromise: Promise<void> | null = null;
 
-function loadSdk(appKey: string): Promise<void> {
+/**
+ * 지도 엔진을 불러온다.
+ *
+ * 예전에는 카카오맵 SDK 였다. 키와 도메인 등록이 있어야 해서 배포 주소가
+ * 바뀌거나 키가 빠지면 지도가 통째로 비었다. 이제 Leaflet 과 공개 지도
+ * 타일을 쓰고, 카카오 API 모양을 흉내 내는 얇은 층(mapShim)을 깐다.
+ * 아래 코드는 그대로 window.kakao.maps 를 부른다.
+ */
+function loadSdk(): Promise<void> {
   if (typeof window === "undefined") return Promise.resolve();
   if (window.kakao?.maps?.Map) return Promise.resolve();
   if (sdkPromise) return sdkPromise;
-
-  sdkPromise = new Promise<void>((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${appKey}&autoload=false`;
-    script.async = true;
-    script.onload = () => window.kakao.maps.load(() => resolve());
-    // script 태그의 onerror 로는 HTTP 상태/본문을 읽을 수 없다.
-    // 실제 원인은 대부분 도메인 미등록 또는 카카오맵 제품 비활성 둘 중 하나다.
-    script.onerror = () =>
-      reject(new Error("카카오맵 SDK 를 불러오지 못했습니다 (도메인 미등록 또는 제품 비활성)"));
-    document.head.appendChild(script);
-  });
+  sdkPromise = Promise.all([import("leaflet"), import("@/lib/mapShim")]).then(
+    ([L, shim]) => shim.installKakaoShim(L.default ?? L),
+  );
   return sdkPromise;
 }
 
@@ -253,7 +253,6 @@ function aimArrow(el: HTMLElement, heading: number | null, animate: boolean) {
 }
 
 export interface KakaoMapProps {
-  appKey?: string;
   center: { lat: number; lng: number };
   level: number;
   places: Place[];
@@ -305,7 +304,6 @@ export interface KakaoMapProps {
 }
 
 export default function KakaoMap({
-  appKey,
   center,
   level,
   places,
@@ -423,12 +421,7 @@ export default function KakaoMap({
   const [ready, setReady] = useState(false);
   const [sdkError, setSdkError] = useState<string | null>(null);
 
-  const error = appKey
-    ? sdkError
-    : "NEXT_PUBLIC_KAKAO_JS_KEY 가 설정되지 않았습니다.";
-
-  // ssr:false 로 동적 로드되는 컴포넌트라 렌더 중 window 접근이 안전하다
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const error = sdkError;
 
   // 최신 콜백을 ref 로 유지 — 지도 재생성 없이 dragend 핸들러가 최신 함수를 참조
   useEffect(() => {
@@ -441,9 +434,8 @@ export default function KakaoMap({
 
   // SDK 로드 + 지도 생성
   useEffect(() => {
-    if (!appKey) return;
     let cancelled = false;
-    loadSdk(appKey)
+    loadSdk()
       .then(() => {
         if (cancelled || !containerRef.current || mapRef.current) return;
         const map = new window.kakao.maps.Map(containerRef.current, {
@@ -478,7 +470,7 @@ export default function KakaoMap({
     };
     // 최초 1회만 — center/level 변경은 아래 effect 가 처리
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appKey]);
+  }, []);
 
   // 시트가 열리고 닫히면 지도 컨테이너 폭이 바뀐다.
   // relayout 을 부르지 않으면 타일이 어긋난 채 남아 "일부 구역에만 보이는" 것처럼 된다.
@@ -1084,36 +1076,10 @@ export default function KakaoMap({
             <div className="text-4xl">🗺️</div>
             <p className="font-semibold">지도를 표시할 수 없습니다</p>
             <p className="text-sm text-[var(--text-muted)]">{error}</p>
-            <div className="rounded-[var(--radius)] bg-[var(--surface)] p-3 text-left text-xs leading-relaxed text-[var(--text-muted)]">
-              {appKey ? (
-                <>
-                  <p className="mb-2">
-                    키는 설정돼 있습니다. 카카오 개발자 콘솔에서 두 가지를 확인하세요.
-                  </p>
-                  <p className="mb-1.5">
-                    <strong className="text-[var(--text)]">① 플랫폼 &gt; Web</strong> 에
-                    현재 주소를 등록:
-                    <br />
-                    <code className="mt-1 inline-block rounded bg-[var(--surface-2)] px-1.5 py-0.5 break-all">
-                      {origin || "현재 도메인"}
-                    </code>
-                  </p>
-                  <p>
-                    <strong className="text-[var(--text)]">② 제품 설정 &gt; 카카오맵</strong>{" "}
-                    활성화 ON
-                  </p>
-                </>
-              ) : (
-                <p>
-                  <code>NEXT_PUBLIC_KAKAO_JS_KEY</code> 가 설정되지 않았습니다. 로컬은{" "}
-                  <code>.env.local</code>, 배포 환경은 호스팅 환경변수에 추가한 뒤 재시작(재배포)
-                  하세요.
-                </p>
-              )}
-              <p className="mt-2 border-t border-[var(--border)] pt-2">
-                사이드 패널의 목록·실시간 정보는 지도 없이도 정상 동작합니다.
-              </p>
-            </div>
+            <p className="text-xs text-[var(--text-muted)]">
+              인터넷 연결을 확인하고 새로고침해 보세요. 메뉴의 목록·실시간 정보는 지도 없이도
+              볼 수 있습니다.
+            </p>
           </div>
         </div>
       )}

@@ -22,17 +22,6 @@ IMAGE="${UIWANG_IMAGE:-ghcr.io/minaryhub/uiwanginside}:latest"
 PREV="${UIWANG_IMAGE:-ghcr.io/minaryhub/uiwanginside}:prev"
 cd "$(dirname "$0")/.."
 
-# NEXT_PUBLIC_* 은 빌드 시점에 클라이언트 번들로 박힌다. 여기서 빠지면 지도가
-# 키 없이 빌드되어 배포 후 화면에서 조용히 실패한다 — 먼저 막는다.
-KEY="${NEXT_PUBLIC_KAKAO_JS_KEY:-}"
-if [[ -z "$KEY" && -f .env.local ]]; then
-  KEY="$(grep -m1 '^NEXT_PUBLIC_KAKAO_JS_KEY=' .env.local | cut -d= -f2- | tr -d '"'"'"'')"
-fi
-if [[ -z "$KEY" ]]; then
-  echo "✗ NEXT_PUBLIC_KAKAO_JS_KEY 가 없습니다. 이 값 없이 빌드하면 지도가 뜨지 않습니다." >&2
-  exit 1
-fi
-
 # 어느 커밋으로 만든 이미지인지 새겨 둔다. 파이에서 무엇이 도는지 알아야
 # 올렸는지 안 올렸는지 헷갈리지 않는다.
 GIT_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
@@ -43,7 +32,6 @@ if [[ -z "${SKIP_BUILD:-}" ]]; then
   echo "▶ linux/arm64 이미지 빌드 ($GIT_SHA)"
   docker buildx build \
     --platform linux/arm64 \
-    --build-arg "NEXT_PUBLIC_KAKAO_JS_KEY=$KEY" \
     --build-arg "GIT_SHA=$GIT_SHA" \
     --build-arg "BUILT_AT=$BUILT_AT" \
     -t "$IMAGE" --load .

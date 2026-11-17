@@ -1,6 +1,7 @@
 import { timedFetch } from "@/lib/fetcher";
 import { UIWANG } from "@/lib/uiwang";
 import { fetchAlerts } from "@/lib/alerts";
+import { tileSpec } from "@/lib/mapShim";
 
 export const dynamic = "force-dynamic";
 
@@ -35,37 +36,24 @@ function msg(e: unknown) {
 }
 
 /**
- * 지도 SDK 는 Referer 로 등록 도메인을 검사한다.
- * 실제 배포 origin 을 Referer 로 보내 도메인 등록 여부까지 확인한다.
+ * 지도 그림(타일). 키는 없지만 타일 서버가 막히면 지도 자리가 빈다.
+ * 의왕시청이 들어 있는 타일 한 장을 실제로 받아 본다.
  */
-async function checkKakaoJs(origin: string): Promise<Partial<HealthCheck>> {
-  const key = process.env.NEXT_PUBLIC_KAKAO_JS_KEY;
-  if (!key) return { status: "missing", detail: "키 없음 — 지도가 표시되지 않습니다" };
-
-  const [res, latencyMs, err] = await timed(() =>
-    timedFetch(`https://dapi.kakao.com/v2/maps/sdk.js?appkey=${key}&autoload=false`, {
-      headers: { Referer: `${origin}/` },
-    }),
-  );
-  if (err) return { status: "error", detail: msg(err), latencyMs };
-
-  const text = await res!.text();
-  if (res!.ok && !text.trimStart().startsWith("{"))
-    return { status: "live", detail: `정상 · ${origin} 도메인 허용됨`, latencyMs };
-
-  if (text.includes("domain mismatched"))
-    return {
-      status: "error",
-      detail: `도메인 미등록 — 카카오 개발자 콘솔 → 앱 설정 → 플랫폼 → Web 에 ${origin} 등록 필요`,
-      latencyMs,
-    };
-  if (text.includes("OPEN_MAP_AND_LOCAL"))
-    return {
-      status: "error",
-      detail: "카카오맵 제품이 비활성 상태 — 제품 설정 → 카카오맵 → 활성화 ON",
-      latencyMs,
-    };
-  return { status: "error", detail: `HTTP ${res!.status} — ${text.slice(0, 140)}`, latencyMs };
+async function checkMapTiles(): Promise<Partial<HealthCheck>> {
+  const t = tileSpec();
+  const url = t.url
+    .replace("{s}", t.subdomains ? t.subdomains[0] : "")
+    .replace("{z}", "13")
+    .replace("{x}", "6985")
+    .replace("{y}", "3179")
+    .replace("{r}", "");
+  const [res, latencyMs, err] = await timed(() => timedFetch(url));
+  if (err) return { status: "error", detail: `타일 서버에 닿지 않습니다: ${msg(err)}`, latencyMs };
+  const type = res!.headers.get("content-type") ?? "";
+  if (!res!.ok || !type.startsWith("image/")) {
+    return { status: "error", detail: `HTTP ${res!.status} (${type || "형식 미상"})`, latencyMs };
+  }
+  return { status: "live", detail: `정상 · ${new URL(url).hostname}`, latencyMs };
 }
 
 async function checkKakaoRest(): Promise<Partial<HealthCheck>> {
@@ -414,10 +402,10 @@ async function checkNeis(): Promise<Partial<HealthCheck>> {
 
 const SPECS: Omit<HealthCheck, "status" | "detail" | "configured">[] = [
   {
-    id: "kakao-js",
-    label: "카카오맵 (지도 렌더링)",
-    envVars: ["NEXT_PUBLIC_KAKAO_JS_KEY"],
-    howTo: "developers.kakao.com → 앱 키 → JavaScript 키. 플랫폼 > Web 에 도메인 등록 필수",
+    id: "map-tiles",
+    label: "지도 그림 (OpenStreetMap · CARTO)",
+    envVars: ["NEXT_PUBLIC_MAP_TILES"],
+    howTo: "키가 필요 없습니다. 타일 서버가 막히면 NEXT_PUBLIC_MAP_TILES=osm 으로 바꿔 보세요",
   },
   {
     id: "kakao-rest",
@@ -490,33 +478,7 @@ const SPECS: Omit<HealthCheck, "status" | "detail" | "configured">[] = [
   },
 ];
 
-/**
- * 브라우저가 실제로 두드린 주소.
- *
- * `new URL(req.url).origin` 을 그대로 쓰면 안 된다. 리버스 프록시 뒤에서는
- * Next 가 컨테이너 안쪽 주소를 돌려준다 — 파이에서 https://0.0.0.0:3000 이
- * 나왔고, 그 화면이 "이 도메인을 카카오에 등록하세요" 라고 안내했다.
- * 등록할 수 없는 주소이고, 정작 진짜 도메인은 멀쩡한데도 오류로 보였다.
- *
- * 프록시가 붙여 주는 값을 먼저 보고, 없으면 설정된 공개 주소를 쓴다.
- * 진단용이라 헤더를 믿어도 위험하지 않다 — 권한을 주는 데 쓰지 않는다.
- */
-function publicOrigin(req: Request): string {
-  const h = req.headers;
-  const host = h.get("x-forwarded-host") ?? h.get("host");
-  if (host) {
-    const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-    return `${proto}://${host}`;
-  }
-  // AUTH_URL 은 로그인을 쓰던 시절의 이름이다. 이미 넣어둔 배포를 위해 함께 읽는다.
-  const configured = process.env.PUBLIC_URL ?? process.env.AUTH_URL;
-  if (configured) return configured.replace(/\/$/, "");
-  return new URL(req.url).origin;
-}
-
-export async function GET(req: Request) {
-  const origin = publicOrigin(req);
-
+export async function GET() {
   const [kakaoRest, kma, naver, its, ggStations, gbisArrival, gbisLocation] =
     await Promise.all([
     checkKakaoRest(),
@@ -529,7 +491,7 @@ export async function GET(req: Request) {
   ]);
 
   const results: Record<string, Partial<HealthCheck>> = {
-    "kakao-js": await checkKakaoJs(origin),
+    "map-tiles": await checkMapTiles(),
     "kakao-rest": kakaoRest,
     emergency: await checkEmergency(),
     "emergency-room": await checkEmergencyRoom(),

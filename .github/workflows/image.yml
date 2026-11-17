@@ -65,7 +65,6 @@ jobs:
             ${{ steps.name.outputs.image }}:latest
             ${{ steps.name.outputs.image }}:${{ github.sha }}
           build-args: |
-            NEXT_PUBLIC_KAKAO_JS_KEY=${{ secrets.NEXT_PUBLIC_KAKAO_JS_KEY }}
             GIT_SHA=${{ github.sha }}
             BUILT_AT=${{ github.event.repository.pushed_at }}
           cache-from: type=gha

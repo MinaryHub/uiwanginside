@@ -30,14 +30,10 @@ package-lock.json 이 그대로면 node_modules 층을 다시 만들지 않는�
 
 ## 준비 (한 번만)
 
-### 1. 카카오 개발자 콘솔 — 빠뜨리면 지도가 안 뜬다
+### 1. 지도 — 할 일 없음
 
-지도 JS 키는 **도메인 제한**이 걸린다. 등록하지 않은 도메인에서는 지도가 아예
-그려지지 않는다. 이 앱은 지도가 본체라 사실상 배포 실패다.
-
-- **플랫폼 → Web → 사이트 도메인**: `https://uiwanginside.kimserv.com` 추가
-
-Vercel 을 대체하므로 기존 Vercel 도메인은 지워도 된다.
+지도는 Leaflet 과 공개 타일(OpenStreetMap·CARTO)이라 키도 도메인 등록도 필요 없다.
+예전 카카오맵 시절의 "플랫폼 → Web 에 도메인 등록" 단계는 더 하지 않는다.
 
 ### 2. 공유기 포트 포워딩
 
@@ -62,7 +58,7 @@ scp deploy/.env.pi <파이>:~/uiwanginside/.env
 값의 출처는 **`.env.local`** 이다. Vercel 은 참고만 한다.
 
 `vercel env pull` 을 그대로 쓸 수 없다. Sensitive 로 표시된 변수를 실제 값이 아니라
-`[SENSITIVE]` 로 내려주는데, 이 프로젝트에서는 13개가 그렇다 — 지도 키·모든 공공데이터
+`[SENSITIVE]` 로 내려주는데, 이 프로젝트에서는 13개가 그렇다 — 모든 공공데이터
 키가 거기에 든다. 그대로 올리면 화면은 뜨는데 아무 데이터도
 안 나오고, 원인이 어디인지도 보이지 않는다. 스크립트가 자리표시자를 거부한다.
 
@@ -125,10 +121,9 @@ tls-alpn-01 로 확인했으니, 그 성공 자체가 포트 포워딩이 된다
 - 그 이미지를 띄워 파이에 올라갈 `.env` 그대로 실행 — 홈·`/status` 200,
   날씨·미세먼지·의료·교통 API 200
 - `_next/static` 의 CSS·JS 가 404 가 아닌지 — 정상 (standalone 이 빼먹는 부분)
-- 지도 키가 클라이언트 번들에 박혔는지 — 박혀 있다
 - Neon 쓰기 — `/api/visit` 204
 
-남은 것은 파이·DNS·공유기·카카오 콘솔처럼 맥에서 확인할 수 없는 것뿐이다.
+남은 것은 파이·DNS·공유기처럼 맥에서 확인할 수 없는 것뿐이다.
 
 ## 최신으로 올리기
 
@@ -211,7 +206,7 @@ ssh <파이> 'cd ~/uiwanginside && docker compose logs -f app'
 
 브라우저에서 순서대로 본다.
 
-1. `https://uiwanginside.kimserv.com` — 자물쇠가 잠기고 **지도가 그려지는지** (안 그려지면 1번 도메인 등록)
+1. `https://uiwanginside.kimserv.com` — 자물쇠가 잠기고 **지도가 그려지는지** (안 그려지면 `/status` 의 "지도 그림" 항목)
 2. 상단 요약줄에 날씨·미세먼지·사고·진료 값이 들어오는지 (안 들어오면 `.env` 의 키)
 3. `https://uiwanginside.kimserv.com/opendata` — 공공데이터 안내 화면이 뜨는지
 4. `https://uiwanginside.kimserv.com/status` — 외부 API 6개의 키 상태를 한 화면에서 진단
