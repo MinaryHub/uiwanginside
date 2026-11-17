@@ -16,10 +16,29 @@ import type {
 
 /**
  * 버스를 두 관측 지점 사이로 옮기는 데 쓰는 시간.
- * GBIS 갱신 주기와 같아야 한다 — 짧으면 도착해 놓고 멈춰 서 있고,
- * 길면 다음 관측이 올 때까지 목표에 닿지 못한다.
+ *
+ * 예전에는 16초로 고정했다 (GBIS 갱신 주기). 그런데 GBIS 가 주는 것은
+ * GPS 가 아니라 "몇 번째 정류소에 있다" 이고, 버스가 정류소를 옮기는
+ * 간격은 30초~1분이 흔하다. 16초 만에 도착해 놓고 한참 서 있다가 다시
+ * 튀어 나가, 가다 서다를 되풀이했다.
+ *
+ * 이제 버스마다 실제로 정류소를 옮긴 간격을 재어 그만큼에 걸쳐 움직인다.
+ * 다음 관측이 올 즈음 닿으므로 멈추지 않고 이어 간다. 처음 한 번은 잴 수
+ * 없어 기본값을 쓴다.
  */
-const BUS_TWEEN_MS = 16_000;
+const BUS_TWEEN_DEFAULT_MS = 20_000;
+const BUS_TWEEN_MIN_MS = 8_000;
+const BUS_TWEEN_MAX_MS = 60_000;
+/** 사라질 때 흐려지는 시간 */
+const BUS_FADE_MS = 400;
+
+/**
+ * 출발은 살짝 천천히, 정류소에 닿을 때도 살짝 천천히.
+ * 완전한 가속·감속 곡선은 이어지는 구간마다 울컥거려 보여 직선과 반반 섞는다.
+ */
+function busEase(t: number): number {
+  return 0.5 * t + 0.5 * (0.5 - 0.5 * Math.cos(Math.PI * t));
+}
 
 let sdkPromise: Promise<void> | null = null;
 
@@ -190,7 +209,7 @@ function busEl(
   // 혼잡할수록 붉게. 색만으로 판단하지 않도록 자세히 볼 때는 라벨도 붙인다.
   const CROWD = ["", "여유", "보통", "혼잡", "매우혼잡"];
   const bg =
-    b.crowded === 4 || b.crowded === 3 ? "#c62828" : b.crowded === 2 ? "#a55a00" : "#1a5fb4";
+    b.crowded === 4 || b.crowded === 3 ? "#e03131" : b.crowded === 2 ? "#e8590c" : "#1c7ed6";
   const el = document.createElement("div");
   el.title = [routeName, b.nodeName, b.crowded ? CROWD[b.crowded] : "", b.lowPlate ? "저상" : ""]
     .filter(Boolean)
@@ -198,12 +217,16 @@ function busEl(
   el.style.cssText = `
     display:flex;align-items:center;gap:${detailed ? 5 : 3}px;
     padding:${detailed ? "3px 8px 3px 6px" : "1px 6px 1px 4px"};border-radius:999px;
-    background:${bg};color:#fff;border:${detailed ? 2 : 1.5}px solid #fff;
-    box-shadow:0 1px ${detailed ? 8 : 4}px rgba(16,32,43,.32);
+    background:${bg};color:#fff;border:2px solid #23201c;
+    box-shadow:2px 2px 0 #23201c;animation:bus-in .35s cubic-bezier(.34,1.56,.64,1) both;
+    transition:opacity ${BUS_FADE_MS}ms ease;
     font-size:${detailed ? 12 : 10}px;font-weight:800;white-space:nowrap;letter-spacing:-.02em;
     font-family:Pretendard,-apple-system,"Apple SD Gothic Neo",sans-serif;`;
   el.innerHTML =
     `<span style="font-size:${detailed ? 12 : 9}px">🚍</span><span>${routeName}</span>` +
+    // 가는 쪽. 움직이기 전에는 모르므로 숨겨 둔다 (아래 애니메이션이 돌린다)
+    `<span data-dir style="display:inline-block;font-size:${detailed ? 9 : 7}px;line-height:1;` +
+    `opacity:0;transition:transform .5s ease,opacity .3s ease">▲</span>` +
     (detailed && b.nodeName
       ? `<span style="font-weight:600;opacity:.88">${b.nodeName.slice(0, 10)}</span>`
       : "") +
@@ -214,6 +237,20 @@ function busEl(
   return el;
 }
 
+
+/** 두 방향의 차 (-180~180). 화살표가 359°→1° 에서 한 바퀴 돌지 않게 */
+function angleDiff(a: number, b: number): number {
+  return ((((a - b) % 360) + 540) % 360) - 180;
+}
+
+/** 버스 알약 안의 화살표를 가는 쪽으로 */
+function aimArrow(el: HTMLElement, heading: number | null, animate: boolean) {
+  const arrow = el.querySelector<HTMLElement>("[data-dir]");
+  if (!arrow || heading === null) return;
+  if (!animate) arrow.style.transition = "none";
+  arrow.style.transform = `rotate(${heading}deg)`;
+  arrow.style.opacity = "1";
+}
 
 export interface KakaoMapProps {
   appKey?: string;
@@ -323,12 +360,27 @@ export default function KakaoMap({
       string,
       {
         ov: kakao.maps.CustomOverlay;
-        /** 직전에 관측된 위치 */
+        /** 이번 구간의 출발점 — 새 관측이 왔을 때 화면에 있던 자리 */
         from: { lat: number; lng: number };
         /** 방금 관측된 위치 */
         to: { lat: number; lng: number };
         /** to 를 받은 시각 */
         at: number;
+        /** 이번 구간에 걸리는 시간 (ms) */
+        dur: number;
+        /** 지금 화면에 그려진 자리 */
+        shown: { lat: number; lng: number };
+        /** 이 버스가 정류소를 옮겨 다닌 간격 (지수평균, ms). 아직 모르면 null */
+        gap: number | null;
+        /** 가는 쪽 (도, 북=0 시계방향). 아직 모르면 null */
+        heading: number | null;
+        /**
+         * 가는 쪽을 마지막으로 잰 자리. 한 프레임에 0.2m 남짓 움직이므로
+         * 프레임끼리 비교하면 늘 너무 짧다 — 몇 미터 쌓인 뒤에 잰다.
+         */
+        headFrom: { lat: number; lng: number };
+        /** 구간 끝에 닿아 더 옮길 것이 없다 */
+        done: boolean;
         /**
          * 노선 경로를 따라 걷는 구간. 경로가 없거나 붙이기가 어긋나면
          * null 이고, 그때는 두 점을 직선으로 잇는다.
@@ -906,6 +958,12 @@ export default function KakaoMap({
             from: { lat: b.lat, lng: b.lng },
             to: { lat: b.lat, lng: b.lng },
             at: now,
+            dur: BUS_TWEEN_DEFAULT_MS,
+            shown: { lat: b.lat, lng: b.lng },
+            gap: null,
+            heading: null,
+            headFrom: { lat: b.lat, lng: b.lng },
+            done: true,
             run: null,
             sig,
           });
@@ -916,9 +974,27 @@ export default function KakaoMap({
         const moved = cur.to.lat !== b.lat || cur.to.lng !== b.lng;
         if (moved) {
           const jump = Math.hypot((b.lat - cur.to.lat) * 111_000, (b.lng - cur.to.lng) * 88_000);
-          cur.from = jump > 2000 ? { lat: b.lat, lng: b.lng } : cur.to;
+          /*
+           * 화면에 지금 있는 자리에서 출발한다. 예전에는 직전 관측 지점에서
+           * 출발해, 아직 가는 중에 새 관측이 오면 버스가 앞으로 툭 튀었다.
+           */
+          cur.from = jump > 2000 ? { lat: b.lat, lng: b.lng } : { ...cur.shown };
+          if (jump > 2000) {
+            cur.shown = { lat: b.lat, lng: b.lng };
+            cur.headFrom = cur.shown;
+          }
+          // 정류소를 옮긴 간격을 잰다. 너무 짧거나 긴 것(누락·정차 대기)은 버린다
+          const sample = now - cur.at;
+          if (sample >= 5_000 && sample <= 180_000) {
+            cur.gap = cur.gap === null ? sample : cur.gap * 0.6 + sample * 0.4;
+          }
+          cur.dur = Math.max(
+            BUS_TWEEN_MIN_MS,
+            Math.min(BUS_TWEEN_MAX_MS, cur.gap ?? BUS_TWEEN_DEFAULT_MS),
+          );
           cur.to = { lat: b.lat, lng: b.lng };
           cur.at = now;
+          cur.done = false;
           // 노선 경로가 있으면 그 위를 걷는다. 붙이기가 어긋나면 null 이고
           // 그때는 아래 애니메이션이 직선으로 잇는다.
           const line = busPaths[r.routeId];
@@ -928,15 +1004,23 @@ export default function KakaoMap({
               : null;
         }
         if (cur.sig !== sig) {
-          cur.ov.setContent(busEl(r.routeName || "버스", b, detailed));
+          const el = busEl(r.routeName || "버스", b, detailed);
+          // 내용을 갈아도 가던 방향은 그대로 — 화살표가 매번 처음으로 돌아가지 않게
+          aimArrow(el, cur.heading, false);
+          el.style.animation = "none";
+          cur.ov.setContent(el);
           cur.sig = sig;
         }
       }
     }
 
+    // 운행을 마쳤거나 화면 밖으로 나간 버스는 흐려지며 사라진다
     for (const [key, entry] of live) {
       if (!seen.has(key)) {
-        entry.ov.setMap(null);
+        const el = entry.ov.getContent();
+        if (el instanceof HTMLElement) el.style.opacity = "0";
+        const ov = entry.ov;
+        setTimeout(() => ov.setMap(null), BUS_FADE_MS);
         live.delete(key);
       }
     }
@@ -954,8 +1038,9 @@ export default function KakaoMap({
     const step = () => {
       const now = Date.now();
       for (const m of busMarks.current.values()) {
-        const t = Math.min(1, (now - m.at) / BUS_TWEEN_MS);
-        if (m.from.lat === m.to.lat && m.from.lng === m.to.lng) continue;
+        if (m.done) continue;
+        const raw = Math.min(1, (now - m.at) / m.dur);
+        const t = busEase(raw);
         // 경로를 따라 걷는다. 붙이지 못한 구간만 직선으로 잇는다.
         const [lat, lng] = m.run
           ? walk(m.run, t)
@@ -963,7 +1048,23 @@ export default function KakaoMap({
               m.from.lat + (m.to.lat - m.from.lat) * t,
               m.from.lng + (m.to.lng - m.from.lng) * t,
             ];
+
+        // 가는 쪽 — 6m 는 움직여야 잰다. 정류소 앞 미세한 떨림에 화살표가 돌지 않게
+        const dy = (lat - m.headFrom.lat) * 111_000;
+        const dx = (lng - m.headFrom.lng) * 88_000;
+        if (dx * dx + dy * dy > 36) {
+          m.headFrom = { lat, lng };
+          const h = (Math.atan2(dx, dy) * 180) / Math.PI;
+          if (m.heading === null || Math.abs(angleDiff(h, m.heading)) > 8) {
+            m.heading = m.heading === null ? h : m.heading + angleDiff(h, m.heading);
+            const el = m.ov.getContent();
+            if (el instanceof HTMLElement) aimArrow(el, m.heading, true);
+          }
+        }
+
+        m.shown = { lat, lng };
         m.ov.setPosition(new window.kakao.maps.LatLng(lat, lng));
+        if (raw >= 1) m.done = true;
       }
       busRaf.current = requestAnimationFrame(step);
     };

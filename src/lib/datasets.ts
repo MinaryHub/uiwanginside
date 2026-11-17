@@ -70,6 +70,15 @@ export const DATASET_GROUPS: DatasetGroup[] = [
         shows: "미세먼지·초미세먼지 농도와 등급",
         kind: "live",
       },
+      {
+        id: "airkorea-forecast",
+        name: "대기질 예보통보 (경기남부)",
+        provider: "한국환경공단 에어코리아",
+        link: dataGoKr("한국환경공단_에어코리아_대기오염정보"),
+        refresh: "하루 4번 발표",
+        shows: "오늘·내일 미세먼지·초미세먼지 예보 등급",
+        kind: "live",
+      },
     ],
   },
   {

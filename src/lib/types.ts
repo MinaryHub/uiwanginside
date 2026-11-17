@@ -215,7 +215,19 @@ export interface AirStation {
   measuredAt: string;
 }
 
+/** 에어코리아 대기질 예보 — 경기남부 권역 (의왕이 속한 권역) */
+export interface AirForecast {
+  /** YYYY-MM-DD */
+  date: string;
+  pm10: AirGrade | null;
+  pm25: AirGrade | null;
+}
+
 export interface AirPayload {
+  /** 오늘·내일 예보. 예보 조회가 실패하면 비어 있다 — 측정값은 그대로 나온다 */
+  forecast?: AirForecast[];
+  /** 예보 발표 시각 ("2026-11-17 17시 발표") */
+  forecastAt?: string;
   stations: AirStation[];
   source: "airkorea";
   updatedAt: string;

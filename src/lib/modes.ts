@@ -73,13 +73,14 @@ const NO_LAYERS: MapLayers = {
 export const MODES: ModeDef[] = [
   {
     id: "weather",
-    label: "날씨",
+    label: "날씨·공기",
     icon: "☀️",
     tint: "#ffe27a",
-    hint: "지금 날씨와 미세먼지",
+    hint: "지금 날씨 · 공기가 좋은지 나쁜지",
     categories: [],
     layers: NO_LAYERS,
-    cards: ["weather", "air"],
+    // 첫 화면 공기 배지를 누르고 들어온 사람이 바로 보게 공기가 먼저
+    cards: ["air", "weather"],
   },
   {
     id: "medical",

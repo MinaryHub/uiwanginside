@@ -7,7 +7,7 @@ import {
   parseDataGoKr,
   isTransientDataGoKrError,
 } from "@/lib/fetcher";
-import type { AirPayload, AirStation, AirGrade } from "@/lib/types";
+import type { AirPayload, AirStation, AirGrade, AirForecast } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +21,68 @@ const CACHE_SEC = 600;
  */
 const AIRKOREA =
   "https://apis.data.go.kr/B552584/ArpltnInforInqireSvc/getMsrstnAcctoRltmMesureDnsty";
+
+/**
+ * 대기질 예보 — 같은 서비스(ArpltnInforInqireSvc) 안에 있어 활용신청을
+ * 따로 받지 않는다. 권역별 등급을 "서울 : 보통,경기남부 : 좋음,…" 처럼
+ * 한 문자열로 준다. 의왕은 경기남부 권역이다.
+ */
+const FORECAST =
+  "https://apis.data.go.kr/B552584/ArpltnInforInqireSvc/getMinuDustFrcstDspth";
+const REGION = "경기남부";
+
+/** KST 날짜 YYYY-MM-DD. offset 일 뒤 */
+function kstDate(offset = 0): string {
+  return new Date(Date.now() + 9 * 3600_000 + offset * 86_400_000).toISOString().slice(0, 10);
+}
+
+interface RawForecast {
+  informCode?: string;
+  informData?: string;
+  informGrade?: string;
+  dataTime?: string;
+}
+
+function regionGrade(s?: string): AirGrade | null {
+  const m = s?.match(new RegExp(`${REGION}\\s*:\\s*(좋음|보통|나쁨|매우나쁨)`));
+  return (m?.[1] as AirGrade | undefined) ?? null;
+}
+
+/**
+ * 오늘·내일 예보.
+ * 하루에 네 번(5·11·17·23시) 발표하고 같은 날짜에 대한 예보가 여러 번
+ * 온다. 날짜·항목마다 가장 늦게 발표된 것을 쓴다. 내일 예보는 오후
+ * 발표부터 나온다 — 없으면 오늘만 보여준다.
+ */
+async function loadForecast(key: string): Promise<{ forecast: AirForecast[]; at?: string }> {
+  const url =
+    `${FORECAST}?searchDate=${kstDate()}&returnType=json&numOfRows=100&pageNo=1` +
+    `&ver=1.1&serviceKey=${key}`;
+  const res = await timedFetch(url, {}, 12_000);
+  const json = parseDataGoKr(await res.text()) as {
+    response?: { body?: { items?: RawForecast[] } };
+  };
+  const items = json?.response?.body?.items ?? [];
+
+  const latest = new Map<string, RawForecast>();
+  for (const it of items) {
+    if (!it.informData || (it.informCode !== "PM10" && it.informCode !== "PM25")) continue;
+    const k = `${it.informData}|${it.informCode}`;
+    const cur = latest.get(k);
+    if (!cur || (it.dataTime ?? "") > (cur.dataTime ?? "")) latest.set(k, it);
+  }
+
+  const forecast: AirForecast[] = [];
+  let at: string | undefined;
+  for (const date of [kstDate(0), kstDate(1)]) {
+    const p10 = latest.get(`${date}|PM10`);
+    const p25 = latest.get(`${date}|PM25`);
+    const f = { date, pm10: regionGrade(p10?.informGrade), pm25: regionGrade(p25?.informGrade) };
+    if (f.pm10 || f.pm25) forecast.push(f);
+    for (const x of [p10, p25]) if (x?.dataTime && (!at || x.dataTime > at)) at = x.dataTime;
+  }
+  return { forecast, at };
+}
 
 /**
  * 의왕시 측정소.
@@ -109,6 +171,11 @@ export async function GET() {
   }
 
   try {
+    // 예보가 실패해도 지금 값은 보여준다. 예보는 덤이다.
+    const forecastP = loadForecast(key).catch((e) => {
+      console.warn("[air:forecast]", e instanceof Error ? e.message : e);
+      return { forecast: [] as AirForecast[], at: undefined };
+    });
     const raws = await Promise.all(UIWANG_STATIONS.map((n) => loadWithRetry(n)));
     const stations = UIWANG_STATIONS.map((name, i): AirStation | null => {
       const r = raws[i];
@@ -133,7 +200,14 @@ export async function GET() {
       return fail(EMPTY, "의왕 측정소 데이터를 찾지 못했습니다.");
     }
 
-    const payload: AirPayload = { stations, source: "airkorea", updatedAt: nowISO() };
+    const { forecast, at } = await forecastP;
+    const payload: AirPayload = {
+      stations,
+      forecast,
+      forecastAt: at,
+      source: "airkorea",
+      updatedAt: nowISO(),
+    };
     cache.set("air", payload);
     return ok(payload, undefined, CACHE_SEC);
   } catch (e) {
