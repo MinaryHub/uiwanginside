@@ -43,6 +43,7 @@ import type {
 import Link from "next/link";
 import Logo from "@/components/Logo";
 import Icon from "@/components/Icon";
+import { AIR_STYLE, overallGrade } from "@/lib/air";
 import SummaryStrip, { type InfoTab } from "@/components/SummaryStrip";
 import PlaceDetailCard from "@/components/PlaceDetailCard";
 import StopCard from "@/components/StopCard";
@@ -651,6 +652,9 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     }
   };
 
+  /** 의왕 측정소 가운데 가장 나쁜 등급 — 조심하는 쪽으로 말한다 */
+  const airGrade = overallGrade(air.data?.data.stations ?? []);
+
   /** 지도 위에 떠 있는 버튼 공통 스타일 */
   const mapBtn = "glass map-btn press";
 
@@ -811,6 +815,31 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           <Icon name="minus" size={22} />
         </button>
       </div>
+
+      {/*
+        오늘 공기 — 첫 화면에서 메뉴를 열지 않아도 보인다.
+        얼굴과 한마디가 먼저, 누르면 날씨·공기 메뉴가 열린다.
+        내용 카드나 하단 카드가 떠 있을 때는 비켜 준다.
+      */}
+      {airGrade && !sheetOpen && !bottomCard && (
+        <button
+          type="button"
+          onClick={() => toggleMode("weather")}
+          title="공기 자세히 보기"
+          className="glass press pop-in absolute left-3 top-[128px] z-20 flex items-center gap-2 rounded-[var(--radius-lg)] py-2 pl-2.5 pr-3.5 text-left sm:top-[76px]"
+          style={{ background: AIR_STYLE[airGrade].tint, color: "#23201c" }}
+        >
+          <span aria-hidden className="text-[1.9rem] leading-none">
+            {AIR_STYLE[airGrade].emoji}
+          </span>
+          <span className="leading-tight">
+            <span className="block text-[length:var(--text-2xs)] font-bold opacity-75">
+              의왕 공기
+            </span>
+            <span className="block text-[length:var(--text-base)] font-extrabold">{airGrade}</span>
+          </span>
+        </button>
+      )}
 
       {/*
         위치 안내. 권한 거부나 '의왕 밖' 같은 것은 눌러본 사람만 알면

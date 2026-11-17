@@ -1,5 +1,6 @@
 "use client";
 
+import { overallGrade } from "@/lib/air";
 import { useEffect, useState } from "react";
 /** 요약줄 칸. 누르면 하단 메뉴의 같은 항목이 열린다 */
 export type InfoTab = "news" | "weather" | "air" | "traffic" | "medical" | "waste" | "population";
@@ -125,8 +126,8 @@ export default function SummaryStrip({
   onOpenInfo: (tab: InfoTab) => void;
 }) {
   const now = weather?.data.now;
-  const station = air?.data.stations[0];
-  const grade = station?.pm25Grade ?? station?.pm10Grade ?? null;
+  // 첫 화면 배지·날씨 메뉴와 같은 판정 — 측정소 중 가장 나쁜 등급
+  const grade = overallGrade(air?.data.stations ?? []);
   const accidents =
     traffic?.data.incidents.filter((i) => i.kind === "accident").length ?? 0;
   // 연동 전에는 0 이 아니라 표시 자체를 생략한다
@@ -237,7 +238,7 @@ export default function SummaryStrip({
 
       {grade && (
         <Item
-          label="미세"
+          label="공기"
           active={openTab === "air"}
           onClick={() => onOpenInfo("air")}
           title="미세먼지 상세 보기"
