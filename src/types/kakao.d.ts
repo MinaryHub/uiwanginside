@@ -43,6 +43,7 @@ declare namespace kakao.maps {
     });
     setMap(map: Map | null): void;
     setPosition(latlng: LatLng): void;
+    getContent(): HTMLElement | string;
     /** 오버레이를 지웠다 만들지 않고 내용만 갈아 끼운다 */
     setContent(content: HTMLElement | string): void;
     setZIndex(zIndex: number): void;
