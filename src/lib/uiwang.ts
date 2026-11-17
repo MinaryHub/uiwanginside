@@ -59,6 +59,8 @@ export type CategoryKey =
   | "PKG"
   | "WC"
   | "SEC"
+  /** 등록 공장 — 경기도 의왕시_공장 현황 */
+  | "MFG"
   /** 분류가 없는 곳 — 호수·공원처럼 카카오 카테고리에 안 잡히는 것들 */
   | "ETC";
 
@@ -88,6 +90,7 @@ export const CATEGORIES: CategoryDef[] = [
   { code: "PKG", label: "주차장", emoji: "🅿️", color: "#334155" },
   { code: "WC", label: "화장실", emoji: "🚻", color: "#0369a1" },
   { code: "SEC", label: "방범CCTV", emoji: "🎥", color: "#7c3aed" },
+  { code: "MFG", label: "공장", emoji: "🏭", color: "#5f3dc4" },
   { code: "ETC", label: "장소", emoji: "📍", color: "#475569" },
 ];
 
