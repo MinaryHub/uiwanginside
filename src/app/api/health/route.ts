@@ -403,9 +403,9 @@ async function checkNeis(): Promise<Partial<HealthCheck>> {
 const SPECS: Omit<HealthCheck, "status" | "detail" | "configured">[] = [
   {
     id: "map-tiles",
-    label: "지도 그림 (OpenStreetMap · CARTO)",
+    label: "지도 그림 (OpenStreetMap)",
     envVars: ["NEXT_PUBLIC_MAP_TILES"],
-    howTo: "키가 필요 없습니다. 타일 서버가 막히면 NEXT_PUBLIC_MAP_TILES=osm 으로 바꿔 보세요",
+    howTo: "키가 필요 없습니다. 다른 타일을 쓰려면 NEXT_PUBLIC_MAP_TILES 에 타일 URL 을 넣으세요",
   },
   {
     id: "kakao-rest",

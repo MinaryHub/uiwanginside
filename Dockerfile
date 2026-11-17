@@ -31,7 +31,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # 지도는 키 없는 공개 타일(Leaflet)이라 빌드 때 넣을 지도 키가 없다.
-# 타일을 바꾸려면 NEXT_PUBLIC_MAP_TILES 를 빌드 인자로 넘긴다 (carto | osm | URL).
+# 타일을 바꾸려면 NEXT_PUBLIC_MAP_TILES 에 타일 URL 을 빌드 인자로 넘긴다.
 ARG NEXT_PUBLIC_MAP_TILES
 ENV NEXT_PUBLIC_MAP_TILES=${NEXT_PUBLIC_MAP_TILES}
 

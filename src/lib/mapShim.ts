@@ -1,5 +1,5 @@
 /**
- * 카카오맵 SDK 대신 Leaflet + 공개 지도 타일.
+ * 카카오맵 SDK 대신 Leaflet + OpenStreetMap 타일.
  *
  * 카카오맵은 JavaScript 키와 도메인 등록이 있어야 그려진다. 배포 주소가
  * 바뀌거나(파이·Vercel) 키가 빠지면 지도 자리가 통째로 비었다. 공개 타일은
@@ -16,27 +16,29 @@ import type * as Leaflet from "leaflet";
 
 type L = typeof Leaflet;
 
-/** 지도 그림. NEXT_PUBLIC_MAP_TILES 로 바꿀 수 있다 (carto | osm | 직접 URL) */
-export function tileSpec(choice = process.env.NEXT_PUBLIC_MAP_TILES ?? "carto") {
-  if (choice === "osm") {
+/**
+ * 지도 그림. NEXT_PUBLIC_MAP_TILES 로 바꿀 수 있다 (osm | 타일 URL).
+ *
+ * 기본은 OpenStreetMap 기본 지도. 키가 없고, 한국에서는 이름이 한글로 나온다.
+ * 이용 조건은 저작권 표시와 과하지 않은 사용이다 (OSMF 타일 이용 정책).
+ *
+ * CARTO 는 쓰지 않는다. 2026-11 기준 키 없이 부르면 "API KEY REQUIRED"
+ * 워터마크가 타일마다 찍혀 나왔다 — 실제 배포에서 겪었다.
+ */
+export function tileSpec(choice = process.env.NEXT_PUBLIC_MAP_TILES ?? "osm") {
+  if (choice.startsWith("http")) {
     return {
-      url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-      subdomains: "",
+      url: choice,
+      subdomains: "abc",
       maxNativeZoom: 19,
       attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     };
   }
-  if (choice.startsWith("http")) {
-    return { url: choice, subdomains: "abc", maxNativeZoom: 19, attribution: "© OpenStreetMap" };
-  }
-  // 기본 — CARTO Voyager. OSM 자료로 그린 차분한 지도. 이름은 OSM 의 현지
-  // 이름(한글)을 쓴다. CDN 이라 OSM 본 서버보다 사용 제한이 너그럽다.
   return {
-    url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
-    subdomains: "abcd",
-    maxNativeZoom: 20,
-    attribution:
-      '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>',
+    url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    subdomains: "",
+    maxNativeZoom: 19,
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   };
 }
 
@@ -116,7 +118,9 @@ export function installKakaoShim(L: L): void {
       });
       const t = tileSpec();
       L.tileLayer(t.url, {
-        subdomains: t.subdomains || undefined,
+        // 비어 있으면 아예 넘기지 않는다. undefined 를 넘기면 Leaflet 의 기본값을
+        // 덮어써, 타일 주소를 만들 때 subdomains.length 에서 죽는다 (OSM 이 그랬다)
+        ...(t.subdomains ? { subdomains: t.subdomains } : {}),
         maxNativeZoom: t.maxNativeZoom,
         maxZoom: MAX_ZOOM,
         attribution: t.attribution,

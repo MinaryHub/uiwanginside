@@ -35,7 +35,7 @@ npm run dev                  # http://localhost:3000
 
 > **키가 하나도 없어도 앱은 실행됩니다.** 키가 없는 영역은 샘플 데이터로 표시되고
 > 각 카드에 `SAMPLE` 뱃지와 안내 문구가 붙습니다. 키를 넣는 즉시 `LIVE` 로 바뀝니다.
-> 지도는 **키 없는 공개 지도**(Leaflet + OpenStreetMap·CARTO 타일)라 키 없이도 그려집니다.
+> 지도는 **키 없는 공개 지도**(Leaflet + OpenStreetMap 타일)라 키 없이도 그려집니다.
 
 ### 장소 데이터는 키 없이도 실제 데이터입니다
 
@@ -56,7 +56,7 @@ npm run dev                  # http://localhost:3000
 
 | 환경변수 | 발급처 | 용도 |
 | --- | --- | --- |
-| `NEXT_PUBLIC_MAP_TILES` | (선택) `carto`(기본) · `osm` · 타일 URL | 지도 그림 바꾸기 — 키 없음 |
+| `NEXT_PUBLIC_MAP_TILES` | (선택) 타일 URL — 기본은 OpenStreetMap | 지도 그림 바꾸기 |
 | `KAKAO_REST_KEY` | 같은 앱의 **REST API 키** | 카테고리별 장소 검색 (로컬 API) |
 | `KMA_SERVICE_KEY` | [data.go.kr](https://www.data.go.kr) → *기상청\_단기예보 조회서비스* → 일반 인증키 **(Decoding)** | 날씨 |
 | `NAVER_CLIENT_ID` / `NAVER_CLIENT_SECRET` | [developers.naver.com](https://developers.naver.com) → 애플리케이션 등록 → **검색 API** | 뉴스 |
@@ -70,7 +70,8 @@ npm run dev                  # http://localhost:3000
 
 **지도:** 카카오맵 SDK 대신 Leaflet 과 공개 타일을 씁니다. 카카오 JS 키와 도메인 등록이 필요 없어
 배포 주소가 바뀌어도(파이·Vercel) 지도가 그대로 뜹니다. 지도 아래 오른쪽의
-`© OpenStreetMap © CARTO` 표시는 이용 조건이라 가리지 않습니다.
+`© OpenStreetMap contributors` 표시는 이용 조건이라 가리지 않습니다.
+CARTO 타일은 이제 키가 없으면 "API KEY REQUIRED" 워터마크가 찍혀 쓰지 않습니다.
 
 ## 구조
 
