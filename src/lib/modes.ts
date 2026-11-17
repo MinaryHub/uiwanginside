@@ -29,6 +29,7 @@ export type ModeId =
 /** 시트에 띄울 내용 */
 export type CardId =
   | "emergency"
+  | "industry"
   | "weather"
   | "air"
   | "medical"
@@ -58,6 +59,11 @@ export interface ModeDef {
   /** 시트 상단 한 줄 설명 */
   hint: string;
   categories: CategoryKey[];
+  /**
+   * categories 를 목록으로도 보일지. 기본은 보인다.
+   * 우리 동네처럼 지도에 점만 찍고 내용은 통계로 보여줄 때 끈다.
+   */
+  list?: boolean;
   layers: MapLayers;
   cards: CardId[];
 }
@@ -139,10 +145,12 @@ export const MODES: ModeDef[] = [
     label: "우리 동네",
     icon: "🏘️",
     tint: "#d9c8ff",
-    hint: "동을 누르면 지도가 그 동으로 갑니다",
-    categories: [],
-    layers: NO_LAYERS,
-    cards: ["population"],
+    hint: "동별 인구 · 제조업 분포",
+    // 공장은 지도에 점으로만. 수백 곳을 목록으로 늘어놓으면 통계가 묻힌다
+    categories: ["MFG"],
+    list: false,
+    layers: { ...NO_LAYERS, places: true },
+    cards: ["population", "industry"],
   },
   {
     id: "news",

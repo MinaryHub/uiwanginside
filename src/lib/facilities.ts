@@ -5,6 +5,8 @@ import {
   UIWANG_SECURITY_CAMS,
 } from "./uiwang-facilities";
 import { haversine } from "./busStations";
+import { UIWANG_FACTORIES } from "./uiwang-factories";
+import { industryGroup } from "./factories";
 import type { Place } from "./types";
 
 /**
@@ -17,7 +19,7 @@ import type { Place } from "./types";
  * 데이터는 그것까지 주므로 이쪽을 쓴다 — 시민이 알고 싶은 것은 주차장이
  * 어디 있느냐보다 얼마고 몇 시까지냐다.
  */
-export type FacilityKind = "PARK" | "PKG" | "WC" | "SEC";
+export type FacilityKind = "PARK" | "PKG" | "WC" | "SEC" | "MFG";
 
 function fmtArea(m2: number | null): string {
   if (!m2) return "";
@@ -148,6 +150,36 @@ export function facilityPlaces(
         lat: c.lat,
         lng: c.lng,
         distance: haversine(center.lat, center.lng, c.lat, c.lng),
+        url: "",
+      });
+    }
+  }
+
+  /*
+   * 등록 공장 — 우리 동네의 제조업 분포를 지도에 찍는다.
+   * 이름 옆에는 업종 묶음과 종업원 수만 둔다. 원본 업종명은 길다.
+   */
+  if (kinds.includes("MFG")) {
+    for (const [i, f] of UIWANG_FACTORIES.entries()) {
+      if (!inRect(f.lat, f.lng, rect)) continue;
+      const g = industryGroup(f.industry);
+      out.push({
+        id: `mfg:${i}`,
+        name: f.name,
+        category: "MFG",
+        categoryName: [
+          `${g.emoji} ${g.label}`,
+          f.employees != null ? `종업원 ${f.employees}명` : "",
+          f.product,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        phone: "",
+        address: f.address,
+        roadAddress: f.address,
+        lat: f.lat,
+        lng: f.lng,
+        distance: haversine(center.lat, center.lng, f.lat, f.lng),
         url: "",
       });
     }

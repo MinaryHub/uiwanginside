@@ -11,7 +11,8 @@
     "roads:fetch": "node scripts/fetch-roads.mjs",
     "cctv:fetch": "node scripts/fetch-cctv.mjs",
     "hours:fetch": "node scripts/fetch-hours.mjs",
-    "facilities:fetch": "node scripts/fetch-facilities.mjs"
+    "facilities:fetch": "node scripts/fetch-facilities.mjs",
+    "factories:fetch": "node scripts/fetch-factories.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

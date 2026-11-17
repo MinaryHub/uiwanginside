@@ -62,6 +62,7 @@ import CctvPanel from "@/components/panels/CctvPanel";
 import NewsPanel from "@/components/panels/NewsPanel";
 import WastePanel from "@/components/panels/WastePanel";
 import PopulationPanel from "@/components/panels/PopulationPanel";
+import IndustryPanel from "@/components/panels/IndustryPanel";
 
 const KakaoMap = dynamic(() => import("@/components/KakaoMap"), { ssr: false });
 
@@ -635,6 +636,8 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
         );
       case "waste":
         return <WastePanel key={id} />;
+      case "industry":
+        return <IndustryPanel key={id} onSelectDong={toggleDong} activeDong={activeDong} />;
       case "population":
         return (
           <PopulationPanel key={id} onSelectDong={toggleDong} activeDong={activeDong} />
@@ -985,7 +988,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           <div className="thin-scroll min-h-0 flex-1 overflow-y-auto">
             {/* 응급실은 장소 목록보다 먼저 — 급한 사람이 스크롤할 여유는 없다 */}
             {def.cards.filter((c) => c === "emergency").map(card)}
-            {def.categories.length > 0 && (
+            {def.categories.length > 0 && def.list !== false && (
               <PlacesPanel
                 res={places.data}
                 isLoading={places.isLoading}

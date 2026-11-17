@@ -229,6 +229,22 @@ export const DATASET_GROUPS: DatasetGroup[] = [
     ],
   },
   {
+    title: "산업",
+    emoji: "🏭",
+    items: [
+      {
+        id: "factories",
+        name: "경기도 의왕시_공장 현황",
+        provider: "경기도 의왕시",
+        link: dataGoKr("경기도 의왕시_공장 현황"),
+        refresh: "연 1회 (스냅샷)",
+        shows: "등록 공장의 업종·종업원 수 — 동별·업종별 제조업 분포",
+        mode: "dong",
+        kind: "snapshot",
+      },
+    ],
+  },
+  {
     title: "인구 · 행정",
     emoji: "📊",
     items: [
