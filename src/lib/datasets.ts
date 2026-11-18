@@ -266,7 +266,8 @@ export const DATASET_GROUPS: DatasetGroup[] = [
  * 섞어 적으면 어느 것이 공식 자료인지 흐려지므로 따로 둔다.
  */
 export const OTHER_SOURCES: { name: string; use: string }[] = [
-  { name: "OpenStreetMap 지도 (ODbL)", use: "지도 그림 — 키 없는 공개 지도" },
+  { name: "카카오맵", use: "지도 화면" },
+  { name: "OpenStreetMap 지도 (ODbL)", use: "카카오맵을 못 불러올 때 대신 그리는 지도" },
   { name: "카카오 로컬", use: "음식점·마트 등 장소 검색 (키가 없으면 OpenStreetMap 으로 대신)" },
   { name: "OpenStreetMap (ODbL)", use: "카카오 키가 없을 때의 장소, 도로 형상, 일부 영업시간" },
   { name: "네이버 뉴스 검색", use: "의왕 관련 최신 뉴스 제목" },

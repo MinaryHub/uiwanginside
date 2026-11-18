@@ -41,23 +41,66 @@ function busEase(t: number): number {
   return 0.5 * t + 0.5 * (0.5 - 0.5 * Math.cos(Math.PI * t));
 }
 
-let sdkPromise: Promise<void> | null = null;
+/** 실제로 그리는 엔진. 카카오가 안 되면 OpenStreetMap 으로 대신 그린다 */
+type Engine = { engine: "kakao" } | { engine: "osm"; reason?: string };
+
+let sdkPromise: Promise<Engine> | null = null;
+
+/** 카카오맵이 이 안에 준비되지 않으면 포기하고 대체 지도로 간다 */
+const KAKAO_TIMEOUT_MS = 10_000;
+
+function loadKakao(appKey: string): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error("카카오맵 SDK 가 응답하지 않습니다")),
+      KAKAO_TIMEOUT_MS,
+    );
+    const script = document.createElement("script");
+    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${appKey}&autoload=false`;
+    script.async = true;
+    script.onload = () =>
+      window.kakao?.maps?.load
+        ? window.kakao.maps.load(() => {
+            clearTimeout(timer);
+            resolve();
+          })
+        : reject(new Error("카카오맵 SDK 응답이 올바르지 않습니다"));
+    // script 태그의 onerror 로는 HTTP 상태/본문을 읽을 수 없다.
+    // 실제 원인은 대부분 도메인 미등록 또는 카카오맵 제품 비활성 둘 중 하나다.
+    script.onerror = () => {
+      clearTimeout(timer);
+      reject(new Error("카카오맵 SDK 를 불러오지 못했습니다 (도메인 미등록 또는 제품 비활성)"));
+    };
+    document.head.appendChild(script);
+  });
+}
 
 /**
  * 지도 엔진을 불러온다.
  *
- * 예전에는 카카오맵 SDK 였다. 키와 도메인 등록이 있어야 해서 배포 주소가
- * 바뀌거나 키가 빠지면 지도가 통째로 비었다. 이제 Leaflet 과 공개 지도
- * 타일을 쓰고, 카카오 API 모양을 흉내 내는 얇은 층(mapShim)을 깐다.
- * 아래 코드는 그대로 window.kakao.maps 를 부른다.
+ * 카카오맵이 기본이다. 그런데 카카오맵은 JavaScript 키와 도메인 등록이 있어야
+ * 그려져서, 배포 주소가 바뀌거나 키가 빠지면 지도 자리가 통째로 비었다
+ * ("지도를 표시할 수 없습니다"). 그럴 때는 Leaflet + OpenStreetMap 으로 대신
+ * 그린다. mapShim 이 카카오 API 모양을 흉내 내므로 아래 코드는 어느 쪽이든
+ * 그대로 window.kakao.maps 를 부른다.
  */
-function loadSdk(): Promise<void> {
-  if (typeof window === "undefined") return Promise.resolve();
-  if (window.kakao?.maps?.Map) return Promise.resolve();
+function loadSdk(appKey?: string): Promise<Engine> {
   if (sdkPromise) return sdkPromise;
-  sdkPromise = Promise.all([import("leaflet"), import("@/lib/mapShim")]).then(
-    ([L, shim]) => shim.installKakaoShim(L.default ?? L),
-  );
+  sdkPromise = (async (): Promise<Engine> => {
+    let reason: string | undefined;
+    if (appKey) {
+      try {
+        await loadKakao(appKey);
+        return { engine: "kakao" };
+      } catch (e) {
+        reason = e instanceof Error ? e.message : String(e);
+        console.warn("[map] 카카오맵 대신 OpenStreetMap 으로 그립니다:", reason);
+      }
+    }
+    const [L, shim] = await Promise.all([import("leaflet"), import("@/lib/mapShim")]);
+    shim.installKakaoShim(L.default ?? L);
+    return { engine: "osm", reason };
+  })();
   return sdkPromise;
 }
 
@@ -253,6 +296,8 @@ function aimArrow(el: HTMLElement, heading: number | null, animate: boolean) {
 }
 
 export interface KakaoMapProps {
+  /** 카카오맵 JavaScript 키. 없거나 안 되면 OpenStreetMap 으로 대신 그린다 */
+  appKey?: string;
   center: { lat: number; lng: number };
   level: number;
   places: Place[];
@@ -304,6 +349,7 @@ export interface KakaoMapProps {
 }
 
 export default function KakaoMap({
+  appKey,
   center,
   level,
   places,
@@ -422,6 +468,8 @@ export default function KakaoMap({
   const [sdkError, setSdkError] = useState<string | null>(null);
 
   const error = sdkError;
+  /** 키가 있는데도 카카오맵을 못 불러와 대체 지도로 그리는 중이면 그 이유 */
+  const [fallback, setFallback] = useState<string | null>(null);
 
   // 최신 콜백을 ref 로 유지 — 지도 재생성 없이 dragend 핸들러가 최신 함수를 참조
   useEffect(() => {
@@ -435,9 +483,10 @@ export default function KakaoMap({
   // SDK 로드 + 지도 생성
   useEffect(() => {
     let cancelled = false;
-    loadSdk()
-      .then(() => {
+    loadSdk(appKey)
+      .then((eng) => {
         if (cancelled || !containerRef.current || mapRef.current) return;
+        if (eng.engine === "osm" && appKey) setFallback(eng.reason ?? "카카오맵을 불러오지 못했습니다");
         const map = new window.kakao.maps.Map(containerRef.current, {
           center: new window.kakao.maps.LatLng(center.lat, center.lng),
           level,
@@ -470,7 +519,7 @@ export default function KakaoMap({
     };
     // 최초 1회만 — center/level 변경은 아래 effect 가 처리
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [appKey]);
 
   // 시트가 열리고 닫히면 지도 컨테이너 폭이 바뀐다.
   // relayout 을 부르지 않으면 타일이 어긋난 채 남아 "일부 구역에만 보이는" 것처럼 된다.
@@ -1082,6 +1131,18 @@ export default function KakaoMap({
             </p>
           </div>
         </div>
+      )}
+      {/*
+        카카오맵 키가 있는데 대체 지도로 그리는 중. 눌러 볼 일은 없지만, 운영자가
+        "왜 카카오맵이 아니지" 를 화면에서 바로 알 수 있게 작게 남긴다.
+      */}
+      {fallback && ready && (
+        <p
+          title={fallback}
+          className="pointer-events-none absolute bottom-[calc(var(--dock-h)+26px)] right-2 z-[1001] rounded-full bg-[var(--surface)]/90 px-2 py-0.5 text-[10px] font-semibold text-[var(--text-muted)]"
+        >
+          카카오맵 대신 OpenStreetMap
+        </p>
       )}
       {!ready && !error && (
         <div className="absolute inset-0 grid place-items-center bg-[var(--surface-2)]">

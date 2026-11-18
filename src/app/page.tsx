@@ -1,6 +1,9 @@
 import { Suspense } from "react";
 import Dashboard from "@/components/Dashboard";
 
+// 카카오 JS 키를 요청 때 읽는다 — 빌드 뒤 환경변수만 바꿔도 반영되게
+export const dynamic = "force-dynamic";
+
 function Loading() {
   return (
     // --background·--muted 라는 토큰은 없다. 이름이 틀려 배경이 칠해지지
@@ -15,7 +18,7 @@ export default function Home() {
   return (
     // Dashboard 가 useSearchParams 로 URL 상태를 복원하므로 Suspense 가 필요하다
     <Suspense fallback={<Loading />}>
-      <Dashboard />
+      <Dashboard appKey={process.env.NEXT_PUBLIC_KAKAO_JS_KEY} />
     </Suspense>
   );
 }
