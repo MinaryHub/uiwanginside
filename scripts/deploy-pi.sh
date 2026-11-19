@@ -22,6 +22,14 @@ IMAGE="${UIWANG_IMAGE:-ghcr.io/minaryhub/uiwanginside}:latest"
 PREV="${UIWANG_IMAGE:-ghcr.io/minaryhub/uiwanginside}:prev"
 cd "$(dirname "$0")/.."
 
+# 카카오맵 키 — 없어도 된다 (지도가 OpenStreetMap 으로 대신 그려진다).
+# NEXT_PUBLIC_* 은 빌드 시점에 번들로 박히므로 여기서 넘긴다.
+KEY="${NEXT_PUBLIC_KAKAO_JS_KEY:-}"
+if [[ -z "$KEY" && -f .env.local ]]; then
+  KEY="$(grep -m1 '^NEXT_PUBLIC_KAKAO_JS_KEY=' .env.local | cut -d= -f2- | tr -d '"'"'"'')"
+fi
+[[ -z "$KEY" ]] && echo "ⓘ NEXT_PUBLIC_KAKAO_JS_KEY 가 없습니다 — 지도는 OpenStreetMap 으로 그려집니다."
+
 # 어느 커밋으로 만든 이미지인지 새겨 둔다. 파이에서 무엇이 도는지 알아야
 # 올렸는지 안 올렸는지 헷갈리지 않는다.
 GIT_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
@@ -32,6 +40,7 @@ if [[ -z "${SKIP_BUILD:-}" ]]; then
   echo "▶ linux/arm64 이미지 빌드 ($GIT_SHA)"
   docker buildx build \
     --platform linux/arm64 \
+    --build-arg "NEXT_PUBLIC_KAKAO_JS_KEY=$KEY" \
     --build-arg "GIT_SHA=$GIT_SHA" \
     --build-arg "BUILT_AT=$BUILT_AT" \
     -t "$IMAGE" --load .

@@ -30,8 +30,11 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# 지도는 키 없는 공개 타일(Leaflet)이라 빌드 때 넣을 지도 키가 없다.
-# 타일을 바꾸려면 NEXT_PUBLIC_MAP_TILES 에 타일 URL 을 빌드 인자로 넘긴다.
+# NEXT_PUBLIC_* 은 클라이언트 번들에 박히므로 빌드 시점에 있어야 한다.
+# 카카오맵 키가 없으면 지도는 OpenStreetMap 으로 대신 그려진다 (비지 않는다).
+ARG NEXT_PUBLIC_KAKAO_JS_KEY
+ENV NEXT_PUBLIC_KAKAO_JS_KEY=${NEXT_PUBLIC_KAKAO_JS_KEY}
+# 대체 지도 타일을 바꾸려면 NEXT_PUBLIC_MAP_TILES 에 타일 URL 을 넘긴다.
 ARG NEXT_PUBLIC_MAP_TILES
 ENV NEXT_PUBLIC_MAP_TILES=${NEXT_PUBLIC_MAP_TILES}
 

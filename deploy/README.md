@@ -30,10 +30,13 @@ package-lock.json 이 그대로면 node_modules 층을 다시 만들지 않는�
 
 ## 준비 (한 번만)
 
-### 1. 지도 — 할 일 없음
+### 1. 카카오 개발자 콘솔 — 도메인 등록
 
-지도는 Leaflet 과 OpenStreetMap 타일이라 키도 도메인 등록도 필요 없다.
-예전 카카오맵 시절의 "플랫폼 → Web 에 도메인 등록" 단계는 더 하지 않는다.
+지도는 카카오맵이 기본이다. 카카오 JS 키는 **도메인 제한**이 걸려, 등록하지 않은
+도메인에서는 카카오맵이 그려지지 않는다. 그때는 OpenStreetMap 지도로 자동 대체되므로
+화면이 비지는 않지만, 카카오맵을 쓰려면 등록해야 한다.
+
+- **플랫폼 → Web → 사이트 도메인**: `https://uiwanginside.kimserv.com` 추가
 
 ### 2. 공유기 포트 포워딩
 
@@ -206,7 +209,7 @@ ssh <파이> 'cd ~/uiwanginside && docker compose logs -f app'
 
 브라우저에서 순서대로 본다.
 
-1. `https://uiwanginside.kimserv.com` — 자물쇠가 잠기고 **지도가 그려지는지** (안 그려지면 `/status` 의 "지도 그림" 항목)
+1. `https://uiwanginside.kimserv.com` — 자물쇠가 잠기고 **카카오맵이 그려지는지** (오른쪽 아래에 "카카오맵 대신 OpenStreetMap" 이 보이면 1번 도메인 등록, `/status` 의 카카오맵 항목)
 2. 상단 요약줄에 날씨·미세먼지·사고·진료 값이 들어오는지 (안 들어오면 `.env` 의 키)
 3. `https://uiwanginside.kimserv.com/opendata` — 공공데이터 안내 화면이 뜨는지
 4. `https://uiwanginside.kimserv.com/status` — 외부 API 6개의 키 상태를 한 화면에서 진단
