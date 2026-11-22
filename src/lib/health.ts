@@ -10,6 +10,9 @@ import { fetchAlerts } from "./alerts";
 import { tileSpec } from "./mapShim";
 import { resolveOdcloudEndpoint } from "./factoryApi";
 import { UIWANG_FACTORIES } from "./uiwang-factories";
+import { fetchEvChargers } from "./evChargers";
+import { fetchUiwangShelters } from "./shelters";
+import { fetchUiwangLibraries } from "./libraries";
 
 /**
  * 각 외부 API 를 실제로 1회씩 호출해 키 상태를 진단한다.
@@ -470,6 +473,61 @@ async function checkFactories(): Promise<Partial<HealthCheck>> {
   };
 }
 
+async function checkEvChargers(): Promise<Partial<HealthCheck>> {
+  const key = process.env.EV_CHARGER_SERVICE_KEY || process.env.KMA_SERVICE_KEY;
+  if (!key) return { status: "missing", detail: "EV_CHARGER_SERVICE_KEY / KMA_SERVICE_KEY 없음" };
+  const t0 = Date.now();
+  try {
+    const data = await fetchEvChargers(key);
+    const avail = data.stations.reduce((n, s) => n + s.available, 0);
+    return {
+      status: "live",
+      detail: `의왕 전기차 충전소 ${data.stations.length}곳 · 충전 가능 ${avail}기`,
+      latencyMs: Date.now() - t0,
+    };
+  } catch (e) {
+    return { status: "error", detail: msg(e), latencyMs: Date.now() - t0 };
+  }
+}
+
+async function checkShelters(): Promise<Partial<HealthCheck>> {
+  const safetyKey = process.env.SAFETY_DATA_KEY;
+  const moisKey = process.env.SHELTER_SERVICE_KEY || process.env.KMA_SERVICE_KEY;
+  if (!safetyKey && !moisKey) {
+    return { status: "missing", detail: "SAFETY_DATA_KEY / SHELTER_SERVICE_KEY 없음" };
+  }
+  const t0 = Date.now();
+  try {
+    const data = await fetchUiwangShelters({ safetyKey, moisKey });
+    return {
+      status: "live",
+      detail: `의왕 쉼터 ${data.shelters.length}곳 (${data.source})`,
+      latencyMs: Date.now() - t0,
+    };
+  } catch (e) {
+    return { status: "error", detail: msg(e), latencyMs: Date.now() - t0 };
+  }
+}
+
+async function checkLibraries(): Promise<Partial<HealthCheck>> {
+  const ggKey = process.env.GG_DATA_KEY;
+  const odcloudKey = process.env.LIBRARY_SERVICE_KEY || process.env.KMA_SERVICE_KEY;
+  if (!ggKey && !odcloudKey) {
+    return { status: "missing", detail: "GG_DATA_KEY / LIBRARY_SERVICE_KEY 없음" };
+  }
+  const t0 = Date.now();
+  try {
+    const data = await fetchUiwangLibraries({ ggKey, odcloudKey });
+    return {
+      status: "live",
+      detail: `의왕 공공도서관 ${data.libraries.length}곳 (${data.source})`,
+      latencyMs: Date.now() - t0,
+    };
+  } catch (e) {
+    return { status: "error", detail: msg(e), latencyMs: Date.now() - t0 };
+  }
+}
+
 interface Spec extends Omit<HealthCheck, "status" | "detail" | "configured"> {
   isConfigured: () => boolean;
 }
@@ -537,6 +595,29 @@ const SPECS: Spec[] = [
     howTo: "data.go.kr → '경기도 의왕시_공장 현황' 오픈API 활용신청 (기존 data.go.kr 키 공유 가능)",
   },
   {
+    id: "ev-chargers",
+    label: "전기차 충전소 (한국환경공단)",
+    envVars: ["EV_CHARGER_SERVICE_KEY", "KMA_SERVICE_KEY"],
+    isConfigured: () => !!(process.env.EV_CHARGER_SERVICE_KEY ?? process.env.KMA_SERVICE_KEY),
+    howTo: "data.go.kr → '한국환경공단_전기자동차 충전소 정보' 활용신청 (기존 data.go.kr 키 공유 가능)",
+  },
+  {
+    id: "shelters",
+    label: "무더위 · 한파 쉼터",
+    envVars: ["SAFETY_DATA_KEY", "SHELTER_SERVICE_KEY", "KMA_SERVICE_KEY"],
+    isConfigured: () =>
+      !!(process.env.SAFETY_DATA_KEY ?? process.env.SHELTER_SERVICE_KEY ?? process.env.KMA_SERVICE_KEY),
+    howTo: "safetydata.go.kr(DSSP-IF-10941) 또는 data.go.kr → '행정안전부_무더위쉼터' 활용신청",
+  },
+  {
+    id: "libraries",
+    label: "의왕시 공공도서관",
+    envVars: ["GG_DATA_KEY", "LIBRARY_SERVICE_KEY", "KMA_SERVICE_KEY"],
+    isConfigured: () =>
+      !!(process.env.GG_DATA_KEY ?? process.env.LIBRARY_SERVICE_KEY ?? process.env.KMA_SERVICE_KEY),
+    howTo: "data.gg.go.kr(PublicLbrry) 또는 data.go.kr → '경기도 의왕시_관내 도서관' 활용신청",
+  },
+  {
     id: "kma",
     label: "기상청 (날씨·특보)",
     envVars: ["KMA_SERVICE_KEY"],
@@ -545,7 +626,7 @@ const SPECS: Spec[] = [
   },
   {
     id: "naver",
-    label: "네이버 검색 (뉴스)",
+    label: "네이버 검색 (뉴스·시정 소식)",
     envVars: ["NAVER_CLIENT_ID", "NAVER_CLIENT_SECRET"],
     isConfigured: () => !!(process.env.NAVER_CLIENT_ID && process.env.NAVER_CLIENT_SECRET),
     howTo:
@@ -622,6 +703,9 @@ export async function runHealthChecks(origin: string, bypassCache = false): Prom
       air,
       neis,
       factories,
+      evChargers,
+      shelters,
+      libraries,
       kma,
       naver,
       its,
@@ -637,6 +721,9 @@ export async function runHealthChecks(origin: string, bypassCache = false): Prom
       checkAir(),
       checkNeis(),
       checkFactories(),
+      checkEvChargers(),
+      checkShelters(),
+      checkLibraries(),
       checkKma(),
       checkNaver(),
       checkIts(),
@@ -654,6 +741,9 @@ export async function runHealthChecks(origin: string, bypassCache = false): Prom
       air,
       neis,
       factories,
+      "ev-chargers": evChargers,
+      shelters,
+      libraries,
       kma,
       naver,
       its,

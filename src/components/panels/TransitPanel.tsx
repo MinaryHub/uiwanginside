@@ -20,24 +20,28 @@ function eta(sec: number | null) {
 function ArrivalRow({
   a,
   tracked,
+  alertOn,
   onTrack,
+  onToggleAlert,
 }: {
   a: BusArrival;
   tracked: boolean;
+  alertOn: boolean;
   onTrack: () => void;
+  onToggleAlert?: () => void;
 }) {
   const first = eta(a.predictSec);
   const second = eta(a.predictSec2);
   const crowd = a.crowded ? BUS_CROWD[a.crowded] : null;
 
   return (
-    <li>
+    <li className="flex items-center gap-1">
       <button
         type="button"
         onClick={onTrack}
         aria-pressed={tracked}
-        title="지도에서 이 노선 버스 위치 보기"
-        className="min-h-[44px] w-full rounded-[var(--radius)] px-1.5 py-1.5 text-left transition hover:bg-[var(--surface-3)]"
+        title="지도에서 이 노선 버스 위치·경로 보기"
+        className="min-h-[44px] min-w-0 flex-1 rounded-[var(--radius)] px-1.5 py-1.5 text-left transition hover:bg-[var(--surface-3)]"
         style={tracked ? { background: "var(--brand-soft)" } : undefined}
       >
         <div className="flex items-center gap-1.5">
@@ -62,7 +66,7 @@ function ArrivalRow({
 
         {tracked && (
           <div className="mt-0.5 pl-[54px] text-[length:var(--text-2xs)] font-bold text-[var(--brand)]">
-            지도에서 위치 표시 중
+            지도에 경로·위치 표시 중
           </div>
         )}
 
@@ -92,6 +96,23 @@ function ArrivalRow({
           </div>
         )}
       </button>
+      {onToggleAlert && a.predictSec != null && (
+        <button
+          type="button"
+          aria-pressed={alertOn}
+          aria-label={`${a.routeName}번 도착 알림 ${alertOn ? "해제" : "설정"}`}
+          title={alertOn ? "도착 알림 해제" : "3분 전 도착 알림 설정"}
+          onClick={onToggleAlert}
+          className={`grid h-9 w-9 shrink-0 place-items-center rounded-[var(--radius)] border-2 text-[length:var(--text-xs)] transition ${
+            alertOn
+              ? "border-[var(--ink)] shadow-[var(--shadow-sm)]"
+              : "border-transparent text-[var(--text-muted)] hover:bg-[var(--surface-3)]"
+          }`}
+          style={alertOn ? { background: "var(--brand-2)", color: "var(--ink)" } : undefined}
+        >
+          <span aria-hidden>{alertOn ? "🔔" : "🔕"}</span>
+        </button>
+      )}
     </li>
   );
 }
@@ -103,6 +124,8 @@ export default function TransitPanel({
   onSelectStop,
   trackedRouteId,
   onTrackRoute,
+  busAlert,
+  onToggleAlert,
 }: {
   res?: ApiEnvelope<TransitPayload>;
   isLoading: boolean;
@@ -111,6 +134,8 @@ export default function TransitPanel({
   /** 지도에 위치를 표시 중인 노선 */
   trackedRouteId: string | null;
   onTrackRoute: (routeId: string, routeName: string) => void;
+  busAlert?: { stationId: string; routeId: string } | null;
+  onToggleAlert?: (stop: BusStop, routeId: string, routeName: string, predictSec: number) => void;
 }) {
   const d = res?.data;
   const stops = d?.stops ?? [];
@@ -173,7 +198,15 @@ export default function TransitPanel({
                         key={`${s.stationId}-${a.routeId}-${a.destName}`}
                         a={a}
                         tracked={trackedRouteId === a.routeId}
+                        alertOn={
+                          busAlert?.stationId === s.stationId && busAlert?.routeId === a.routeId
+                        }
                         onTrack={() => onTrackRoute(a.routeId, a.routeName)}
+                        onToggleAlert={
+                          onToggleAlert && a.predictSec != null
+                            ? () => onToggleAlert(s, a.routeId, a.routeName, a.predictSec!)
+                            : undefined
+                        }
                       />
                     ))}
                   </ul>

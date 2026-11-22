@@ -30,14 +30,19 @@ export type ModeId =
 export type CardId =
   | "emergency"
   | "industry"
+  | "compare"
   | "weather"
   | "air"
+  | "shelter"
   | "medical"
   | "traffic"
   | "cctv"
   | "transit"
+  | "ev"
+  | "libraries"
   | "waste"
   | "population"
+  | "notices"
   | "news";
 
 export interface MapLayers {
@@ -82,11 +87,11 @@ export const MODES: ModeDef[] = [
     label: "날씨·공기",
     icon: "☀️",
     tint: "#ffe27a",
-    hint: "지금 날씨 · 공기가 좋은지 나쁜지",
+    hint: "지금 날씨 · 공기 · 무더위·한파 쉼터",
     categories: [],
     layers: NO_LAYERS,
     // 첫 화면 공기 배지를 누르고 들어온 사람이 바로 보게 공기가 먼저
-    cards: ["air", "weather"],
+    cards: ["air", "weather", "shelter"],
   },
   {
     id: "medical",
@@ -104,11 +109,11 @@ export const MODES: ModeDef[] = [
     label: "버스·교통",
     icon: "🚌",
     tint: "#a8d8ff",
-    hint: "버스 도착 · 사고·정체 · CCTV · 주차장",
+    hint: "버스 도착 · 사고·정체 · CCTV · 전기차 충전",
     // 주차장은 카카오(PK6) 대신 표준데이터(PKG)를 쓴다 — 요금과 운영시간이 있다
     categories: ["SW8", "PKG"],
     layers: { places: true, bus: true, incidents: true, traffic: true, cctv: true },
-    cards: ["transit", "traffic", "cctv"],
+    cards: ["transit", "traffic", "ev", "cctv"],
   },
   {
     id: "food",
@@ -125,10 +130,10 @@ export const MODES: ModeDef[] = [
     label: "생활",
     icon: "🛒",
     tint: "#b8efc0",
-    hint: "마트 · 편의점 · 은행 · 학교 · 공원 · 화장실",
+    hint: "마트 · 편의점 · 학교 · 도서관 · 공원 · 화장실",
     categories: ["MT1", "CS2", "BK9", "OL7", "SC4", "PO3", "CT1", "PARK", "WC", "SEC"],
     layers: { ...NO_LAYERS, places: true },
-    cards: [],
+    cards: ["libraries"],
   },
   {
     id: "waste",
@@ -145,22 +150,22 @@ export const MODES: ModeDef[] = [
     label: "우리 동네",
     icon: "🏘️",
     tint: "#d9c8ff",
-    hint: "동별 인구 · 제조업 분포",
+    hint: "동별 인구 · 생활 인프라 비교 · 제조업 분포",
     // 공장은 지도에 점으로만. 수백 곳을 목록으로 늘어놓으면 통계가 묻힌다
     categories: ["MFG"],
     list: false,
     layers: { ...NO_LAYERS, places: true },
-    cards: ["population", "industry"],
+    cards: ["population", "compare", "industry"],
   },
   {
     id: "news",
     label: "소식",
     icon: "📰",
     tint: "#ffd1ec",
-    hint: "의왕 최신 뉴스",
+    hint: "의왕시 공지·행사 · 지역 최신 뉴스",
     categories: [],
     layers: NO_LAYERS,
-    cards: ["news"],
+    cards: ["notices", "news"],
   },
 ];
 

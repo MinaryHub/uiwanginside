@@ -324,6 +324,103 @@ export interface FactoriesPayload {
   updatedAt: string;
 }
 
+/** 전기차 충전소 1개소 (충전기들을 statId 기준으로 집계) */
+export interface EvStation {
+  id: string;
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
+  dong: string;
+  operator: string;
+  useTime: string;
+  parkingFree: boolean | null;
+  /** 외부인 이용 제한 여부 */
+  limitYn: boolean;
+  limitDetail: string;
+  /** 현재 충전 가능(대기) 기기 수 */
+  available: number;
+  /** 현재 충전 중인 기기 수 */
+  charging: number;
+  /** 전체 기기 수 */
+  total: number;
+  fastCount: number;
+  slowCount: number;
+  maxOutputKw: number | null;
+}
+
+export interface EvChargersPayload {
+  stations: EvStation[];
+  source: "keco";
+  updatedAt: string;
+}
+
+export type ShelterKind = "heat" | "cold" | "quake";
+
+export interface ShelterItem {
+  id: string;
+  kind: ShelterKind;
+  name: string;
+  facilityType: string;
+  address: string;
+  lat: number;
+  lng: number;
+  dong: string;
+  capacity: number | null;
+  useHours: string;
+  coolingInfo: string;
+}
+
+export interface SheltersPayload {
+  shelters: ShelterItem[];
+  source: "safetydata" | "mois";
+  updatedAt: string;
+}
+
+export interface LibraryItem {
+  id: string;
+  name: string;
+  kind: string;
+  address: string;
+  phone: string;
+  lat: number | null;
+  lng: number | null;
+  dong: string;
+  seats: number | null;
+  books: number | null;
+  weekdayHours: string;
+  weekendHours: string;
+  closedDays: string;
+  homepage: string;
+}
+
+export interface LibrariesPayload {
+  libraries: LibraryItem[];
+  source: "gg" | "odcloud";
+  updatedAt: string;
+}
+
+export type CityNoticeKind = "event" | "notice" | "recruit";
+
+export interface CityNoticeItem {
+  id: string;
+  kind: CityNoticeKind;
+  title: string;
+  summary: string;
+  period: string;
+  place: string;
+  fee: string;
+  source: string;
+  publishedAt: string;
+  url: string;
+}
+
+export interface NoticesPayload {
+  items: CityNoticeItem[];
+  source: "gg+naver" | "gg" | "naver";
+  updatedAt: string;
+}
+
 export interface ApiEnvelope<T> {
   /** false = 데이터를 가져오지 못했다. 이때 data 는 비어 있다. */
   ok: boolean;
