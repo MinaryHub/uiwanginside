@@ -15,6 +15,9 @@ import type {
   BusPositionsPayload,
   MedicalPlace,
   EmergencyRoom,
+  EvStation,
+  ShelterItem,
+  LibraryItem,
 } from "@/lib/types";
 
 /**
@@ -357,8 +360,16 @@ export interface KakaoMapProps {
   busPositions: BusPositionsPayload[];
   /** 노선별 실제 주행 경로 — 버스를 그 위로 움직인다 */
   busPaths: Record<string, LatLng[]>;
+  /** 좇고 있는 단일 버스 노선의 주행 경로 — 지도 위에 굵은 선으로 표시 */
+  trackedRoutePath?: LatLng[] | null;
   /** 랜드마크 (둘러보기 모드) */
   landmarks: LandmarkItem[];
+  /** 전기차 충전소 (교통 모드) */
+  evStations?: EvStation[];
+  /** 무더위·한파·지진 쉼터 (날씨 모드) */
+  shelters?: ShelterItem[];
+  /** 공공도서관 (생활 모드) */
+  libraries?: LibraryItem[];
   /** 도로 소통상태 — 도로 형상에 ITS 속도를 입힌 조각들 */
   trafficSegments: TrafficSegment[];
   /** 내 위치 — 알아냈을 때만 */
@@ -388,6 +399,9 @@ export interface KakaoMapProps {
   onSelectMedical?: (m: MedicalPlace) => void;
   onSelectEmergency?: (r: EmergencyRoom) => void;
   onSelectLandmark?: (l: LandmarkItem) => void;
+  onSelectEv?: (s: EvStation) => void;
+  onSelectShelter?: (s: ShelterItem) => void;
+  onSelectLibrary?: (l: LibraryItem) => void;
   onSelectBus?: (routeId: string, routeName: string) => void;
   onSelectStop: (s: BusStop) => void;
   onSelectIncident: (i: Incident) => void;
@@ -395,6 +409,10 @@ export interface KakaoMapProps {
   /** 지도가 멈출 때마다 화면 범위를 알린다 (minLng,minLat,maxLng,maxLat) */
   onBoundsChanged: (rect: string, center: { lat: number; lng: number }, level: number) => void;
 }
+
+const EMPTY_EV: EvStation[] = [];
+const EMPTY_SHELTERS: ShelterItem[] = [];
+const EMPTY_LIBRARIES: LibraryItem[] = [];
 
 export default function KakaoMap({
   appKey,
@@ -407,7 +425,11 @@ export default function KakaoMap({
   emergencyRooms,
   busPositions,
   busPaths,
+  trackedRoutePath,
   landmarks,
+  evStations = EMPTY_EV,
+  shelters = EMPTY_SHELTERS,
+  libraries = EMPTY_LIBRARIES,
   trafficSegments,
   me,
   cctvs,
@@ -424,6 +446,9 @@ export default function KakaoMap({
   onSelectMedical,
   onSelectEmergency,
   onSelectLandmark,
+  onSelectEv,
+  onSelectShelter,
+  onSelectLibrary,
   onSelectBus,
   onSelectStop,
   onSelectIncident,
@@ -494,6 +519,8 @@ export default function KakaoMap({
   const meRef = useRef<kakao.maps.CustomOverlay | null>(null);
   const boundaryRef = useRef<kakao.maps.Polygon[]>([]);
   const dongRef = useRef<kakao.maps.Polygon[]>([]);
+  /** 좇고 있는 버스 노선 경로선 (흰 외곽선 + 파란 본선) */
+  const trackedRouteRef = useRef<kakao.maps.Polyline[]>([]);
   /** 소통정보 선. 45초마다 색만 바뀌므로 마커와 같은 방식으로 재사용한다. */
   const roadLines = useRef(
     new Map<string, { line: kakao.maps.Polyline; level: TrafficLevel }>(),
@@ -506,6 +533,9 @@ export default function KakaoMap({
   const selectMedicalRef = useRef(onSelectMedical);
   const selectEmergencyRef = useRef(onSelectEmergency);
   const selectLandmarkRef = useRef(onSelectLandmark);
+  const selectEvRef = useRef(onSelectEv);
+  const selectShelterRef = useRef(onSelectShelter);
+  const selectLibraryRef = useRef(onSelectLibrary);
   const selectBusRef = useRef(onSelectBus);
   /**
    * 시트가 열려 있는지. deps 에 넣으면 시트를 여닫을 때마다 지도가
@@ -540,6 +570,9 @@ export default function KakaoMap({
     selectMedicalRef.current = onSelectMedical;
     selectEmergencyRef.current = onSelectEmergency;
     selectLandmarkRef.current = onSelectLandmark;
+    selectEvRef.current = onSelectEv;
+    selectShelterRef.current = onSelectShelter;
+    selectLibraryRef.current = onSelectLibrary;
     selectBusRef.current = onSelectBus;
     sheetRef.current = sheetOpen;
   }, [
@@ -550,6 +583,9 @@ export default function KakaoMap({
     onSelectMedical,
     onSelectEmergency,
     onSelectLandmark,
+    onSelectEv,
+    onSelectShelter,
+    onSelectLibrary,
     onSelectBus,
     sheetOpen,
   ]);
@@ -760,12 +796,42 @@ export default function KakaoMap({
     }
   }, [ready, trafficSegments]);
 
+  /** 좇고 있는 버스 노선의 주행 경로선 — 흰 외곽선 위에 파란 본선을 겹쳐 도로 위에서 또렷하게 */
+  useEffect(() => {
+    if (!ready || !mapRef.current) return;
+    const map = mapRef.current;
+    trackedRouteRef.current.forEach((p) => p.setMap(null));
+    trackedRouteRef.current = [];
+    if (!trackedRoutePath || trackedRoutePath.length < 2) return;
+
+    const path = trackedRoutePath.map(([lat, lng]) => new window.kakao.maps.LatLng(lat, lng));
+    const halo = new window.kakao.maps.Polyline({
+      path,
+      strokeWeight: 9,
+      strokeColor: "#ffffff",
+      strokeOpacity: 0.9,
+      strokeStyle: "solid",
+      zIndex: 6,
+    });
+    const main = new window.kakao.maps.Polyline({
+      path,
+      strokeWeight: 5,
+      strokeColor: "#1c7ed6",
+      strokeOpacity: 0.94,
+      strokeStyle: "solid",
+      zIndex: 7,
+    });
+    halo.setMap(map);
+    main.setMap(map);
+    trackedRouteRef.current = [halo, main];
+  }, [ready, trackedRoutePath]);
+
   // 검색 반경 원은 그리지 않는다.
   // 큰 점선 원이 "이 밖은 없음" 처럼 읽혀 화면이 제한된 구역처럼 보였다.
   // 반경은 시트의 슬라이더로 조절하고, 결과는 마커 자체로 드러난다.
 
   /**
-   * 장소·병원·랜드마크 마커.
+   * 장소·병원·랜드마크·충전소·쉼터·도서관 마커.
    *
    * 이름표는 아주 가까이 봤을 때만. 그 밖에는 작은 점으로 위치만 알린다.
    * 선택한 곳은 확대 수준과 무관하게 이름표를 붙인다.
@@ -848,6 +914,50 @@ export default function KakaoMap({
       });
     }
 
+    for (const s of evStations) {
+      const on = selectedMarkerId === `ev:${s.id}`;
+      const color = s.available > 0 ? "#237a35" : "#6b7280";
+      const label = `${s.name} · ${s.available}/${s.total}`;
+      const pin = on || labelled;
+      want.set(`ev:${s.id}`, {
+        lat: s.lat,
+        lng: s.lng,
+        sig: `ev|${pin ? "pin" : "dot"}|${on}|${s.available}/${s.total}`,
+        zIndex: on ? 92 : 25,
+        el: () => (pin ? pinEl("⚡", color, label, { active: on }) : dotEl(color, "⚡")),
+        hit: () => selectEvRef.current?.(s),
+      });
+    }
+
+    for (const s of shelters) {
+      const on = selectedMarkerId === `shelter:${s.id}`;
+      const emoji = s.kind === "cold" ? "❄️" : s.kind === "quake" ? "⛺" : "🏖️";
+      const color = s.kind === "cold" ? "#1864ab" : s.kind === "quake" ? "#7c3aed" : "#c84600";
+      const pin = on || labelled;
+      want.set(`sh:${s.id}`, {
+        lat: s.lat,
+        lng: s.lng,
+        sig: `sh|${pin ? "pin" : "dot"}|${on}|${s.kind}|${s.name}`,
+        zIndex: on ? 92 : 30,
+        el: () => (pin ? pinEl(emoji, color, s.name, { active: on }) : dotEl(color, emoji)),
+        hit: () => selectShelterRef.current?.(s),
+      });
+    }
+
+    // 공공도서관은 수가 적어 항상 이름표를 붙인다
+    for (const lib of libraries) {
+      if (lib.lat == null || lib.lng == null) continue;
+      const on = selectedMarkerId === `library:${lib.id}`;
+      want.set(`lib:${lib.id}`, {
+        lat: lib.lat,
+        lng: lib.lng,
+        sig: `lib|${on}|${lib.name}`,
+        zIndex: on ? 92 : 55,
+        el: () => pinEl("📚", "#4f46e5", lib.name, { active: on }),
+        hit: () => selectLibraryRef.current?.(lib),
+      });
+    }
+
     const live = placeMarks.current;
 
     // 사라진 것만 지운다
@@ -892,6 +1002,9 @@ export default function KakaoMap({
     medicalOpen,
     emergencyRooms,
     landmarks,
+    evStations,
+    shelters,
+    libraries,
     selectedPlaceId,
     selectedMarkerId,
   ]);
@@ -1268,6 +1381,8 @@ export default function KakaoMap({
       boundaryRef.current = [];
       dongRef.current.forEach((p) => p.setMap(null));
       dongRef.current = [];
+      trackedRouteRef.current.forEach((p) => p.setMap(null));
+      trackedRouteRef.current = [];
       mapRef.current = null;
     };
   }, []);

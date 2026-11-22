@@ -23,11 +23,15 @@ export default function StopCard({
   stop,
   trackedRouteId,
   onTrackRoute,
+  busAlert,
+  onToggleAlert,
   onClose,
 }: {
   stop: BusStop;
   trackedRouteId: string | null;
   onTrackRoute: (routeId: string, routeName: string) => void;
+  busAlert?: { stationId: string; routeId: string } | null;
+  onToggleAlert?: (stop: BusStop, routeId: string, routeName: string, predictSec: number) => void;
   onClose: () => void;
 }) {
   const arrivals = stop.arrivals ?? [];
@@ -62,14 +66,16 @@ export default function StopCard({
             const second = eta(a.predictSec2);
             const crowd = a.crowded ? BUS_CROWD[a.crowded] : null;
             const on = trackedRouteId === a.routeId;
+            const alertOn =
+              busAlert?.stationId === stop.stationId && busAlert?.routeId === a.routeId;
             return (
-              <li key={`${a.routeId}-${a.destName}`}>
+              <li key={`${a.routeId}-${a.destName}`} className="flex items-center gap-1">
                 <button
                   type="button"
                   onClick={() => onTrackRoute(a.routeId, a.routeName)}
                   aria-pressed={on}
-                  title="지도에서 이 노선 버스 위치 보기"
-                  className="min-h-[48px] w-full rounded-[var(--radius)] px-1.5 py-2 text-left transition hover:bg-[var(--surface-2)]"
+                  title="지도에서 이 노선 버스 위치·경로 보기"
+                  className="min-h-[48px] min-w-0 flex-1 rounded-[var(--radius)] px-1.5 py-2 text-left transition hover:bg-[var(--surface-2)]"
                   style={on ? { background: "var(--brand-soft)" } : undefined}
                 >
                   <div className="flex items-center gap-2">
@@ -110,12 +116,29 @@ export default function StopCard({
                       )}
                       {on && (
                         <span className="ml-auto font-bold text-[var(--brand)]">
-                          지도에 위치 표시 중
+                          경로·위치 표시 중
                         </span>
                       )}
                     </div>
                   )}
                 </button>
+                {onToggleAlert && a.predictSec != null && (
+                  <button
+                    type="button"
+                    aria-pressed={alertOn}
+                    aria-label={`${a.routeName}번 도착 알림 ${alertOn ? "해제" : "설정"}`}
+                    title={alertOn ? "도착 알림 해제" : "3분 전 도착 알림 설정"}
+                    onClick={() => onToggleAlert(stop, a.routeId, a.routeName, a.predictSec!)}
+                    className={`grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius)] border-2 text-[length:var(--text-sm)] transition ${
+                      alertOn
+                        ? "border-[var(--ink)] shadow-[var(--shadow-sm)]"
+                        : "border-transparent text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
+                    }`}
+                    style={alertOn ? { background: "var(--brand-2)", color: "var(--ink)" } : undefined}
+                  >
+                    <span aria-hidden>{alertOn ? "🔔" : "🔕"}</span>
+                  </button>
+                )}
               </li>
             );
           })}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import useSWR from "swr";
@@ -14,6 +14,7 @@ import { MODES, MODE_MAP, type ModeId, type CardId } from "@/lib/modes";
 import type { CategoryKey } from "@/lib/uiwang";
 import type { LatLng } from "@/lib/busPath";
 import { pickFleet, EMPTY_FLEET } from "@/lib/busFleet";
+import { playArrivalChime, type BusAlertTarget, type FiredBusAlert } from "@/lib/busAlert";
 import { useMyLocation } from "@/lib/useMyLocation";
 import {
   buildSegments,
@@ -35,6 +36,13 @@ import type {
   EmergencyRoom,
   FactoryItem,
   FactoriesPayload,
+  EvStation,
+  EvChargersPayload,
+  ShelterItem,
+  SheltersPayload,
+  LibraryItem,
+  LibrariesPayload,
+  NoticesPayload,
   PlacesPayload,
   WeatherPayload,
   AirPayload,
@@ -70,6 +78,11 @@ import NewsPanel from "@/components/panels/NewsPanel";
 import WastePanel from "@/components/panels/WastePanel";
 import PopulationPanel from "@/components/panels/PopulationPanel";
 import IndustryPanel from "@/components/panels/IndustryPanel";
+import EvChargersPanel from "@/components/panels/EvChargersPanel";
+import ShelterPanel from "@/components/panels/ShelterPanel";
+import LibrariesPanel from "@/components/panels/LibrariesPanel";
+import NoticesPanel from "@/components/panels/NoticesPanel";
+import DongComparePanel from "@/components/panels/DongComparePanel";
 
 const KakaoMap = dynamic(() => import("@/components/KakaoMap"), { ssr: false });
 
@@ -89,6 +102,9 @@ const NO_SEGMENTS: TrafficSegment[] = [];
 const NO_CCTVS: Cctv[] = [];
 const NO_BUSES: BusPositionsPayload[] = [];
 const NO_PATHS: Record<string, LatLng[]> = {};
+const NO_EV: EvStation[] = [];
+const NO_SHELTERS: ShelterItem[] = [];
+const NO_LIBRARIES: LibraryItem[] = [];
 
 const POLL = {
   weather: 10 * 60_000,
@@ -131,10 +147,20 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     | { kind: "cctv"; cctv: Cctv }
     | { kind: "emergency"; room: EmergencyRoom }
     | { kind: "landmark"; landmark: LandmarkItem }
+    | { kind: "ev"; station: EvStation }
+    | { kind: "shelter"; shelter: ShelterItem }
+    | { kind: "library"; library: LibraryItem }
     | null
   >(null);
   const [activeDong, setActiveDong] = useState<string | null>(initial.dong);
   const [tracked, setTracked] = useState<{ id: string; name: string } | null>(null);
+  /** 클라이언트 전용 버스 도착 알림 (설정된 정류소·노선이 임계 시간 이하로 오면 울린다) */
+  const [busAlert, setBusAlert] = useState<BusAlertTarget | null>(null);
+  const busAlertRef = useRef<BusAlertTarget | null>(null);
+  useEffect(() => {
+    busAlertRef.current = busAlert;
+  }, [busAlert]);
+  const [firedAlert, setFiredAlert] = useState<FiredBusAlert | null>(null);
   const [newsQuery, setNewsQuery] = useState("의왕시");
   const [sheetOpen, setSheetOpen] = useState(!!initial.mode);
   /**
@@ -262,9 +288,27 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     { refreshInterval: POLL.emergency, keepPreviousData: true },
   );
   const transit = useSWR<ApiEnvelope<TransitPayload>>(
-    def?.layers.bus || needs("transit") ? `/api/transit?${geo}` : null,
+    def?.layers.bus || needs("transit") || !!busAlert ? `/api/transit?${geo}` : null,
     swrFetcher,
-    { refreshInterval: POLL.transit, keepPreviousData: true },
+    {
+      refreshInterval: busAlert ? 15_000 : POLL.transit,
+      keepPreviousData: true,
+      onSuccess(env) {
+        const alert = busAlertRef.current;
+        if (!alert || !env?.ok) return;
+        const stop = env.data.stops.find((s) => s.stationId === alert.stationId);
+        const arr = stop?.arrivals?.find((a) => a.routeId === alert.routeId);
+        if (arr?.predictSec != null && arr.predictSec <= alert.thresholdSec) {
+          playArrivalChime();
+          setFiredAlert({
+            stationName: alert.stationName,
+            routeName: alert.routeName,
+            predictSec: arr.predictSec,
+          });
+          setBusAlert(null);
+        }
+      },
+    },
   );
   /*
    * 뉴스는 모드와 무관하게 받는다. 상단 요약줄에 최신 제목을 띄우기
@@ -277,9 +321,29 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     { refreshInterval: POLL.news, keepPreviousData: true },
   );
   const factories = useSWR<ApiEnvelope<FactoriesPayload>>(
-    needs("industry") || activeDong ? "/api/factories" : null,
+    needs("industry") || needs("compare") || activeDong ? "/api/factories" : null,
     swrFetcher,
     { revalidateOnFocus: false, dedupingInterval: 30 * 60_000 },
+  );
+  const evChargers = useSWR<ApiEnvelope<EvChargersPayload>>(
+    needs("ev") || needs("compare") ? "/api/ev-chargers" : null,
+    swrFetcher,
+    { refreshInterval: 3 * 60_000, keepPreviousData: true },
+  );
+  const shelters = useSWR<ApiEnvelope<SheltersPayload>>(
+    needs("shelter") ? "/api/shelters" : null,
+    swrFetcher,
+    { revalidateOnFocus: false, dedupingInterval: 60 * 60_000 },
+  );
+  const libraries = useSWR<ApiEnvelope<LibrariesPayload>>(
+    needs("libraries") ? "/api/libraries" : null,
+    swrFetcher,
+    { revalidateOnFocus: false, dedupingInterval: 60 * 60_000 },
+  );
+  const notices = useSWR<ApiEnvelope<NoticesPayload>>(
+    needs("notices") ? "/api/notices" : null,
+    swrFetcher,
+    { refreshInterval: POLL.news, keepPreviousData: true },
   );
 
   const dongFactoryCounts = useMemo(() => {
@@ -611,9 +675,69 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     [focus, revealMap],
   );
 
+  const selectEv = useCallback(
+    (station: EvStation) => {
+      setSelectedPlaceId(null);
+      setMarker((cur) => {
+        if (cur?.kind === "ev" && cur.station.id === station.id) return null;
+        focus(station.lat, station.lng, 320);
+        revealMap();
+        return { kind: "ev", station };
+      });
+    },
+    [focus, revealMap],
+  );
+
+  const selectShelter = useCallback(
+    (shelter: ShelterItem) => {
+      setSelectedPlaceId(null);
+      setMarker((cur) => {
+        if (cur?.kind === "shelter" && cur.shelter.id === shelter.id) return null;
+        focus(shelter.lat, shelter.lng, 350);
+        revealMap();
+        return { kind: "shelter", shelter };
+      });
+    },
+    [focus, revealMap],
+  );
+
+  const selectLibrary = useCallback(
+    (library: LibraryItem) => {
+      if (library.lat == null || library.lng == null) return;
+      const lat = library.lat;
+      const lng = library.lng;
+      setSelectedPlaceId(null);
+      setMarker((cur) => {
+        if (cur?.kind === "library" && cur.library.id === library.id) return null;
+        focus(lat, lng, 350);
+        revealMap();
+        return { kind: "library", library };
+      });
+    },
+    [focus, revealMap],
+  );
+
   const toggleBusTrack = useCallback((rid: string, name: string) => {
     setTracked((cur) => (cur?.id === rid ? null : { id: rid, name }));
   }, []);
+
+  const toggleBusAlert = useCallback(
+    (stop: BusStop, routeId: string, routeName: string, predictSec: number) => {
+      setFiredAlert(null);
+      setBusAlert((cur) => {
+        if (cur?.stationId === stop.stationId && cur?.routeId === routeId) return null;
+        return {
+          stationId: stop.stationId,
+          stationName: stop.name,
+          routeId,
+          routeName,
+          thresholdSec: predictSec > 180 ? 180 : 60,
+          setAt: Date.now(),
+        };
+      });
+    },
+    [],
+  );
 
   const markerId =
     marker?.kind === "stop"
@@ -626,7 +750,13 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             ? `emergency:${marker.room.id}`
             : marker?.kind === "landmark"
               ? `landmark:${marker.landmark.name}`
-              : null;
+              : marker?.kind === "ev"
+                ? `ev:${marker.station.id}`
+                : marker?.kind === "shelter"
+                  ? `shelter:${marker.shelter.id}`
+                  : marker?.kind === "library"
+                    ? `library:${marker.library.id}`
+                    : null;
 
   const selectedPlace = useMemo(
     () =>
@@ -733,6 +863,26 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     [mode, emergency.data],
   );
 
+  const trackedRoutePath = useMemo(
+    () => (tracked ? (busRoutePaths.data?.data.paths[tracked.id] ?? null) : null),
+    [tracked, busRoutePaths.data],
+  );
+
+  const evMarkers = useMemo(
+    () => (mode === "transit" ? (evChargers.data?.data.stations ?? NO_EV) : NO_EV),
+    [mode, evChargers.data],
+  );
+
+  const shelterMarkers = useMemo(
+    () => (mode === "weather" ? (shelters.data?.data.shelters ?? NO_SHELTERS) : NO_SHELTERS),
+    [mode, shelters.data],
+  );
+
+  const libraryMarkers = useMemo(
+    () => (mode === "life" ? (libraries.data?.data.libraries ?? NO_LIBRARIES) : NO_LIBRARIES),
+    [mode, libraries.data],
+  );
+
   // ── 시트 내용 ─────────────────────────────────────────
   const card = (id: CardId) => {
     switch (id) {
@@ -764,6 +914,16 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             error={air.error}
           />
         );
+      case "shelter":
+        return (
+          <ShelterPanel
+            key={id}
+            res={shelters.data}
+            isLoading={shelters.isLoading}
+            error={shelters.error}
+            onSelect={selectShelter}
+          />
+        );
       case "medical":
         return (
           <MedicalPanel
@@ -782,6 +942,16 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             isLoading={traffic.isLoading}
             error={traffic.error}
             onSelectIncident={selectIncident}
+          />
+        );
+      case "ev":
+        return (
+          <EvChargersPanel
+            key={id}
+            res={evChargers.data}
+            isLoading={evChargers.isLoading}
+            error={evChargers.error}
+            onSelect={selectEv}
           />
         );
       case "cctv":
@@ -811,10 +981,33 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
               toggleBusTrack(rid, name);
               revealMap();
             }}
+            busAlert={busAlert}
+            onToggleAlert={toggleBusAlert}
+          />
+        );
+      case "libraries":
+        return (
+          <LibrariesPanel
+            key={id}
+            res={libraries.data}
+            isLoading={libraries.isLoading}
+            error={libraries.error}
+            onSelect={selectLibrary}
           />
         );
       case "waste":
         return <WastePanel key={id} />;
+      case "compare":
+        return (
+          <DongComparePanel
+            key={id}
+            medical={medical.data}
+            factories={factories.data}
+            evChargers={evChargers.data}
+            activeDong={activeDong}
+            onSelectDong={toggleDong}
+          />
+        );
       case "industry":
         return (
           <IndustryPanel
@@ -835,6 +1028,15 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
       case "population":
         return (
           <PopulationPanel key={id} onSelectDong={toggleDong} activeDong={activeDong} />
+        );
+      case "notices":
+        return (
+          <NoticesPanel
+            key={id}
+            res={notices.data}
+            isLoading={notices.isLoading}
+            error={notices.error}
+          />
         );
       case "news":
         return (
@@ -918,7 +1120,11 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           emergencyRooms={emergencyMarkers}
           busPositions={mapBusPositions}
           busPaths={busRoutePaths.data?.data.paths ?? NO_PATHS}
+          trackedRoutePath={trackedRoutePath}
           landmarks={mapLandmarks}
+          evStations={evMarkers}
+          shelters={shelterMarkers}
+          libraries={libraryMarkers}
           showBoundary
           activeDong={activeDong}
           trafficSegments={trafficSegments}
@@ -933,6 +1139,9 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           onSelectMedical={selectMedical}
           onSelectEmergency={selectEmergency}
           onSelectLandmark={selectLandmark}
+          onSelectEv={selectEv}
+          onSelectShelter={selectShelter}
+          onSelectLibrary={selectLibrary}
           onSelectBus={toggleBusTrack}
           onSelectStop={selectStop}
           onSelectIncident={selectIncident}
@@ -1078,6 +1287,58 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
         </div>
       )}
 
+      {/* 버스 도착 알림 발동 배너 */}
+      {firedAlert && (
+        <div className="pointer-events-none absolute inset-x-0 top-[128px] z-50 flex justify-center px-4 sm:top-[76px]">
+          <button
+            type="button"
+            onClick={() => setFiredAlert(null)}
+            className="pop-in pointer-events-auto flex max-w-[420px] items-center gap-2.5 rounded-[var(--radius-full)] border-2 border-[var(--ink)] bg-[var(--brand)] px-4 py-2.5 text-left text-[length:var(--text-sm)] font-extrabold text-white shadow-[var(--shadow-lg)]"
+          >
+            <span aria-hidden className="text-lg leading-none">
+              🔔
+            </span>
+            <span className="min-w-0 flex-1">
+              {firedAlert.stationName} · {firedAlert.routeName}번{" "}
+              {firedAlert.predictSec < 60
+                ? "곧 도착!"
+                : `약 ${Math.max(1, Math.round(firedAlert.predictSec / 60))}분 전`}
+            </span>
+            <span className="text-xs opacity-80">확인 ✕</span>
+          </button>
+        </div>
+      )}
+
+      {/* 버스 노선 경로 추적 / 도착 알림 대기 중 플로팅 칩 */}
+      {(tracked || busAlert) && !firedAlert && !locNotice && (
+        <div className="pointer-events-none absolute inset-x-0 top-[128px] z-20 flex flex-wrap justify-center gap-1.5 px-16 sm:top-[76px]">
+          {tracked && (
+            <button
+              type="button"
+              onClick={() => setTracked(null)}
+              className="glass press pop-in pointer-events-auto inline-flex min-h-[38px] items-center gap-1.5 rounded-[var(--radius-full)] px-3.5 text-[length:var(--text-xs)] font-extrabold"
+            >
+              <span aria-hidden>🚍</span>
+              <span>{tracked.name}번 경로 표시 중</span>
+              <span className="text-[var(--text-faint)]">✕</span>
+            </button>
+          )}
+          {busAlert && (
+            <button
+              type="button"
+              onClick={() => setBusAlert(null)}
+              className="glass press pop-in pointer-events-auto inline-flex min-h-[38px] items-center gap-1.5 rounded-[var(--radius-full)] px-3.5 text-[length:var(--text-xs)] font-extrabold"
+            >
+              <span aria-hidden>🔔</span>
+              <span>
+                {busAlert.routeName}번 {Math.round(busAlert.thresholdSec / 60)}분 전 알림 대기
+              </span>
+              <span className="text-[var(--text-faint)]">✕</span>
+            </button>
+          )}
+        </div>
+      )}
+
       {/* 색만 칠해두고 뜻을 안 알려주면 읽을 수 없다 */}
       {trafficSegments.length > 0 && !bottomCard && !sheetOpen && (
         <div className="glass absolute bottom-[calc(var(--dock-h)+8px)] left-3 z-10 rounded-[var(--radius-lg)] px-3 py-2">
@@ -1100,9 +1361,14 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
       {marker?.kind === "stop" && (
         <StopCard
           key={marker.stop.stationId}
-          stop={marker.stop}
+          stop={
+            transit.data?.data.stops.find((s) => s.stationId === marker.stop.stationId) ??
+            marker.stop
+          }
           trackedRouteId={tracked?.id ?? null}
           onTrackRoute={toggleBusTrack}
+          busAlert={busAlert}
+          onToggleAlert={toggleBusAlert}
           onClose={() => setMarker(null)}
         />
       )}
@@ -1208,6 +1474,166 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             >
               길찾기 ↗
             </a>
+          </div>
+        </MapCard>
+      )}
+
+      {marker?.kind === "ev" && (
+        <MapCard
+          key={marker.station.id}
+          title={marker.station.name}
+          accent={marker.station.available > 0 ? "#237a35" : "#6b7280"}
+          subtitle={[marker.station.operator, marker.station.dong].filter(Boolean).join(" · ") || "전기차 충전소"}
+          onClose={() => setMarker(null)}
+        >
+          <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <span
+              className="tnum text-[length:var(--text-lg)] font-extrabold"
+              style={{ color: marker.station.available > 0 ? "var(--ok)" : "var(--text-muted)" }}
+            >
+              {marker.station.available > 0
+                ? `충전 가능 ${marker.station.available} / ${marker.station.total}기`
+                : `전부 사용 중 (${marker.station.total}기)`}
+            </span>
+            <span className="text-[length:var(--text-xs)] text-[var(--text-muted)]">
+              {[
+                marker.station.fastCount > 0 ? `급속 ${marker.station.fastCount}` : "",
+                marker.station.slowCount > 0 ? `완속 ${marker.station.slowCount}` : "",
+                marker.station.maxOutputKw ? `최대 ${marker.station.maxOutputKw}kW` : "",
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </span>
+          </div>
+          <div className="mt-2 space-y-0.5 text-[length:var(--text-xs)] text-[var(--text-muted)]">
+            {marker.station.address && <p>{marker.station.address}</p>}
+            <p>
+              {[
+                marker.station.useTime,
+                marker.station.parkingFree === true ? "주차 무료" : "",
+                marker.station.limitYn ? marker.station.limitDetail || "외부인 이용 제한" : "외부 개방",
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+          </div>
+          <div className="mt-3 flex gap-2">
+            <a
+              href={`https://map.kakao.com/link/to/${encodeURIComponent(marker.station.name)},${marker.station.lat},${marker.station.lng}`}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="brand-fill press inline-flex min-h-[44px] flex-1 items-center justify-center rounded-[var(--radius-full)] border-2 text-[length:var(--text-sm)] font-bold shadow-[var(--shadow-sm)]"
+            >
+              길찾기 ↗
+            </a>
+          </div>
+        </MapCard>
+      )}
+
+      {marker?.kind === "shelter" && (
+        <MapCard
+          key={marker.shelter.id}
+          title={marker.shelter.name}
+          accent={
+            marker.shelter.kind === "cold"
+              ? "#1864ab"
+              : marker.shelter.kind === "quake"
+                ? "#7c3aed"
+                : "#c84600"
+          }
+          subtitle={[
+            marker.shelter.kind === "cold"
+              ? "한파쉼터"
+              : marker.shelter.kind === "quake"
+                ? "지진대피소"
+                : "무더위쉼터",
+            marker.shelter.facilityType,
+            marker.shelter.dong,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+          onClose={() => setMarker(null)}
+        >
+          <div className="mt-3 space-y-1 text-[length:var(--text-xs)] text-[var(--text-muted)]">
+            {marker.shelter.address && <p>{marker.shelter.address}</p>}
+            {marker.shelter.capacity != null && (
+              <p className="font-bold text-[var(--text)]">
+                수용 가능 인원: {marker.shelter.capacity.toLocaleString("ko-KR")}명
+              </p>
+            )}
+            {marker.shelter.useHours && <p>운영시간: {marker.shelter.useHours}</p>}
+            {marker.shelter.coolingInfo && <p>냉·난방: {marker.shelter.coolingInfo}</p>}
+          </div>
+          <div className="mt-3 flex gap-2">
+            <a
+              href={`https://map.kakao.com/link/to/${encodeURIComponent(marker.shelter.name)},${marker.shelter.lat},${marker.shelter.lng}`}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="brand-fill press inline-flex min-h-[44px] flex-1 items-center justify-center rounded-[var(--radius-full)] border-2 text-[length:var(--text-sm)] font-bold shadow-[var(--shadow-sm)]"
+            >
+              길찾기 ↗
+            </a>
+          </div>
+        </MapCard>
+      )}
+
+      {marker?.kind === "library" && (
+        <MapCard
+          key={marker.library.id}
+          title={marker.library.name}
+          accent="#4f46e5"
+          subtitle={[marker.library.kind || "공공도서관", marker.library.dong].filter(Boolean).join(" · ")}
+          onClose={() => setMarker(null)}
+        >
+          <div className="mt-3 space-y-1 text-[length:var(--text-xs)] text-[var(--text-muted)]">
+            {marker.library.address && <p>{marker.library.address}</p>}
+            {(marker.library.seats != null || marker.library.books != null) && (
+              <p className="font-bold text-[var(--text)]">
+                {[
+                  marker.library.seats != null
+                    ? `열람석 ${marker.library.seats.toLocaleString("ko-KR")}석`
+                    : "",
+                  marker.library.books != null
+                    ? `장서 ${marker.library.books.toLocaleString("ko-KR")}권`
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+            )}
+            {marker.library.weekdayHours && <p>평일: {marker.library.weekdayHours}</p>}
+            {marker.library.weekendHours && <p>주말: {marker.library.weekendHours}</p>}
+            {marker.library.closedDays && <p>휴관: {marker.library.closedDays}</p>}
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {marker.library.phone && (
+              <a
+                href={`tel:${marker.library.phone}`}
+                className="press inline-flex min-h-[44px] flex-1 items-center justify-center rounded-[var(--radius-full)] border-2 border-[var(--ink)] px-3 text-[length:var(--text-xs)] font-bold shadow-[var(--shadow-sm)]"
+              >
+                📞 전화
+              </a>
+            )}
+            {marker.library.homepage && (
+              <a
+                href={marker.library.homepage}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="press inline-flex min-h-[44px] flex-1 items-center justify-center rounded-[var(--radius-full)] border-2 border-[var(--ink)] px-3 text-[length:var(--text-xs)] font-bold shadow-[var(--shadow-sm)]"
+              >
+                누리집 ↗
+              </a>
+            )}
+            {marker.library.lat != null && marker.library.lng != null && (
+              <a
+                href={`https://map.kakao.com/link/to/${encodeURIComponent(marker.library.name)},${marker.library.lat},${marker.library.lng}`}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="brand-fill press inline-flex min-h-[44px] flex-1 items-center justify-center rounded-[var(--radius-full)] border-2 px-3 text-[length:var(--text-sm)] font-bold shadow-[var(--shadow-sm)]"
+              >
+                길찾기 ↗
+              </a>
+            )}
           </div>
         </MapCard>
       )}

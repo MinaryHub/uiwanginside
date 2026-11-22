@@ -6,18 +6,19 @@
 
 | 분야 | 보여주는 것 | 출처 |
 | --- | --- | --- |
-| 🌤️ 날씨·환경 | 현재 날씨·시간대별 예보·기상특보·미세먼지 | 기상청, 에어코리아 |
-| 🚌 교통 | 버스 도착·실시간 버스 위치·사고/공사·도로 소통·고속도로 CCTV·주차장 | 경기도 GBIS, 경기데이터드림, ITS, 행정안전부 표준데이터 |
+| 🌤️ 날씨·환경 | 현재 날씨·시간대별 예보·기상특보·미세먼지·계절별 무더위/한파/지진 쉼터 | 기상청, 에어코리아, 재난안전데이터공유플랫폼, 행정안전부 |
+| 🚌 교통 | 버스 도착·실시간 버스 위치·노선 경로선·도착 알림·전기차 충전소·사고/공사·도로 소통·고속도로 CCTV·주차장 | 경기도 GBIS, 경기데이터드림, 한국환경공단, ITS, 행정안전부 표준데이터 |
 | 🏥 의료 | 근처 응급실 실시간 가용병상, 지금 진료 중인 병원·약국과 요일별 진료시간 | 국립중앙의료원 |
-| 🏘️ 생활 | 공원·공중화장실·방범 CCTV·학교 정보와 급식·쓰레기 배출 안내 | 행정안전부 표준데이터, 나이스, 의왕시청 |
-| 📊 인구 | 행정동별 인구·세대수 | 행정안전부 주민등록 인구통계 |
+| 🏘️ 생활 | 공원·공중화장실·방범 CCTV·공공도서관·학교 정보와 급식·쓰레기 배출 안내 | 행정안전부 표준데이터, 경기데이터드림, 나이스, 의왕시청 |
+| 📊 인구·비교 | 행정동별 인구·세대수, 6개 행정동 7종 인프라 비교(전체 / 1만명당) | 행정안전부 주민등록 인구통계 및 공공시설 집계 |
 | 🏭 산업 | 동별·업종별 제조업 분포, 큰 일터 | 경기도 의왕시 공장 현황 |
+| 📰 소식 | 의왕시 문화행사·모집·시정 공지 및 지역 뉴스 | 경기데이터드림, 네이버 검색 |
 
 자료별 제공 기관·갱신 주기·화면 위치는 **`/opendata`** (공공데이터 안내) 에서 한눈에 본다.
 목록은 `src/lib/datasets.ts` 한 곳에 있다 — 자료를 새로 붙이면 여기에도 한 줄 더한다.
 
-실시간 자료는 자동으로 다시 받아온다 — 버스 위치 16초, 버스 도착 30초, 교통 60초,
-뉴스 5분, 날씨·미세먼지·의료 10분.
+실시간 자료는 자동으로 다시 받아온다 — 버스 위치 16초, 버스 도착 30초(도착 알림 대기 시 15초), 교통 60초,
+전기차 충전소 3분, 뉴스·시정소식 5분, 날씨·미세먼지·의료 10분.
 
 > 2026-11 개편: 사진 올리기·사진첩·장소 리스트와 공유·카카오 로그인·맛집 별점을
 > 모두 없앴다. 예전 DB 표(`photos`·`place_ratings`·`place_lists`·`place_list_items`)는
@@ -49,7 +50,7 @@ npm run dev                  # http://localhost:3000
 
 ### 연동 상태 진단
 
-**`/status`** 에서 14개 외부 API와 DB 연동 상태를 한 번에 점검합니다.
+**`/status`** 에서 17개 외부 API와 DB 연동 상태를 한 번에 점검합니다.
 키를 추가하거나 활용신청이 승인된 뒤 이 페이지만 새로고침하면 반영 여부를 바로 알 수 있습니다.
 (오류 코드와 조치 방법까지 함께 표시됩니다. 키 변경 후에는 개발 서버 재시작 필요.)
 
@@ -66,12 +67,16 @@ npm run dev                  # http://localhost:3000
 | `AIRKOREA_SERVICE_KEY` | data.go.kr → *한국환경공단\_에어코리아\_대기오염정보* | 미세먼지·초미세먼지·예보 (비우면 `KMA_SERVICE_KEY` 재사용) |
 | `EMERGENCY_SERVICE_KEY` | data.go.kr → *국립중앙의료원\_응급의료·병의원·약국 정보* | 응급실 병상 · 진료중인 병원·약국 (비우면 `KMA_SERVICE_KEY` 재사용) |
 | `FACTORY_SERVICE_KEY` | data.go.kr → *경기도 의왕시\_공장 현황* (`15126591`, ODCloud) | 제조업 분포 · 공장 마커 (비우면 `KMA_SERVICE_KEY` 재사용) |
+| `EV_CHARGER_SERVICE_KEY` | data.go.kr → *한국환경공단\_전기자동차 충전소 정보* | 전기차 충전소 실시간 현황 (비우면 `KMA_SERVICE_KEY` 재사용) |
+| `SHELTER_SERVICE_KEY` | data.go.kr → *행정안전부\_무더위쉼터 정보* | 무더위쉼터 폴백 (비우면 `KMA_SERVICE_KEY` 재사용) |
+| `LIBRARY_SERVICE_KEY` | data.go.kr → *전국도서관표준데이터* (`15136382`, ODCloud) | 공공도서관 폴백 (비우면 `KMA_SERVICE_KEY` 재사용) |
 | `GBIS_SERVICE_KEY` | data.go.kr → *경기도\_버스도착정보* · *버스위치정보* · *노선정보* | 버스 도착 · 실시간 위치 · 노선 경로 |
 | `TAGO_SERVICE_KEY` | data.go.kr → *국토교통부\_TAGO 버스위치정보* | 수도권 광역버스 위치 보조 (비우면 `GBIS_SERVICE_KEY` 재사용) |
-| `GG_DATA_KEY` | [data.gg.go.kr](https://data.gg.go.kr) → *버스정류소 현황* | 의왕 및 인근 정류소 목록 |
+| `GG_DATA_KEY` | [data.gg.go.kr](https://data.gg.go.kr) → *버스정류소 · 공공도서관 · 문화행사 현황* | 의왕 정류소 · 공공도서관 · 문화행사 피드 |
+| `SAFETY_DATA_KEY` | [safetydata.go.kr](https://www.safetydata.go.kr) → *DSSP-IF-10941* | 한파·무더위·지진 대피소 및 쉼터 |
 | `ITS_API_KEY` | [openapi.its.go.kr](https://openapi.its.go.kr) 회원가입 → 인증키 | 사고 · 정체 · 고속도로 CCTV |
 | `NEIS_API_KEY` | [open.neis.go.kr](https://open.neis.go.kr) | 학교 기본정보 · 학급 수 · 급식 |
-| `NAVER_CLIENT_ID` / `NAVER_CLIENT_SECRET` | [developers.naver.com](https://developers.naver.com) → **검색 API** | 의왕 지역 뉴스 |
+| `NAVER_CLIENT_ID` / `NAVER_CLIENT_SECRET` | [developers.naver.com](https://developers.naver.com) → **검색 API** | 의왕 지역 뉴스 · 시정/모집 소식 |
 | `DATABASE_URL` | [neon.tech](https://neon.tech) Postgres | 교통·CCTV·공장 좌표 캐시 및 접속 통계 |
 | `STATS_TOKEN` | 임의 긴 문자열 (선택) | 비공개 접속 통계(`/stats/<토큰>`) 활성화 |
 
@@ -88,7 +93,7 @@ src/
 ├─ app/
 │  ├─ page.tsx                 지도 대시보드 진입점
 │  ├─ opendata/                공공데이터 안내 (출처·갱신 주기)
-│  ├─ status/                  14개 외부 API·DB 연동 상태 진단
+│  ├─ status/                  17개 외부 API·DB 연동 상태 진단
 │  ├─ stats/[token]/           접속 통계 (비밀 주소)
 │  ├─ layout.tsx / globals.css 테마 (라이트·다크 자동)
 │  └─ api/
@@ -96,25 +101,33 @@ src/
 │     ├─ factories/     경기도 의왕시 공장 현황 (ODCloud 15126591 + 좌표 캐시)
 │     ├─ weather/       기상청 초단기실황 + 단기예보 + 기상특보
 │     ├─ air/           에어코리아 측정소(고천동·청계동) + 경기남부 예보
+│     ├─ shelters/      한파·무더위·지진 쉼터 (SafetyData / 행안부)
 │     ├─ medical/       국립중앙의료원 병·의원·약국 요일별 진료시간
 │     ├─ emergency/     응급실 실시간 가용병상
 │     ├─ traffic/       ITS 돌발정보 + 구간 소통속도
 │     ├─ cctv/          고속도로 CCTV 목록 및 이미지 중계
+│     ├─ ev-chargers/   한국환경공단 의왕시 전기차 충전소 실시간 현황
 │     ├─ transit/       주변 버스정류소 + 실시간 도착정보
 │     ├─ bus-positions/ 실시간 운행 버스 위치 (GBIS + TAGO)
-│     ├─ bus-route/     노선 주행 경로
+│     ├─ bus-route/     노선 주행 경로 (버스 이동 + 추적 경로선)
+│     ├─ libraries/     의왕시 공공도서관 현황 (경기데이터드림 / ODCloud)
 │     ├─ school/        나이스 학교 정보·학급·급식
+│     ├─ notices/       의왕시 문화행사·시정·모집 소식 (경기데이터드림 + 네이버)
 │     ├─ news/          네이버 지역 뉴스
-│     └─ health/        연동 상태 진단 API
+│     └─ health/        연동 상태 진단 API (17종)
 ├─ components/
-│  ├─ Dashboard.tsx            상태·SWR 폴링·지도 인터랙션 오케스트레이션
-│  ├─ KakaoMap.tsx             SDK 로드 + CustomOverlay 마커·버스 애니메이션
+│  ├─ Dashboard.tsx            상태·SWR 폴링·버스 도착 알림·지도 인터랙션 오케스트레이션
+│  ├─ KakaoMap.tsx             SDK 로드 + CustomOverlay 마커·버스 애니메이션·경로선
 │  ├─ ui.tsx                   Section / Badge / Notice / Skeleton / LiveDot
-│  └─ panels/                  Places · Weather · Air · Medical · Emergency · Traffic · Transit · Cctv · Waste · Population · Industry · News
+│  └─ panels/                  Places · Weather · Air · Shelter · Medical · Emergency · Traffic · Transit · EvChargers · Cctv · Libraries · Waste · Population · DongCompare · Industry · Notices · News
 └─ lib/
    ├─ datasets.ts    공공데이터 목록 (/opendata 화면의 원본)
    ├─ factoryApi.ts  공장 현황 ODCloud 연동 + Neon 좌표 캐시
-   ├─ health.ts      서버 공용 14종 연동 상태 점검
+   ├─ evChargers.ts  전기차 충전소 조회·집계
+   ├─ shelters.ts    무더위·한파·지진 쉼터 조회
+   ├─ libraries.ts   공공도서관 조회
+   ├─ busAlert.ts    클라이언트 버스 도착 알림 (Web Audio 차임 + 진동)
+   ├─ health.ts      서버 공용 17종 연동 상태 점검
    ├─ uiwang.ts      의왕시 좌표·격자·행정동·랜드마크·카테고리 정의
    ├─ types.ts       API 응답 타입
    └─ fetcher.ts     타임아웃 fetch · 인증키 정규화 · TTL 캐시 · single-flight
@@ -144,14 +157,14 @@ npm run factories:fetch -- ~/Downloads/경기도_의왕시_공장현황.csv
 
 | 메뉴 | 열리는 것 |
 | --- | --- |
-| ☀️ 날씨 | 지금 날씨 · 기상특보 · 시간대별 예보 · 미세먼지 |
+| ☀️ 날씨 | 지금 날씨 · 기상특보 · 시간대별 예보 · 미세먼지 · 계절별 무더위/한파/지진 쉼터 |
 | 🏥 병원·약국 | 근처 응급실 남은 병상 · 지금 문 연 병원·약국(요일별 진료시간 포함) |
-| 🚌 버스·교통 | 정류소 버스 도착 · 사고·정체 · CCTV · 주차장 |
+| 🚌 버스·교통 | 정류소 버스 도착(노선 경로선 · 도착 알림 🔔) · 사고·정체 · 전기차 충전소 · CCTV · 주차장 |
 | 🍜 맛집 | 음식점 · 카페 |
-| 🛒 생활 | 마트 · 편의점 · 은행 · 학교(급식·학급) · 공원 · 화장실 |
+| 🛒 생활 | 마트 · 편의점 · 은행 · 학교(급식·학급) · 공원 · 화장실 · 공공도서관 |
 | ♻️ 쓰레기 | 버리는 시간과 방법 |
-| 🏘️ 우리 동네 | 동별 인구 · 제조업 분포(업종별 지도 필터 · 큰 일터) — 동을 누르면 지도가 그 동으로 |
-| 📰 소식 | 의왕 최신 뉴스 |
+| 🏘️ 우리 동네 | 동별 인구 · 6개 동 인프라 비교(전체 / 1만명당) · 제조업 분포(업종별 지도 필터 · 큰 일터) |
+| 📰 소식 | 의왕시 행사·시정·모집 소식 · 공식 누리집 바로가기 · 지역 뉴스 |
 
 - 같은 메뉴를 다시 누르면 닫히고 지도만 남습니다. ✕ 로 닫았다면 "다시 보기" 단추로 펼칩니다.
 - 상단 요약줄(기상특보·뉴스·기온·미세먼지·사고·진료)을 누르면 해당 메뉴가 열립니다.
