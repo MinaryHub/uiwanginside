@@ -1,23 +1,67 @@
 import type { ApiEnvelope } from "./types";
 
-/** 외부 API 호출 공통 래퍼 — 타임아웃 + 에러 로깅 */
+/**
+ * 외부 API 호출 공통 래퍼 — 응답 헤더뿐 아니라 본문 읽기까지 타임아웃으로 보호한다.
+ * AbortSignal.timeout() 은 헤더 수신 후에도 유지되어 스트림이 멈추는 현상을 막는다.
+ */
 export async function timedFetch(
   url: string,
   init: RequestInit = {},
   timeoutMs = 8000,
 ): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    // cache 옵션을 지정하지 않는다.
-    // Next 의 패치된 fetch 에 cache:"no-store" 를 주면 일부 호스트에서
-    // 응답이 극단적으로 느려진다 (apis.data.go.kr 실측: 128ms → 58,788ms + 503).
-    // 모든 라우트가 force-dynamic 이라 응답이 캐시될 일도 없고,
-    // CDN 캐시는 Cache-Control 헤더로 직접 제어한다.
-    return await fetch(url, { ...init, signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  const signal = init.signal
+    ? AbortSignal.any([init.signal, timeoutSignal])
+    : timeoutSignal;
+  // cache 옵션을 지정하지 않는다.
+  // Next 의 패치된 fetch 에 cache:"no-store" 를 주면 일부 호스트에서
+  // 응답이 극단적으로 느려진다 (apis.data.go.kr 실측: 128ms → 58,788ms + 503).
+  // 모든 라우트가 force-dynamic 이라 응답이 캐시될 일도 없고,
+  // CDN 캐시는 Cache-Control 헤더로 직접 제어한다.
+  return fetch(url, { ...init, signal });
+}
+
+/**
+ * data.go.kr 서비스키 정규화.
+ * 공공데이터포털은 Encoding 키(%2F, %2B 포함)와 Decoding 키(+, /, = 포함)를
+ * 둘 다 발급한다. 이미 인코딩된 키는 그대로 두고, 원문 키만 URL 인코딩해
+ * 어떤 형식을 넣어도 동일하게 동작하게 한다.
+ */
+export function normalizeServiceKey(key: string): string {
+  const trimmed = key.trim();
+  return /%[0-9a-fA-F]{2}/.test(trimmed) ? trimmed : encodeURIComponent(trimmed);
+}
+
+/** 단일 객체 또는 배열로 오는 XML/JSON 필드를 안전하게 배열로 정규화한다 */
+export function asArray<T>(v: T | T[] | null | undefined): T[] {
+  if (v == null) return [];
+  return Array.isArray(v) ? v : [v];
+}
+
+/** KST(UTC+9) 기준 날짜·시각 분해. 호스트 로캘·TZ 에 의존하지 않는다. */
+export function kstDateParts(offsetMs = 0) {
+  const d = new Date(Date.now() + 9 * 3600_000 + offsetMs);
+  const p = (n: number) => String(n).padStart(2, "0");
+  const year = d.getUTCFullYear();
+  const month = d.getUTCMonth() + 1;
+  const day = d.getUTCDate();
+  const hour = d.getUTCHours();
+  const minute = d.getUTCMinutes();
+  const dow = d.getUTCDay(); // 0=일
+  return {
+    year,
+    month,
+    day,
+    hour,
+    minute,
+    /** 공공데이터 규격 요일: 1=월 … 7=일 */
+    isoDow: dow === 0 ? 7 : dow,
+    ymd: `${year}${p(month)}${p(day)}`,
+    isoDate: `${year}-${p(month)}-${p(day)}`,
+    hh: p(hour),
+    mm: p(minute),
+    hhmm: hour * 100 + minute,
+  };
 }
 
 /**
@@ -119,14 +163,37 @@ export function createTtlCache<T>(ttlMs: number, maxEntries = 200) {
       }
       return hit.value;
     },
-    set(key: string, value: T) {
-      // 단순 FIFO 축출 — 엔트리가 작고 TTL 이 짧아 이 정도면 충분하다
-      if (store.size >= maxEntries) {
+    set(key: string, value: T, customTtlMs?: number) {
+      // 이미 있는 키를 갱신할 때는 다른 항목을 밀어내지 않는다
+      if (store.has(key)) {
+        store.delete(key);
+      } else if (store.size >= maxEntries) {
         const oldest = store.keys().next().value;
         if (oldest !== undefined) store.delete(oldest);
       }
-      store.set(key, { at: Date.now(), value });
+      const at =
+        customTtlMs != null && customTtlMs < ttlMs
+          ? Date.now() - (ttlMs - customTtlMs)
+          : Date.now();
+      store.set(key, { at, value });
     },
+  };
+}
+
+/**
+ * 진행 중인 비동기 작업을 키별로 합친다 (single-flight).
+ * 콜드 스타트 직후 동시 요청이 몰릴 때 같은 외부 API 를 중복 호출하지 않게 막는다.
+ */
+export function createInFlight<T>() {
+  const pending = new Map<string, Promise<T>>();
+  return function run(key: string, fn: () => Promise<T>): Promise<T> {
+    const existing = pending.get(key);
+    if (existing) return existing;
+    const p = fn().finally(() => {
+      pending.delete(key);
+    });
+    pending.set(key, p);
+    return p;
   };
 }
 

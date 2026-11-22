@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 
 /**
  * 로그인 없이 접속 통계를 여는 비밀 주소.
@@ -33,19 +33,13 @@ export function statsToken(): string | null {
   return raw;
 }
 
-export function statsLinkEnabled(): boolean {
-  return statsToken() !== null;
-}
+const sha256 = (s: string) => createHash("sha256").update(s, "utf8").digest();
 
 /**
- * 시간차로 한 글자씩 맞혀 나가는 것을 막으려면 앞에서 끊지 않고 끝까지 비교해야
- * 한다. 길이는 어차피 주소를 보면 드러나므로 먼저 걸러도 잃을 것이 없다.
+ * 시간차로 길이·글자를 추론하는 것을 막기 위해 양쪽을 해시한 뒤 상수 시간 비교한다.
  */
 export function matchesStatsToken(given: string): boolean {
   const want = statsToken();
   if (!want) return false;
-  const a = Buffer.from(given, "utf8");
-  const b = Buffer.from(want, "utf8");
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
+  return timingSafeEqual(sha256(given), sha256(want));
 }

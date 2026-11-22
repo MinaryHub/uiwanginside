@@ -47,7 +47,7 @@ export default function MapCard({
             type="button"
             onClick={onClose}
             aria-label="닫기"
-            className="press grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius-full)] text-[length:var(--text-sm)] text-[var(--text-muted)] hover:text-[var(--text)]"
+            className="press grid h-11 w-11 shrink-0 place-items-center rounded-[var(--radius-full)] text-[length:var(--text-sm)] text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
           >
             <Icon name="close" size={18} />
           </button>

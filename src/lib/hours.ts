@@ -1,4 +1,5 @@
 import { UIWANG_HOURS, type OsmHours } from "./uiwang-hours";
+import { flatMetres } from "./geo";
 
 /**
  * 장소의 운영시간.
@@ -22,10 +23,6 @@ const NEAR_M = 80;
 
 function norm(s: string): string {
   return s.replace(/\s|\(.*?\)/g, "").toLowerCase();
-}
-
-function metres(aLat: number, aLng: number, bLat: number, bLng: number): number {
-  return Math.hypot((aLat - bLat) * 111_000, (aLng - bLng) * 88_000);
 }
 
 /**
@@ -55,7 +52,7 @@ export function osmHours(place: {
 }): PlaceHours | null {
   let best: { h: OsmHours; d: number } | null = null;
   for (const h of UIWANG_HOURS) {
-    const d = metres(place.lat, place.lng, h.lat, h.lng);
+    const d = flatMetres(place.lat, place.lng, h.lat, h.lng);
     if (d > NEAR_M) continue;
     if (!nameMatches(place.name, h.name)) continue;
     if (!best || d < best.d) best = { h, d };
@@ -74,6 +71,21 @@ const DAY_KO: Record<string, string> = {
   PH: "공휴일",
 };
 
+const MONTH_KO: Record<string, string> = {
+  Jan: "1월",
+  Feb: "2월",
+  Mar: "3월",
+  Apr: "4월",
+  May: "5월",
+  Jun: "6월",
+  Jul: "7월",
+  Aug: "8월",
+  Sep: "9월",
+  Oct: "10월",
+  Nov: "11월",
+  Dec: "12월",
+};
+
 /**
  * OSM 문법을 읽기 쉽게 바꾼다.
  *
@@ -88,8 +100,11 @@ function prettify(raw: string): string {
     .map((part) =>
       part
         .trim()
+        .replace(/\s*\|\|\s*/g, " / ")
+        .replace(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/g, (m) => MONTH_KO[m] ?? m)
         .replace(/\b(Mo|Tu|We|Th|Fr|Sa|Su|PH)\b/g, (d) => DAY_KO[d] ?? d)
-        .replace(/(?<=[가-힣])-(?=[가-힣])/g, "~"),
+        .replace(/\b(closed|off)\b/gi, "휴무")
+        .replace(/(?<=[가-힣])-(?=[가-힣0-9])/g, "~"),
     )
     .join(" · ");
 }

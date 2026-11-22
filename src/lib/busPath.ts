@@ -99,13 +99,23 @@ export function planRun(path: LatLng[], a: LatLng, b: LatLng): PathRun | null {
 
 /** 구간의 진행률(0~1) 에 해당하는 좌표 */
 export function walk(run: PathRun, ratio: number): LatLng {
-  const want = run.length * Math.max(0, Math.min(1, ratio));
-  if (want <= 0) return at(run.path, run.from);
+  const r = Math.max(0, Math.min(1, ratio));
+  const start = at(run.path, run.from);
+  const end = at(run.path, run.to);
+  if (r <= 0 || run.length <= 0) return start;
+  if (r >= 1) return end;
 
+  // 같은 선분 안에 출발·도착이 모두 있으면 직선 보간한다
+  if (run.from.seg === run.to.seg) {
+    return [start[0] + (end[0] - start[0]) * r, start[1] + (end[1] - start[1]) * r];
+  }
+
+  const want = run.length * r;
   let acc = 0;
-  let cur = at(run.path, run.from);
-  for (let i = run.from.seg + 1; i <= run.to.seg; i++) {
-    const next = i === run.to.seg ? at(run.path, run.to) : run.path[i];
+  let cur = start;
+
+  // from → path[from.seg+1] → … → path[to.seg] → to 순으로 빠짐없이 걷는다
+  const step = (next: LatLng): LatLng | null => {
     const d = mx(cur, next);
     if (acc + d >= want) {
       const t = d === 0 ? 0 : (want - acc) / d;
@@ -113,6 +123,12 @@ export function walk(run: PathRun, ratio: number): LatLng {
     }
     acc += d;
     cur = next;
+    return null;
+  };
+
+  for (let i = run.from.seg + 1; i <= run.to.seg; i++) {
+    const hit = step(run.path[i]);
+    if (hit) return hit;
   }
-  return at(run.path, run.to);
+  return step(end) ?? end;
 }

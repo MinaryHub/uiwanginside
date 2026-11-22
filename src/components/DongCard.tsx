@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { DONG_POPULATION, POPULATION_AS_OF, TOTAL_POPULATION, density } from "@/lib/population";
 import { HAS_DONG_SCHEDULE } from "@/lib/waste";
 
@@ -16,10 +17,12 @@ import { HAS_DONG_SCHEDULE } from "@/lib/waste";
  */
 export default function DongCard({
   name,
+  factoryCount,
   onClose,
   onOpenWaste,
 }: {
   name: string;
+  factoryCount?: number;
   onClose: () => void;
   onOpenWaste: () => void;
 }) {
@@ -30,7 +33,7 @@ export default function DongCard({
   const share = ((d.population / TOTAL_POPULATION) * 100).toFixed(1);
 
   return (
-    <div className="pop-in absolute inset-x-3 bottom-[calc(var(--dock-h)+8px)] z-30 mx-auto max-w-[440px] overflow-hidden rounded-[var(--radius-xl)] bg-[var(--surface)] shadow-[var(--shadow-lg)] border-2 border-[var(--ink)]">
+    <div className="pop-in absolute inset-x-3 bottom-[calc(var(--dock-h)+8px)] z-30 mx-auto max-w-[440px] overflow-hidden rounded-[var(--radius-xl)] border-2 border-[var(--ink)] bg-[var(--surface)] shadow-[var(--shadow-lg)]">
       <div className="flex items-center gap-2 px-3.5 pt-3">
         <h2 className="min-w-0 flex-1 truncate text-[length:var(--text-base)] font-bold">
           {d.name}
@@ -39,9 +42,9 @@ export default function DongCard({
           type="button"
           onClick={onClose}
           aria-label="닫기"
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius)] text-[var(--text-muted)] transition hover:bg-[var(--surface-2)]"
+          className="press grid h-11 w-11 shrink-0 place-items-center rounded-[var(--radius-full)] text-[var(--text-muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
         >
-          ✕
+          <Icon name="close" size={18} />
         </button>
       </div>
 
@@ -66,7 +69,14 @@ export default function DongCard({
       </dl>
 
       <p className="px-3.5 pt-2 text-[length:var(--text-xs)] leading-relaxed text-[var(--text-muted)]">
-        의왕시 인구의 <b className="text-[var(--text)]">{share}%</b> · 법정동{" "}
+        의왕시 인구의 <b className="text-[var(--text)]">{share}%</b>
+        {factoryCount != null && factoryCount > 0 && (
+          <>
+            {" · 등록 공장 "}
+            <b className="text-[var(--text)]">{factoryCount.toLocaleString("ko-KR")}곳</b>
+          </>
+        )}
+        {" · 법정동 "}
         {d.legalDongs.join(", ")}
       </p>
 
@@ -75,7 +85,7 @@ export default function DongCard({
         <button
           type="button"
           onClick={onOpenWaste}
-          className="mt-2 flex w-full items-center gap-1.5 border-t border-[var(--border)] px-3.5 py-2.5 text-left text-[length:var(--text-xs)] transition hover:bg-[var(--surface-2)]"
+          className="mt-2 flex min-h-[44px] w-full items-center gap-1.5 border-t border-[var(--border)] px-3.5 py-2.5 text-left text-[length:var(--text-xs)] transition hover:bg-[var(--surface-2)]"
         >
           <span aria-hidden>🗑️</span>
           <span className="flex-1 text-[var(--text-muted)]">

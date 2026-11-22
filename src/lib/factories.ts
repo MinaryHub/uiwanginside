@@ -1,4 +1,5 @@
-import { UIWANG_FACTORIES, FACTORIES_AS_OF, type Factory } from "./uiwang-factories";
+import { UIWANG_FACTORIES, FACTORIES_AS_OF } from "./uiwang-factories";
+import type { FactoryItem } from "./types";
 
 /**
  * 제조업 분포.
@@ -51,10 +52,11 @@ export interface Tally {
   employees: number;
 }
 
-function tally(list: Factory[], keyOf: (f: Factory) => string): Tally[] {
+function tally(list: FactoryItem[], keyOf: (f: FactoryItem) => string): Tally[] {
   const m = new Map<string, Tally>();
   for (const f of list) {
     const k = keyOf(f);
+    if (!k) continue;
     const t = m.get(k) ?? { key: k, label: k, count: 0, employees: 0 };
     t.count += 1;
     t.employees += f.employees ?? 0;
@@ -63,11 +65,18 @@ function tally(list: Factory[], keyOf: (f: Factory) => string): Tally[] {
   return [...m.values()].sort((a, b) => b.count - a.count || b.employees - a.employees);
 }
 
-/** 화면에 필요한 요약. 원본이 바뀌지 않으므로 한 번만 계산한다 */
-export const FACTORY_SUMMARY = (() => {
-  const list = UIWANG_FACTORIES;
+export interface FactorySummary {
+  asOf: string | null;
+  total: number;
+  employees: number;
+  byGroup: Tally[];
+  byDong: Tally[];
+  largest: FactoryItem[];
+}
+
+export function summarizeFactories(list: FactoryItem[], asOf: string | null): FactorySummary {
   return {
-    asOf: FACTORIES_AS_OF,
+    asOf,
     total: list.length,
     employees: list.reduce((n, f) => n + (f.employees ?? 0), 0),
     byGroup: tally(list, (f) => industryGroup(f.industry).id).map((t) => ({
@@ -77,10 +86,13 @@ export const FACTORY_SUMMARY = (() => {
     byDong: tally(list, (f) => f.dong),
     /** 종업원이 많은 곳 — 우리 동네 큰 일터 */
     largest: [...list]
-      .filter((f) => f.employees != null)
+      .filter((f) => f.employees != null && f.employees > 0)
       .sort((a, b) => (b.employees ?? 0) - (a.employees ?? 0))
       .slice(0, 8),
   };
-})();
+}
+
+/** 정적 스냅샷 요약 */
+export const FACTORY_SUMMARY = summarizeFactories(UIWANG_FACTORIES, FACTORIES_AS_OF);
 
 export { GROUP_MAP as INDUSTRY_GROUP_MAP };

@@ -3,6 +3,7 @@
 import Icon from "@/components/Icon";
 import SchoolFacts from "@/components/SchoolFacts";
 import PlaceHours from "@/components/PlaceHours";
+import { formatDistance } from "@/lib/format";
 import { CATEGORY_MAP } from "@/lib/uiwang";
 import type { MedicalPlace, Place } from "@/lib/types";
 
@@ -27,12 +28,11 @@ export default function PlaceDetailCard({
   onClose: () => void;
 }) {
   const def = CATEGORY_MAP[place.category];
-  const distance =
-    place.distance == null
-      ? null
-      : place.distance >= 1000
-        ? `${(place.distance / 1000).toFixed(1)}km`
-        : `${place.distance}m`;
+  const distance = formatDistance(place.distance);
+  const detailText =
+    place.categoryName && place.categoryName.trim() !== def.label
+      ? place.categoryName.trim()
+      : null;
 
   /** 카카오맵 길찾기 — 앱이 있으면 앱으로, 없으면 웹으로 열린다 */
   const directionsUrl = `https://map.kakao.com/link/to/${encodeURIComponent(
@@ -40,8 +40,8 @@ export default function PlaceDetailCard({
   )},${place.lat},${place.lng}`;
 
   return (
-    <div className="pointer-events-auto pop-in absolute inset-x-3 bottom-[calc(var(--dock-h)+8px)] z-30 mx-auto max-w-[440px] overflow-hidden rounded-[var(--radius-xl)] bg-[var(--surface)] shadow-[var(--shadow-lg)] border-2 border-[var(--ink)]">
-      <div className="p-5">
+    <div className="pointer-events-auto pop-in absolute inset-x-3 bottom-[calc(var(--dock-h)+8px)] z-30 mx-auto max-w-[440px] overflow-hidden rounded-[var(--radius-xl)] border-2 border-[var(--ink)] bg-[var(--surface)] shadow-[var(--shadow-lg)]">
+      <div className="thin-scroll max-h-[58vh] overflow-y-auto p-5">
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
             <h3 className="truncate text-[length:var(--text-lg)] font-bold">
@@ -58,11 +58,17 @@ export default function PlaceDetailCard({
             type="button"
             onClick={onClose}
             aria-label="닫기"
-            className="press grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius-full)] text-[length:var(--text-sm)] text-[var(--text-muted)] hover:text-[var(--text)]"
+            className="press grid h-11 w-11 shrink-0 place-items-center rounded-[var(--radius-full)] text-[length:var(--text-sm)] text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
           >
             <Icon name="close" size={18} />
           </button>
         </div>
+
+        {detailText && (
+          <p className="mt-2 rounded-[var(--radius)] bg-[var(--surface-2)] px-3 py-1.5 text-[length:var(--text-xs)] font-semibold leading-relaxed text-[var(--text)]">
+            {detailText}
+          </p>
+        )}
 
         <PlaceHours place={place} medical={medical} day={medicalDay} />
 
@@ -77,7 +83,7 @@ export default function PlaceDetailCard({
           {place.phone && (
             <a
               href={`tel:${place.phone}`}
-              className="brand-fill press border-2 shadow-[var(--shadow-sm)] inline-flex min-h-[46px] flex-1 items-center justify-center rounded-[var(--radius-full)] text-[length:var(--text-sm)] font-semibold"
+              className="brand-fill press inline-flex min-h-[46px] flex-1 items-center justify-center rounded-[var(--radius-full)] border-2 text-[length:var(--text-sm)] font-semibold shadow-[var(--shadow-sm)]"
             >
               전화
             </a>
@@ -86,7 +92,7 @@ export default function PlaceDetailCard({
             href={directionsUrl}
             target="_blank"
             rel="noreferrer noopener"
-            className="press inline-flex min-h-[46px] flex-1 items-center justify-center rounded-[var(--radius-full)] border-2 border-[var(--ink)] shadow-[var(--shadow-sm)] text-[length:var(--text-sm)] font-semibold "
+            className="press inline-flex min-h-[46px] flex-1 items-center justify-center rounded-[var(--radius-full)] border-2 border-[var(--ink)] text-[length:var(--text-sm)] font-semibold shadow-[var(--shadow-sm)]"
           >
             길찾기
           </a>
@@ -95,7 +101,8 @@ export default function PlaceDetailCard({
               href={place.url}
               target="_blank"
               rel="noreferrer noopener"
-              className="press inline-flex min-h-[46px] min-w-[46px] items-center justify-center rounded-[var(--radius-full)] border-2 border-[var(--ink)] shadow-[var(--shadow-sm)] px-3 text-[length:var(--text-sm)] font-semibold "
+              aria-label="카카오맵에서 보기"
+              className="press inline-flex min-h-[46px] min-w-[46px] items-center justify-center rounded-[var(--radius-full)] border-2 border-[var(--ink)] px-3 text-[length:var(--text-sm)] font-semibold shadow-[var(--shadow-sm)]"
               title="카카오맵에서 보기"
             >
               ↗
@@ -105,7 +112,6 @@ export default function PlaceDetailCard({
 
         {/* 학교는 이름·주소만으로는 부족하다 — 학부모가 볼 것을 덧붙인다 */}
         {place.category === "SC4" && <SchoolFacts name={place.name} />}
-
       </div>
     </div>
   );

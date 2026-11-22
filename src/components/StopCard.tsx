@@ -2,6 +2,7 @@
 
 import MapCard from "@/components/MapCard";
 import { Empty } from "@/components/ui";
+import { BUS_CROWD, formatDistance } from "@/lib/format";
 import type { BusStop } from "@/lib/types";
 
 /** 남은 시간에 따라 색을 달리해 "지금 뛰어야 하는지" 를 한눈에 */
@@ -13,8 +14,6 @@ function eta(sec: number | null) {
   if (min <= 7) return { text: `${min}분`, color: "var(--warn)" };
   return { text: `${min}분`, color: "var(--text)" };
 }
-
-const CROWD: Record<number, string> = { 1: "여유", 2: "보통", 3: "혼잡", 4: "매우혼잡" };
 
 /**
  * 지도에서 정류소를 누르면 뜨는 카드.
@@ -32,12 +31,7 @@ export default function StopCard({
   onClose: () => void;
 }) {
   const arrivals = stop.arrivals ?? [];
-  const distance =
-    stop.distance == null
-      ? null
-      : stop.distance >= 1000
-        ? `${(stop.distance / 1000).toFixed(1)}km`
-        : `${stop.distance}m`;
+  const distance = formatDistance(stop.distance);
 
   return (
     <MapCard
@@ -66,6 +60,7 @@ export default function StopCard({
           {arrivals.map((a) => {
             const first = eta(a.predictSec);
             const second = eta(a.predictSec2);
+            const crowd = a.crowded ? BUS_CROWD[a.crowded] : null;
             const on = trackedRouteId === a.routeId;
             return (
               <li key={`${a.routeId}-${a.destName}`}>
@@ -97,13 +92,22 @@ export default function StopCard({
                     </span>
                   </div>
 
-                  {(a.stationsLeft || a.crowded || a.lowPlate || on) && (
-                    <div className="mt-1 flex items-center gap-2 pl-[56px] text-[length:var(--text-2xs)] text-[var(--text-muted)]">
+                  {(a.stationsLeft || crowd || a.remainSeats != null || a.lowPlate || on) && (
+                    <div className="mt-1 flex flex-wrap items-center gap-2 pl-[56px] text-[length:var(--text-2xs)] text-[var(--text-muted)]">
                       {a.stationsLeft != null && a.stationsLeft > 0 && (
                         <span>{a.stationsLeft}번째 전</span>
                       )}
-                      {a.crowded && <span>{CROWD[a.crowded]}</span>}
-                      {a.lowPlate && <span>저상</span>}
+                      {crowd && (
+                        <span className="font-bold" style={{ color: crowd.color }}>
+                          {crowd.label}
+                        </span>
+                      )}
+                      {a.remainSeats != null && <span>좌석 {a.remainSeats}</span>}
+                      {a.lowPlate && (
+                        <span className="rounded bg-[var(--ok-soft)] px-1 font-bold text-[var(--ok)]">
+                          저상
+                        </span>
+                      )}
                       {on && (
                         <span className="ml-auto font-bold text-[var(--brand)]">
                           지도에 위치 표시 중

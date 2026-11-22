@@ -1,7 +1,10 @@
+import { after } from "next/server";
 import { timedFetch } from "@/lib/fetcher";
 import { cctvUrl } from "@/lib/cctv";
 
 export const dynamic = "force-dynamic";
+
+const ALLOWED_IMAGE_TYPES = /^image\/(jpeg|jpg|png|webp|gif)(;|$)/i;
 
 /**
  * CCTV 정지영상 중계.
@@ -18,19 +21,20 @@ export async function GET(req: Request) {
   if (!id) return new Response("id required", { status: 400 });
 
   try {
-    const url = await cctvUrl(id);
+    const url = await cctvUrl(id, (work) => after(work));
     if (!url) return new Response("not found", { status: 404 });
 
-    const res = await timedFetch(url, {}, 10_000);
+    const res = await timedFetch(url, { redirect: "error" }, 10_000);
     if (!res.ok || !res.body) return new Response("upstream error", { status: 502 });
 
     const type = res.headers.get("content-type") ?? "";
-    // 이미지가 아니면 내보내지 않는다 — 카메라가 죽으면 오류 페이지가 온다
-    if (!type.startsWith("image/")) return new Response("not an image", { status: 502 });
+    // SVG 등 실행 가능한 형식을 차단하고 래스터 이미지만 허용한다
+    if (!ALLOWED_IMAGE_TYPES.test(type)) return new Response("not an image", { status: 502 });
 
     return new Response(res.body, {
       headers: {
         "Content-Type": type,
+        "X-Content-Type-Options": "nosniff",
         // 몇 초 사이 여러 사람이 같은 카메라를 봐도 원본은 한 번만 두드린다
         "Cache-Control": "public, max-age=0, s-maxage=10, stale-while-revalidate=20",
       },

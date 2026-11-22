@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { Skeleton, Empty, Notice } from "@/components/ui";
+import { Section, Skeleton, Empty, Unavailable } from "@/components/ui";
 import type { ApiEnvelope } from "@/lib/types";
 import type { Cctv, CctvPayload } from "@/lib/cctvTypes";
 
@@ -14,10 +14,14 @@ import type { Cctv, CctvPayload } from "@/lib/cctvTypes";
 export default function CctvPanel({
   res,
   isLoading,
+  error,
+  activeCctvId,
   onSelect,
 }: {
   res?: ApiEnvelope<CctvPayload>;
   isLoading: boolean;
+  error?: unknown;
+  activeCctvId?: string | null;
   onSelect: (c: Cctv) => void;
 }) {
   const byRoad = useMemo(() => {
@@ -32,41 +36,50 @@ export default function CctvPanel({
   }, [res]);
 
   return (
-    <section className="border-t border-[var(--border)] px-4 py-3.5">
-      <h2 className="text-[length:var(--text-sm)] font-bold">도로 CCTV</h2>
-      <p className="mb-2 mt-0.5 text-[length:var(--text-2xs)] text-[var(--text-muted)]">
+    <Section title="도로 CCTV">
+      <p className="mb-2.5 -mt-1.5 text-[length:var(--text-2xs)] text-[var(--text-muted)]">
         의왕을 지나는 고속도로 · 누르면 지금 모습이 뜹니다
       </p>
 
       {isLoading && !res ? (
         <Skeleton rows={3} />
-      ) : res?.ok === false ? (
-        <Notice>{res.notice}</Notice>
+      ) : !res?.ok ? (
+        <Unavailable reason={res?.notice} error={error} />
       ) : byRoad.length === 0 ? (
         <Empty>표시할 카메라가 없습니다.</Empty>
       ) : (
-        <div className="space-y-2.5">
+        <div className="space-y-3">
           {byRoad.map(([road, cams]) => (
             <div key={road}>
               <p className="mb-1 text-[length:var(--text-2xs)] font-bold text-[var(--text-faint)]">
                 {road}
               </p>
-              <div className="flex flex-wrap gap-1">
-                {cams.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => onSelect(c)}
-                    className="min-h-[36px] rounded-[var(--radius)] border border-[var(--border)] px-2.5 text-[length:var(--text-xs)] font-semibold transition hover:border-[var(--brand)] hover:text-[var(--brand)]"
-                  >
-                    📹 {c.name}
-                  </button>
-                ))}
+              <div className="flex flex-wrap gap-1.5">
+                {cams.map((c) => {
+                  const on = activeCctvId === c.id;
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => onSelect(c)}
+                      className={`min-h-[44px] rounded-[var(--radius)] border-2 px-3 text-[length:var(--text-xs)] font-semibold transition ${
+                        on
+                          ? "border-[var(--ink)] shadow-[var(--shadow-sm)]"
+                          : "border-[var(--border)] hover:border-[var(--brand)] hover:text-[var(--brand)]"
+                      }`}
+                      style={on ? { background: "var(--brand-2)", color: "var(--ink)" } : undefined}
+                    >
+                      <span aria-hidden>📹 </span>
+                      {c.name}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           ))}
         </div>
       )}
-    </section>
+    </Section>
   );
 }

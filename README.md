@@ -33,49 +33,53 @@ cp .env.example .env.local   # 키를 채워넣으세요 (아래 참고)
 npm run dev                  # http://localhost:3000
 ```
 
-> **키가 하나도 없어도 앱은 실행됩니다.** 키가 없는 영역은 샘플 데이터로 표시되고
-> 각 카드에 `SAMPLE` 뱃지와 안내 문구가 붙습니다. 키를 넣는 즉시 `LIVE` 로 바뀝니다.
+> **키가 하나도 없어도 앱은 실행됩니다.** 샘플이나 가짜 데이터는 표시하지 않으며,
+> 키가 없는 영역은 연동 안내가 뜹니다. 키를 넣는 즉시 실시간 데이터로 채워집니다.
 > 지도는 **카카오맵**이 기본입니다. 카카오 JS 키가 없거나 카카오맵을 못 불러오면
 > **OpenStreetMap 지도로 자동 대체**되어 지도 자리가 비지 않습니다.
 
 ### 장소 데이터는 키 없이도 실제 데이터입니다
 
-`KAKAO_REST_KEY` 가 없으면 **OpenStreetMap Overpass API** 로 자동 폴백합니다 — 무인증이지만
-샘플이 아닌 의왕시 실제 시설 데이터입니다 (시청 반경 4km 기준 340여 곳).
+`KAKAO_REST_KEY` 가 없으면 **OpenStreetMap Overpass API** 와 지자체 공개 시설 데이터로 자동 폴백합니다 —
+무인증이지만 샘플이 아닌 의왕시 실제 시설 데이터입니다.
 카카오 키를 넣으면 전화번호·상세페이지까지 제공하는 카카오 로컬이 우선 사용됩니다.
-좌측 패널 우상단 뱃지로 현재 출처(`카카오 LIVE` / `OSM` / `SAMPLE`)를 확인할 수 있습니다.
+좌측 패널 우상단 출처 표시(`카카오` / `OSM` / `공공`)로 현재 출처를 확인할 수 있습니다.
 
 데이터 © OpenStreetMap contributors (ODbL).
 
 ### 연동 상태 진단
 
-**`/status`** 에서 6개 API 를 실제로 호출해 키 상태를 진단합니다.
+**`/status`** 에서 14개 외부 API와 DB 연동 상태를 한 번에 점검합니다.
 키를 추가하거나 활용신청이 승인된 뒤 이 페이지만 새로고침하면 반영 여부를 바로 알 수 있습니다.
 (오류 코드와 조치 방법까지 함께 표시됩니다. 키 변경 후에는 개발 서버 재시작 필요.)
 
 ## API 키 발급
 
+전체 환경변수 목록은 `.env.example` 에 정리되어 있습니다.
+
 | 환경변수 | 발급처 | 용도 |
 | --- | --- | --- |
 | `NEXT_PUBLIC_KAKAO_JS_KEY` | [developers.kakao.com](https://developers.kakao.com) → 앱 키 → **JavaScript 키** | 지도 (없으면 OpenStreetMap 으로 대체) |
 | `NEXT_PUBLIC_MAP_TILES` | (선택) 타일 URL — 기본은 OpenStreetMap | 대체 지도 그림 바꾸기 |
-| `KAKAO_REST_KEY` | 같은 앱의 **REST API 키** | 카테고리별 장소 검색 (로컬 API) |
-| `KMA_SERVICE_KEY` | [data.go.kr](https://www.data.go.kr) → *기상청\_단기예보 조회서비스* → 일반 인증키 **(Decoding)** | 날씨 |
-| `NAVER_CLIENT_ID` / `NAVER_CLIENT_SECRET` | [developers.naver.com](https://developers.naver.com) → 애플리케이션 등록 → **검색 API** | 뉴스 |
-| `ITS_API_KEY` | [openapi.its.go.kr](https://openapi.its.go.kr) 회원가입 → 인증키 | 사고 · 정체 |
-| `GBIS_SERVICE_KEY` | data.go.kr → *경기도\_버스도착정보 조회* **및** *경기도\_버스정류소 조회* → 일반 인증키 **(Encoding)** | 버스 도착 |
-
-**경기버스는 서비스 2개를 모두 활용신청해야 합니다.** 앱은 *정류소 조회* 로 지도 중심
-주변의 `stationId` 를 얻은 뒤 그 ID 로 *도착정보 조회* 를 호출합니다. 도착정보만 승인되면
-정류소를 찾을 수 없어 도착 시간이 뜨지 않습니다. 이 경우 정류소 위치는 OpenStreetMap
-데이터로 대체 표시되고, 패널에 `OSM 위치만` 뱃지가 붙습니다.
+| `KAKAO_REST_KEY` | 같은 앱의 **REST API 키** | 카테고리별 장소 검색 · 공장 주소 지오코딩 |
+| `KMA_SERVICE_KEY` | [data.go.kr](https://www.data.go.kr) → *기상청\_단기예보 조회서비스* · *기상특보 조회서비스* | 날씨 · 기상특보 (다른 data.go.kr 키의 기본 폴백) |
+| `AIRKOREA_SERVICE_KEY` | data.go.kr → *한국환경공단\_에어코리아\_대기오염정보* | 미세먼지·초미세먼지·예보 (비우면 `KMA_SERVICE_KEY` 재사용) |
+| `EMERGENCY_SERVICE_KEY` | data.go.kr → *국립중앙의료원\_응급의료·병의원·약국 정보* | 응급실 병상 · 진료중인 병원·약국 (비우면 `KMA_SERVICE_KEY` 재사용) |
+| `FACTORY_SERVICE_KEY` | data.go.kr → *경기도 의왕시\_공장 현황* (`15126591`, ODCloud) | 제조업 분포 · 공장 마커 (비우면 `KMA_SERVICE_KEY` 재사용) |
+| `GBIS_SERVICE_KEY` | data.go.kr → *경기도\_버스도착정보* · *버스위치정보* · *노선정보* | 버스 도착 · 실시간 위치 · 노선 경로 |
+| `TAGO_SERVICE_KEY` | data.go.kr → *국토교통부\_TAGO 버스위치정보* | 수도권 광역버스 위치 보조 (비우면 `GBIS_SERVICE_KEY` 재사용) |
+| `GG_DATA_KEY` | [data.gg.go.kr](https://data.gg.go.kr) → *버스정류소 현황* | 의왕 및 인근 정류소 목록 |
+| `ITS_API_KEY` | [openapi.its.go.kr](https://openapi.its.go.kr) 회원가입 → 인증키 | 사고 · 정체 · 고속도로 CCTV |
+| `NEIS_API_KEY` | [open.neis.go.kr](https://open.neis.go.kr) | 학교 기본정보 · 학급 수 · 급식 |
+| `NAVER_CLIENT_ID` / `NAVER_CLIENT_SECRET` | [developers.naver.com](https://developers.naver.com) → **검색 API** | 의왕 지역 뉴스 |
+| `DATABASE_URL` | [neon.tech](https://neon.tech) Postgres | 교통·CCTV·공장 좌표 캐시 및 접속 통계 |
+| `STATS_TOKEN` | 임의 긴 문자열 (선택) | 비공개 접속 통계(`/stats/<토큰>`) 활성화 |
 
 **지도:** 카카오맵이 기본입니다. 카카오 개발자 콘솔 → *앱 설정 → 플랫폼 → Web* 에
-배포 도메인(예: `https://uiwanginside.vercel.app`, 파이 도메인, 로컬은 `http://localhost:3000`)을
+배포 도메인(예: `https://uiwanginside.vercel.app`, 로컬은 `http://localhost:3000`)을
 등록해야 그려집니다. 키가 없거나, 도메인이 등록되지 않았거나, 10초 안에 응답이 없으면
 Leaflet + OpenStreetMap 지도로 자동 대체하고 지도 오른쪽 아래에 "카카오맵 대신 OpenStreetMap" 이 작게 뜹니다.
 대체 지도의 `© OpenStreetMap contributors` 표시는 이용 조건이라 가리지 않습니다.
-CARTO 타일은 키가 없으면 "API KEY REQUIRED" 워터마크가 찍혀 쓰지 않습니다.
 
 ## 구조
 
@@ -84,40 +88,55 @@ src/
 ├─ app/
 │  ├─ page.tsx                 지도 대시보드 진입점
 │  ├─ opendata/                공공데이터 안내 (출처·갱신 주기)
-│  ├─ status/                  연동 상태 진단
+│  ├─ status/                  14개 외부 API·DB 연동 상태 진단
 │  ├─ stats/[token]/           접속 통계 (비밀 주소)
 │  ├─ layout.tsx / globals.css 테마 (라이트·다크 자동)
 │  └─ api/
-│     ├─ places/    카카오 로컬 카테고리 검색 프록시 (최대 45건/카테고리)
-│     ├─ weather/   기상청 초단기실황 + 단기예보 (발표시각 자동 계산)
-│     ├─ traffic/   ITS 돌발정보 + 소통정보 (의왕시 bbox)
-│     ├─ transit/   GBIS 주변 정류소 → 정류소별 도착정보 병렬 조회 (XML)
-│     └─ news/      네이버 뉴스 검색
+│     ├─ places/        카카오 로컬 / OSM / 공공시설(공원·주차장·화장실·CCTV·공장)
+│     ├─ factories/     경기도 의왕시 공장 현황 (ODCloud 15126591 + 좌표 캐시)
+│     ├─ weather/       기상청 초단기실황 + 단기예보 + 기상특보
+│     ├─ air/           에어코리아 측정소(고천동·청계동) + 경기남부 예보
+│     ├─ medical/       국립중앙의료원 병·의원·약국 요일별 진료시간
+│     ├─ emergency/     응급실 실시간 가용병상
+│     ├─ traffic/       ITS 돌발정보 + 구간 소통속도
+│     ├─ cctv/          고속도로 CCTV 목록 및 이미지 중계
+│     ├─ transit/       주변 버스정류소 + 실시간 도착정보
+│     ├─ bus-positions/ 실시간 운행 버스 위치 (GBIS + TAGO)
+│     ├─ bus-route/     노선 주행 경로
+│     ├─ school/        나이스 학교 정보·학급·급식
+│     ├─ news/          네이버 지역 뉴스
+│     └─ health/        연동 상태 진단 API
 ├─ components/
-│  ├─ Dashboard.tsx            상태·SWR 폴링 오케스트레이션
-│  ├─ KakaoMap.tsx             SDK 로드 + CustomOverlay 마커 동기화
-│  ├─ ui.tsx                   Card / Badge / Skeleton / LiveDot
-│  └─ panels/                  Places · Weather · Traffic · Transit · News
+│  ├─ Dashboard.tsx            상태·SWR 폴링·지도 인터랙션 오케스트레이션
+│  ├─ KakaoMap.tsx             SDK 로드 + CustomOverlay 마커·버스 애니메이션
+│  ├─ ui.tsx                   Section / Badge / Notice / Skeleton / LiveDot
+│  └─ panels/                  Places · Weather · Air · Medical · Emergency · Traffic · Transit · Cctv · Waste · Population · Industry · News
 └─ lib/
-   ├─ datasets.ts 공공데이터 목록 (/opendata 화면의 원본)
-   ├─ uiwang.ts   의왕시 좌표·격자·행정동·랜드마크·카테고리 정의
-   ├─ types.ts    API 응답 타입
-   └─ fetcher.ts  타임아웃 fetch + ApiEnvelope 헬퍼
+   ├─ datasets.ts    공공데이터 목록 (/opendata 화면의 원본)
+   ├─ factoryApi.ts  공장 현황 ODCloud 연동 + Neon 좌표 캐시
+   ├─ health.ts      서버 공용 14종 연동 상태 점검
+   ├─ uiwang.ts      의왕시 좌표·격자·행정동·랜드마크·카테고리 정의
+   ├─ types.ts       API 응답 타입
+   └─ fetcher.ts     타임아웃 fetch · 인증키 정규화 · TTL 캐시 · single-flight
 ```
 
 모든 외부 API는 **서버 라우트에서만** 호출합니다. 브라우저가 직접 부르는 것은 지도(카카오맵 SDK 또는 OSM 타일)뿐입니다.
-키가 브라우저로 노출되지 않고, 실패 시 8초 타임아웃 후 샘플로 폴백합니다.
 
-### 공장 자료 갱신 (1년에 한 번)
+### 공장 자료 (ODCloud 공공 API + 선택적 정적 스냅샷)
 
-공장 현황은 API 가 아니라 파일 데이터라 직접 받아 굳힙니다.
+**`GET /api/factories`** 가 공공데이터포털 **경기도 의왕시\_공장 현황**(`15126591`) ODCloud API 에서
+실시간으로 데이터를 받아오고, `KAKAO_REST_KEY` 와 `DATABASE_URL` 이 있으면 건물 단위로 좌표를
+변환해 Neon DB(`factory_coords`)에 영구 캐시합니다.
 
-1. 공공데이터포털에서 **경기도 의왕시_공장 현황** CSV 를 내려받습니다.
-2. `KAKAO_REST_KEY` 가 있는 곳(.env.local 또는 환경변수)에서 실행합니다 — 주소를 좌표로 바꿉니다.
-   ```bash
-   npm run factories:fetch -- ~/Downloads/경기도_의왕시_공장현황.csv
-   ```
-3. `src/lib/uiwang-factories.ts` 가 새로 만들어집니다. 커밋하면 끝입니다.
+필요하면 아래 명령으로 정적 스냅샷(`src/lib/uiwang-factories.ts`)을 미리 굳혀 둘 수도 있습니다.
+
+```bash
+# 공공 API 에서 직접 수집 + 지오코딩
+npm run factories:fetch
+
+# 또는 공공데이터포털 CSV 파일에서 변환
+npm run factories:fetch -- ~/Downloads/경기도_의왕시_공장현황.csv
+```
 
 ## 사용법
 
@@ -125,26 +144,29 @@ src/
 
 | 메뉴 | 열리는 것 |
 | --- | --- |
-| ☀️ 날씨 | 지금 날씨 · 시간대별 예보 · 미세먼지 |
-| 🏥 병원·약국 | 근처 응급실 남은 병상 · 지금 문 연 병원·약국 |
+| ☀️ 날씨 | 지금 날씨 · 기상특보 · 시간대별 예보 · 미세먼지 |
+| 🏥 병원·약국 | 근처 응급실 남은 병상 · 지금 문 연 병원·약국(요일별 진료시간 포함) |
 | 🚌 버스·교통 | 정류소 버스 도착 · 사고·정체 · CCTV · 주차장 |
 | 🍜 맛집 | 음식점 · 카페 |
-| 🛒 생활 | 마트 · 편의점 · 은행 · 학교 · 공원 · 화장실 |
+| 🛒 생활 | 마트 · 편의점 · 은행 · 학교(급식·학급) · 공원 · 화장실 |
 | ♻️ 쓰레기 | 버리는 시간과 방법 |
-| 🏘️ 우리 동네 | 동별 인구 · 제조업 분포(지도에 🏭) — 동을 누르면 지도가 그 동으로 |
+| 🏘️ 우리 동네 | 동별 인구 · 제조업 분포(업종별 지도 필터 · 큰 일터) — 동을 누르면 지도가 그 동으로 |
 | 📰 소식 | 의왕 최신 뉴스 |
 
 - 같은 메뉴를 다시 누르면 닫히고 지도만 남습니다. ✕ 로 닫았다면 "다시 보기" 단추로 펼칩니다.
-- 상단 요약줄(기온·미세먼지·사고·진료)을 누르면 해당 메뉴가 열립니다.
+- 상단 요약줄(기상특보·뉴스·기온·미세먼지·사고·진료)을 누르면 해당 메뉴가 열립니다.
 - 오른쪽 단추는 내 위치 · 확대 · 축소, 상단 🔍 은 이름으로 찾기입니다.
 - 휴대폰에서는 메뉴가 4칸 두 줄로 여덟 개 모두 한눈에 보입니다.
 
-## 배포
+## 배포 (Vercel)
+
+`vercel.json` 이 서울 리전(`icn1`)으로 설정되어 있으며, 무거운 API 라우트에는 `maxDuration` 과
+`next/server` 의 `after()` 백그라운드 저장이 적용되어 있습니다.
 
 ```bash
 npx vercel            # 프리뷰
 npx vercel --prod     # 프로덕션
 ```
 
-배포 전 Vercel 프로젝트에 위 환경변수를 모두 등록하고,
+배포 전 Vercel 프로젝트 Environment Variables 에 `.env.example` 의 필요한 변수를 등록하고,
 카카오 콘솔 Web 플랫폼에 배포 도메인을 추가하세요.

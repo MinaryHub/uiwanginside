@@ -1,3 +1,5 @@
+import { useId } from "react";
+
 /**
  * 의왕 인사이드 심볼.
  *
@@ -16,6 +18,7 @@ export default function Logo({
   size?: number;
   className?: string;
 }) {
+  const clipId = useId();
   return (
     <svg
       width={size}
@@ -26,7 +29,7 @@ export default function Logo({
       aria-label="의왕 인사이드"
     >
       <defs>
-        <clipPath id="uiwang-logo-clip">
+        <clipPath id={clipId}>
           <circle cx="16" cy="16" r="15" />
         </clipPath>
       </defs>
@@ -34,7 +37,7 @@ export default function Logo({
       {/* 원 — 의왕의 'ㅇ' */}
       <circle cx="16" cy="16" r="15" fill="#0f6b60" />
 
-      <g clipPath="url(#uiwang-logo-clip)">
+      <g clipPath={`url(#${clipId})`}>
         {/* 떠오르는 해 — 봉우리 뒤에 두어 능선 위로 걸치게 한다 */}
         <circle cx="16" cy="13.5" r="4.4" fill="#f2b23e" />
 

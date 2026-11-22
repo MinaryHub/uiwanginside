@@ -32,7 +32,9 @@ export default function PopulationPanel({
     return b.population - a.population;
   });
 
-  const max = Math.max(...rows.map((d) => d.population));
+  const metricOf = (d: (typeof DONG_POPULATION)[number]) =>
+    sort === "density" ? density(d.population, d.area) : d.population;
+  const max = Math.max(...rows.map(metricOf));
 
   return (
     <Section
@@ -84,21 +86,25 @@ export default function PopulationPanel({
               ["density", "밀도순"],
               ["name", "가나다"],
             ] as const
-          ).map(([k, label]) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => setSort(k)}
-              className="rounded px-1.5 py-0.5 text-[length:var(--text-2xs)] font-bold transition"
-              style={
-                sort === k
-                  ? { background: "var(--brand-2)", color: "var(--ink)", border: "2px solid var(--ink)", boxShadow: "var(--shadow-sm)" }
-                  : { color: "var(--text-muted)" }
-              }
-            >
-              {label}
-            </button>
-          ))}
+          ).map(([k, label]) => {
+            const on = sort === k;
+            return (
+              <button
+                key={k}
+                type="button"
+                aria-pressed={on}
+                onClick={() => setSort(k)}
+                className={`min-h-[34px] rounded-[var(--radius)] border-2 px-2 py-0.5 text-[length:var(--text-2xs)] font-bold transition ${
+                  on
+                    ? "border-[var(--ink)] shadow-[var(--shadow-sm)]"
+                    : "border-transparent text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
+                }`}
+                style={on ? { background: "var(--brand-2)", color: "var(--ink)" } : undefined}
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -106,16 +112,19 @@ export default function PopulationPanel({
       <ul className="space-y-1.5">
         {rows.map((d) => {
           const share = (d.population / TOTAL_POPULATION) * 100;
+          const on = activeDong === d.name;
           return (
             <li key={d.name}>
               <button
                 type="button"
                 onClick={() => onSelectDong(d)}
-                aria-pressed={activeDong === d.name}
-                className="w-full rounded-[var(--radius)] px-2 py-1.5 text-left transition hover:bg-[var(--surface-2)]"
+                aria-pressed={on}
+                className={`w-full rounded-[var(--radius)] border-2 px-2 py-1.5 text-left transition ${
+                  on ? "border-[var(--info)]" : "border-transparent hover:bg-[var(--surface-2)]"
+                }`}
                 style={
-                  activeDong === d.name
-                    ? { background: "color-mix(in srgb, var(--info) 12%, transparent)", outline: "1px solid var(--info)" }
+                  on
+                    ? { background: "color-mix(in srgb, var(--info) 12%, transparent)" }
                     : undefined
                 }
                 title={`${d.name} 경계 보기 · 법정동: ${d.legalDongs.join(", ")}`}
@@ -128,7 +137,7 @@ export default function PopulationPanel({
                   <span className="ml-auto text-[length:var(--text-sm)] font-bold tabular-nums">
                     {fmt(d.population)}
                   </span>
-                  <span className="w-9 text-right text-[length:var(--text-2xs)] text-[var(--text-muted)] tabular-nums">
+                  <span className="w-9 text-right text-[length:var(--text-2xs)] tabular-nums text-[var(--text-muted)]">
                     {share.toFixed(1)}%
                   </span>
                 </div>
@@ -136,7 +145,7 @@ export default function PopulationPanel({
                   <div
                     className="h-full rounded-full transition-[width] duration-500"
                     style={{
-                      width: `${(d.population / max) * 100}%`,
+                      width: `${(metricOf(d) / max) * 100}%`,
                       background: "var(--brand)",
                     }}
                   />

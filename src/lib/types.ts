@@ -16,7 +16,7 @@ export interface Place {
 }
 
 /** 모두 실제 데이터 출처다. 샘플/가짜 데이터는 표시하지 않는다. */
-export type PlaceSource = "kakao" | "osm";
+export type PlaceSource = "kakao" | "osm" | "public";
 
 export interface PlacesPayload {
   places: Place[];
@@ -27,6 +27,14 @@ export interface PlacesPayload {
    * 얼마나 덜 보여주고 있는지 사용자에게 알리는 데 쓴다.
    */
   total?: number;
+}
+
+export interface SearchPayload {
+  places: Place[];
+}
+
+export interface BusRoutePayload {
+  paths: Record<string, [number, number][]>;
 }
 
 export interface WeatherNow {
@@ -233,6 +241,11 @@ export interface AirPayload {
   updatedAt: string;
 }
 
+export interface DayHours {
+  start: string;
+  close: string;
+}
+
 export interface MedicalPlace {
   id: string;
   kind: "hospital" | "pharmacy";
@@ -245,6 +258,8 @@ export interface MedicalPlace {
   /** 오늘 진료 시작/종료 (HH:MM). 정보 없으면 빈 문자열 */
   todayStart: string;
   todayClose: string;
+  /** 요일별 진료시간 (1=월 … 7=일, 8=공휴일) */
+  weeklyHours?: Record<number, DayHours>;
   /** 지금 진료 중인지. 시간 정보가 없으면 null */
   openNow: boolean | null;
 }
@@ -287,6 +302,25 @@ export interface EmergencyRoom {
 export interface EmergencyPayload {
   rooms: EmergencyRoom[];
   source: "nmc";
+  updatedAt: string;
+}
+
+/** 등록 공장 1건 — 좌표는 지오코딩 전에는 null 일 수 있다 */
+export interface FactoryItem {
+  name: string;
+  industry: string;
+  employees: number | null;
+  product: string;
+  address: string;
+  dong: string;
+  lat: number | null;
+  lng: number | null;
+}
+
+export interface FactoriesPayload {
+  asOf: string | null;
+  factories: FactoryItem[];
+  source: "odcloud" | "snapshot";
   updatedAt: string;
 }
 

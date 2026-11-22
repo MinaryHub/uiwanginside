@@ -13,13 +13,15 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(_req: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  if (!matchesStatsToken(token)) return new Response("Not Found", { status: 404 });
+  if (!matchesStatsToken(token)) {
+    return new Response("Not Found", { status: 404, headers: { "Cache-Control": "no-store" } });
+  }
 
   if (!hasDb()) return fail(EMPTY_STATS, "저장소가 연결되지 않았습니다.");
   try {
     return ok(await collectStats(), undefined, 0);
   } catch (e) {
     console.error("[stats:link]", e);
-    return fail(EMPTY_STATS, `통계 조회 실패: ${e instanceof Error ? e.message : e}`);
+    return fail(EMPTY_STATS, "통계 조회에 일시 실패했습니다. 잠시 후 다시 시도하세요.");
   }
 }

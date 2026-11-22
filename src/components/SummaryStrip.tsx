@@ -1,9 +1,10 @@
 "use client";
 
 import { overallGrade } from "@/lib/air";
+import { weatherIcon } from "@/lib/format";
 import { useEffect, useState } from "react";
 /** 요약줄 칸. 누르면 하단 메뉴의 같은 항목이 열린다 */
-export type InfoTab = "news" | "weather" | "air" | "traffic" | "medical" | "waste" | "population";
+export type InfoTab = "news" | "weather" | "air" | "traffic" | "medical";
 
 import type {
   ApiEnvelope,
@@ -25,14 +26,6 @@ const GRADE_COLOR: Record<AirGrade, string> = {
   보통: "var(--ok)",
   나쁨: "var(--warn)",
   매우나쁨: "var(--danger)",
-};
-
-const SKY_ICON: Record<string, string> = { 맑음: "☀️", 구름많음: "⛅", 흐림: "☁️" };
-const PTY_ICON: Record<string, string> = {
-  비: "🌧️",
-  "비/눈": "🌨️",
-  눈: "❄️",
-  소나기: "🌦️",
 };
 
 /**
@@ -71,7 +64,7 @@ function Item({
   title?: string;
   children: React.ReactNode;
 }) {
-  const cls = `flex min-h-[36px] items-center gap-1.5 rounded-[var(--radius-full)] px-2.5 text-[length:var(--text-sm)] transition ${
+  const cls = `flex min-h-[36px] items-center gap-1.5 rounded-[var(--radius-full)] border-2 px-2.5 text-[length:var(--text-sm)] transition ${
     grow ? "min-w-0 flex-1" : "shrink-0"
   }`;
   const body = (
@@ -88,13 +81,17 @@ function Item({
       onClick={onClick}
       title={title}
       aria-pressed={active}
-      className={`${cls} ${active ? "" : "hover:bg-[var(--surface-2)]"}`}
-      style={active ? { background: "var(--brand-2)", color: "var(--ink)", border: "2px solid var(--ink)", boxShadow: "var(--shadow-sm)" } : undefined}
+      className={`${cls} ${active ? "border-[var(--ink)]" : "border-transparent hover:bg-[var(--surface-2)]"}`}
+      style={
+        active
+          ? { background: "var(--brand-2)", color: "var(--ink)", boxShadow: "var(--shadow-sm)" }
+          : undefined
+      }
     >
       {body}
     </button>
   ) : (
-    <span title={title} className={cls}>
+    <span title={title} className={`${cls} border-transparent`}>
       {body}
     </span>
   );
@@ -135,10 +132,7 @@ export default function SummaryStrip({
     ? medical.data.places.filter((p) => p.openNow === true).length
     : null;
 
-  const icon =
-    now && now.precipitation !== "없음"
-      ? (PTY_ICON[now.precipitation] ?? "🌧️")
-      : (SKY_ICON[now?.sky ?? ""] ?? "🌤️");
+  const icon = weatherIcon(now?.sky ?? "", now?.precipitation ?? "없음");
 
   const alerts = weather?.data.alerts ?? [];
   /*
@@ -181,10 +175,11 @@ export default function SummaryStrip({
             className="rounded-[var(--radius)] px-1.5 py-0.5 text-[length:var(--text-xs)] font-bold"
             style={{
               background: a.level === "warning" ? "var(--danger)" : "var(--warn)",
-              color: "#fff",
+              color: "var(--surface)",
             }}
           >
-            ⚠ {a.kind}
+            <span aria-hidden>⚠ </span>
+            {a.kind}
           </span>
         </Item>
       ))}
@@ -202,7 +197,7 @@ export default function SummaryStrip({
           onClick={() => onOpenInfo("news")}
           title={headline.title}
         >
-          <span className="shrink-0 text-[1.05rem]">📰</span>
+          <span aria-hidden className="shrink-0 text-[1.05rem]">📰</span>
           {/* key 를 바꿔 제목이 갈릴 때마다 살짝 떠오르게 한다 */}
           <span
             key={headline.link}
@@ -227,12 +222,12 @@ export default function SummaryStrip({
       {/* 값을 못 가져온 항목은 아예 표시하지 않는다 — 빈칸이 기본값처럼 보이면 안 된다 */}
       {now?.temp != null && (
         <Item
-          label={icon}
           active={openTab === "weather"}
           onClick={() => onOpenInfo("weather")}
           title="날씨 상세 보기"
         >
-          {now.temp}°
+          <span aria-hidden>{icon}</span>
+          <span>{now.temp}°</span>
         </Item>
       )}
 

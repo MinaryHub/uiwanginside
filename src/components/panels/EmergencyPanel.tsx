@@ -1,14 +1,11 @@
 "use client";
 
 import { Section, Skeleton, Empty, LiveDot, Unavailable, Notice, timeAgo } from "@/components/ui";
+import { formatDistance } from "@/lib/format";
 import type { ApiEnvelope, EmergencyPayload, EmergencyRoom } from "@/lib/types";
 
 /** 갱신한 지 이만큼 지나면 숫자를 믿기 어렵다고 알린다 */
 const STALE_MS = 60 * 60_000;
-
-function km(m: number) {
-  return m >= 1000 ? `${(m / 1000).toFixed(1)}km` : `${m}m`;
-}
 
 /**
  * 남은 병상.
@@ -35,8 +32,17 @@ function Beds({ r }: { r: EmergencyRoom }) {
 }
 
 /** at = 서버가 응답을 만든 시각. 렌더 중에 현재 시각을 읽지 않는다 */
-function Row({ r, at }: { r: EmergencyRoom; at: string }) {
-  const stale = !!r.reportedAt && Date.parse(at) - Date.parse(r.reportedAt) > STALE_MS;
+function Row({
+  r,
+  at,
+  onFocus,
+}: {
+  r: EmergencyRoom;
+  at: string;
+  onFocus?: (r: EmergencyRoom) => void;
+}) {
+  const atMs = Date.parse(at);
+  const stale = !!r.reportedAt && Number.isFinite(atMs) && atMs - Date.parse(r.reportedAt) > STALE_MS;
   const gear = [
     r.ct && "CT",
     r.mri && "MRI",
@@ -47,13 +53,28 @@ function Row({ r, at }: { r: EmergencyRoom; at: string }) {
   return (
     <li className="border-b border-[var(--border)] py-3 last:border-b-0">
       <div className="flex items-start gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[length:var(--text-sm)] font-semibold">{r.name}</p>
-          <p className="mt-0.5 truncate text-[length:var(--text-xs)] text-[var(--text-muted)]">
-            {km(r.distance)}
-            {r.level && ` · ${r.level}`}
-          </p>
-        </div>
+        {onFocus ? (
+          <button
+            type="button"
+            onClick={() => onFocus(r)}
+            className="min-w-0 flex-1 rounded-[var(--radius)] text-left transition hover:text-[var(--brand)]"
+            title="지도에서 응급실 위치 보기"
+          >
+            <p className="truncate text-[length:var(--text-sm)] font-semibold">{r.name}</p>
+            <p className="mt-0.5 truncate text-[length:var(--text-xs)] text-[var(--text-muted)]">
+              {formatDistance(r.distance)}
+              {r.level && ` · ${r.level}`}
+            </p>
+          </button>
+        ) : (
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[length:var(--text-sm)] font-semibold">{r.name}</p>
+            <p className="mt-0.5 truncate text-[length:var(--text-xs)] text-[var(--text-muted)]">
+              {formatDistance(r.distance)}
+              {r.level && ` · ${r.level}`}
+            </p>
+          </div>
+        )}
         <Beds r={r} />
       </div>
 
@@ -63,7 +84,7 @@ function Row({ r, at }: { r: EmergencyRoom; at: string }) {
           {r.reportedAt && (
             <span style={stale ? { color: "var(--warn)", fontWeight: 700 } : undefined}>
               {gear.length > 0 && " · "}
-              {timeAgo(r.reportedAt)} 갱신
+              {timeAgo(r.reportedAt, atMs)} 갱신
             </span>
           )}
         </p>
@@ -74,16 +95,18 @@ function Row({ r, at }: { r: EmergencyRoom; at: string }) {
         {r.phone && (
           <a
             href={`tel:${r.phone}`}
-            className="brand-fill press flex min-h-[44px] flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-[var(--radius-full)] border-2 text-[length:var(--text-sm)] font-extrabold shadow-[var(--shadow-sm)]"
+            aria-label={`${r.name} 전화 ${r.phone}`}
+            className="brand-fill press flex min-h-[44px] flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-[var(--radius-full)] border-2 px-3 text-[length:var(--text-xs)] font-extrabold shadow-[var(--shadow-sm)]"
           >
-            <span aria-hidden>📞</span> 전화
+            <span aria-hidden>📞</span>
+            <span className="truncate tabular-nums">{r.phone}</span>
           </a>
         )}
         <a
           href={directions}
           target="_blank"
           rel="noreferrer noopener"
-          className="press flex min-h-[44px] flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-[var(--radius-full)] border-2 border-[var(--ink)] bg-[var(--surface)] text-[length:var(--text-sm)] font-extrabold shadow-[var(--shadow-sm)]"
+          className="press flex min-h-[44px] flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-[var(--radius-full)] border-2 border-[var(--ink)] bg-[var(--surface)] px-3 text-[length:var(--text-sm)] font-extrabold shadow-[var(--shadow-sm)]"
         >
           <span aria-hidden>🧭</span> 길찾기
         </a>
@@ -95,9 +118,13 @@ function Row({ r, at }: { r: EmergencyRoom; at: string }) {
 export default function EmergencyPanel({
   res,
   isLoading,
+  error,
+  onFocus,
 }: {
   res?: ApiEnvelope<EmergencyPayload>;
   isLoading: boolean;
+  error?: unknown;
+  onFocus?: (r: EmergencyRoom) => void;
 }) {
   const rooms = res?.data.rooms ?? [];
   const live = !!res?.ok && rooms.some((r) => r.beds != null);
@@ -107,7 +134,7 @@ export default function EmergencyPanel({
       {isLoading && !res ? (
         <Skeleton rows={4} />
       ) : !res?.ok ? (
-        <Unavailable reason={res?.notice} />
+        <Unavailable reason={res?.notice} error={error} />
       ) : rooms.length === 0 ? (
         <Empty>의왕 근처 15km 안에서 응급실을 찾지 못했습니다.</Empty>
       ) : (
@@ -115,7 +142,7 @@ export default function EmergencyPanel({
           {res.notice && <Notice>{res.notice}</Notice>}
           <ul>
             {rooms.map((r) => (
-              <Row key={r.id} r={r} at={res.data.updatedAt} />
+              <Row key={r.id} r={r} at={res.data.updatedAt} onFocus={onFocus} />
             ))}
           </ul>
           <p className="mt-3 text-[length:var(--text-2xs)] leading-relaxed text-[var(--text-faint)]">

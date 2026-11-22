@@ -38,42 +38,6 @@ export function Section({
   );
 }
 
-/** 화면에서 가장 크게 읽혀야 하는 수치 */
-export function Stat({
-  value,
-  unit,
-  label,
-  tone = "default",
-}: {
-  value: ReactNode;
-  unit?: string;
-  label: string;
-  tone?: "default" | "brand" | "danger" | "warn" | "ok";
-}) {
-  const color =
-    tone === "default"
-      ? "var(--text)"
-      : tone === "brand"
-        ? "var(--brand)"
-        : `var(--${tone})`;
-  return (
-    <div className="flex flex-col">
-      <span
-        className="tnum text-[length:var(--text-xl)] font-bold leading-none"
-        style={{ color }}
-      >
-        {value}
-        {unit && (
-          <span className="ml-0.5 text-[length:var(--text-2xs)] font-semibold text-[var(--text-faint)]">
-            {unit}
-          </span>
-        )}
-      </span>
-      <span className="mt-1 text-[length:var(--text-2xs)] text-[var(--text-muted)]">{label}</span>
-    </div>
-  );
-}
-
 export function Badge({
   children,
   tone = "neutral",
@@ -97,53 +61,6 @@ export function Badge({
     >
       {children}
     </span>
-  );
-}
-
-/** 터치 영역 44px 를 지킨다 */
-export function Button({
-  children,
-  onClick,
-  variant = "secondary",
-  full,
-  disabled,
-  title,
-  type = "button",
-}: {
-  children: ReactNode;
-  onClick?: () => void;
-  variant?: "primary" | "secondary" | "ghost";
-  full?: boolean;
-  disabled?: boolean;
-  title?: string;
-  type?: "button" | "submit";
-}) {
-  const style =
-    variant === "primary"
-      ? undefined
-      : variant === "secondary"
-        ? {
-            background: "transparent",
-            color: "var(--text)",
-            border: "2px solid var(--ink)",
-            boxShadow: "var(--shadow-sm)",
-          }
-        : { color: "var(--text-muted)" };
-  return (
-    <button
-      type={type}
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      className={`press inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-[var(--radius-full)] px-4 text-[length:var(--text-sm)] font-bold disabled:opacity-45 ${
-        full ? "w-full" : ""
-      } ${variant === "primary" ? "brand-fill border-2 shadow-[var(--shadow-sm)]" : ""} ${
-        disabled ? "cursor-not-allowed" : "hover:brightness-[0.97]"
-      }`}
-      style={style}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -185,10 +102,11 @@ export function Skeleton({ rows = 3 }: { rows?: number }) {
 }
 
 /** ISO 문자열 → "3분 전" */
-export function timeAgo(iso: string): string {
+export function timeAgo(iso: string, nowMs?: number): string {
   const t = new Date(iso).getTime();
   if (!Number.isFinite(t)) return "";
-  const diff = Math.floor((Date.now() - t) / 1000);
+  const ref = nowMs != null && Number.isFinite(nowMs) ? nowMs : Date.now();
+  const diff = Math.max(0, Math.floor((ref - t) / 1000));
   if (diff < 60) return "방금 전";
   if (diff < 3600) return `${Math.floor(diff / 60)}분 전`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}시간 전`;
@@ -206,30 +124,50 @@ export function hhmm(iso: string): string {
   });
 }
 
-export function LiveDot({ live }: { live: boolean }) {
+export function LiveDot({ live, stale = false }: { live: boolean; stale?: boolean }) {
   // 연동 전에는 아무 표시도 하지 않는다. 가짜 데이터가 없으니 경고할 것도 없다.
   if (!live) return null;
   return (
     <span
       className="inline-flex items-center gap-1.5 text-[length:var(--text-2xs)] font-medium text-[var(--text-muted)]"
-      title="실시간 데이터"
+      title={stale ? "최근 저장본 표시 중" : "실시간 데이터"}
     >
-      <span className="h-1.5 w-1.5 rounded-full bg-[var(--ok)]" />
-      실시간
+      <span
+        className="h-1.5 w-1.5 rounded-full"
+        style={{ background: stale ? "var(--warn)" : "var(--ok)" }}
+      />
+      {stale ? "이전 값" : "실시간"}
     </span>
   );
 }
 
 /** 데이터를 가져오지 못했을 때 — 값을 지어내지 않고 이유만 알린다 */
-export function Unavailable({ reason }: { reason?: string }) {
+export function Unavailable({
+  reason,
+  error,
+}: {
+  reason?: string;
+  /** 네트워크 오류 등 클라이언트 요청 자체가 실패했을 때 */
+  error?: unknown;
+}) {
+  const isNetworkError = error != null && !reason;
+  const heading = isNetworkError
+    ? "정보를 불러오지 못했습니다"
+    : "아직 연동되지 않았습니다";
+  const detail =
+    reason ??
+    (isNetworkError
+      ? "잠시 후 다시 시도해 주세요. 인터넷 연결이 불안정하거나 서버 응답이 지연되고 있습니다."
+      : undefined);
+
   return (
     <div className="py-4">
       <p className="text-[length:var(--text-sm)] font-semibold text-[var(--text-muted)]">
-        아직 연동되지 않았습니다
+        {heading}
       </p>
-      {reason && (
+      {detail && (
         <p className="mt-1 text-[length:var(--text-xs)] leading-relaxed text-[var(--text-faint)]">
-          {reason}
+          {detail}
         </p>
       )}
       <a

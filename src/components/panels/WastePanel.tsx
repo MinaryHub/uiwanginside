@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Section } from "@/components/ui";
 import {
   WASTE_KINDS,
@@ -10,15 +10,17 @@ import {
   HAS_DONG_SCHEDULE,
 } from "@/lib/waste";
 
-/** 6~8월은 하절기 수거 시간 적용 */
-function isSummer() {
-  const m = new Date().getMonth() + 1;
-  return m >= 6 && m <= 8;
+const noopSubscribe = () => () => {};
+
+/** 6~8월(한국 시각 기준)은 하절기 수거 시간 적용 */
+function isKstSummer() {
+  const kstMonth = new Date(Date.now() + 9 * 3600_000).getUTCMonth() + 1;
+  return kstMonth >= 6 && kstMonth <= 8;
 }
 
 export default function WastePanel() {
   const [open, setOpen] = useState<string | null>(null);
-  const summer = isSummer();
+  const summer = useSyncExternalStore(noopSubscribe, isKstSummer, () => false);
 
   return (
     <Section title="쓰레기 배출">
@@ -42,11 +44,12 @@ export default function WastePanel() {
               <button
                 type="button"
                 onClick={() => setOpen(isOpen ? null : k.id)}
-                className="w-full rounded-[var(--radius)] bg-[var(--surface-2)] px-2.5 py-2 text-left transition hover:brightness-95"
+                className="w-full rounded-[var(--radius)] bg-[var(--surface-2)] px-2.5 py-2.5 text-left transition hover:brightness-95"
                 aria-expanded={isOpen}
               >
                 <div className="flex items-center gap-2">
                   <span
+                    aria-hidden
                     className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-[length:var(--text-sm)]"
                     style={{ background: `${k.color}20` }}
                   >
@@ -58,12 +61,12 @@ export default function WastePanel() {
                       {k.container}
                     </div>
                   </div>
-                  <span className="shrink-0 text-[length:var(--text-2xs)] text-[var(--text-muted)]">
+                  <span aria-hidden className="shrink-0 text-[length:var(--text-2xs)] text-[var(--text-muted)]">
                     {isOpen ? "▲" : "▼"}
                   </span>
                 </div>
                 {isOpen && (
-                  <ul className="mt-1.5 space-y-1 border-t border-[var(--border)] pt-1.5 pl-8">
+                  <ul className="mt-1.5 space-y-1 border-t border-[var(--border)] pl-8 pt-1.5">
                     {k.notes.map((n) => (
                       <li key={n} className="text-[length:var(--text-xs)] leading-snug text-[var(--text-muted)]">
                         · {n}
@@ -82,15 +85,16 @@ export default function WastePanel() {
           href={WASTE_CONTACT.bulkyUrl}
           target="_blank"
           rel="noreferrer noopener"
-          className="flex-1 rounded-[var(--radius)] bg-[var(--brand)] px-2 py-1.5 text-center text-[length:var(--text-xs)] font-bold text-[var(--on-brand)]"
+          className="brand-fill press flex min-h-[44px] flex-1 items-center justify-center rounded-[var(--radius)] border-2 px-2 text-center text-[length:var(--text-xs)] font-bold shadow-[var(--shadow-sm)]"
         >
           대형폐기물 신청 ↗
         </a>
         <a
           href={`tel:${WASTE_CONTACT.phone}`}
-          className="rounded-[var(--radius)] border border-[var(--border)] px-2 py-1.5 text-[length:var(--text-xs)] font-bold"
+          className="press flex min-h-[44px] items-center justify-center rounded-[var(--radius)] border-2 border-[var(--ink)] bg-[var(--surface)] px-3 text-[length:var(--text-xs)] font-bold shadow-[var(--shadow-sm)]"
         >
-          📞 {WASTE_CONTACT.phone}
+          <span aria-hidden>📞 </span>
+          {WASTE_CONTACT.phone}
         </a>
       </div>
 

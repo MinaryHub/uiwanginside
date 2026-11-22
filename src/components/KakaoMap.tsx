@@ -13,6 +13,8 @@ import type {
   Incident,
   BusStop,
   BusPositionsPayload,
+  MedicalPlace,
+  EmergencyRoom,
 } from "@/lib/types";
 
 /**
@@ -56,7 +58,7 @@ function loadKakao(appKey: string): Promise<void> {
       KAKAO_TIMEOUT_MS,
     );
     const script = document.createElement("script");
-    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${appKey}&autoload=false`;
+    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${encodeURIComponent(appKey)}&autoload=false`;
     script.async = true;
     script.onload = () =>
       window.kakao?.maps?.load
@@ -100,7 +102,11 @@ function loadSdk(appKey?: string): Promise<Engine> {
     const [L, shim] = await Promise.all([import("leaflet"), import("@/lib/mapShim")]);
     shim.installKakaoShim(L.default ?? L);
     return { engine: "osm", reason };
-  })();
+  })().catch((err) => {
+    // 일시적인 로드 실패 시 다음 마운트에서 다시 시도할 수 있게 캐시를 비운다
+    sdkPromise = null;
+    throw err;
+  });
   return sdkPromise;
 }
 
@@ -134,7 +140,15 @@ function pinEl(
     transform:translateY(-2px);
     font-family:Pretendard,-apple-system,"Apple SD Gothic Neo",sans-serif;`;
   if (opts.pulse) el.classList.add("pulse");
-  el.innerHTML = `<span style="font-size:${active ? 12 : 11}px">${emoji}</span><span>${label}</span>`;
+
+  const iconSpan = document.createElement("span");
+  iconSpan.style.fontSize = `${active ? 12 : 11}px`;
+  iconSpan.textContent = emoji;
+
+  const textSpan = document.createElement("span");
+  textSpan.textContent = label;
+
+  el.append(iconSpan, textSpan);
   return el;
 }
 
@@ -260,26 +274,48 @@ function busEl(
   el.style.cssText = `
     display:flex;align-items:center;gap:${detailed ? 5 : 3}px;
     padding:${detailed ? "3px 8px 3px 6px" : "1px 6px 1px 4px"};border-radius:999px;
-    background:${bg};color:#fff;border:2px solid #23201c;
+    background:${bg};color:#fff;border:2px solid #23201c;cursor:pointer;
     box-shadow:2px 2px 0 #23201c;animation:bus-in .35s cubic-bezier(.34,1.56,.64,1) both;
     transition:opacity ${BUS_FADE_MS}ms ease;
     font-size:${detailed ? 12 : 10}px;font-weight:800;white-space:nowrap;letter-spacing:-.02em;
     font-family:Pretendard,-apple-system,"Apple SD Gothic Neo",sans-serif;`;
-  el.innerHTML =
-    `<span style="font-size:${detailed ? 12 : 9}px">🚍</span><span>${routeName}</span>` +
-    // 가는 쪽. 움직이기 전에는 모르므로 숨겨 둔다 (아래 애니메이션이 돌린다)
-    `<span data-dir style="display:inline-block;font-size:${detailed ? 9 : 7}px;line-height:1;` +
-    `opacity:0;transition:transform .5s ease,opacity .3s ease">▲</span>` +
-    (detailed && b.nodeName
-      ? `<span style="font-weight:600;opacity:.88">${b.nodeName.slice(0, 10)}</span>`
-      : "") +
-    (detailed && b.crowded
-      ? `<span style="font-weight:700;opacity:.95">${CROWD[b.crowded] ?? ""}</span>`
-      : "") +
-    (detailed && b.lowPlate ? `<span title="저상버스" style="opacity:.9">♿</span>` : "");
+
+  const busIcon = document.createElement("span");
+  busIcon.style.fontSize = `${detailed ? 12 : 9}px`;
+  busIcon.textContent = "🚍";
+
+  const routeSpan = document.createElement("span");
+  routeSpan.textContent = routeName;
+
+  // 가는 쪽. 움직이기 전에는 모르므로 숨겨 둔다 (아래 애니메이션이 돌린다)
+  const dirSpan = document.createElement("span");
+  dirSpan.setAttribute("data-dir", "");
+  dirSpan.style.cssText = `display:inline-block;font-size:${detailed ? 9 : 7}px;line-height:1;opacity:0;transition:transform .5s ease,opacity .3s ease`;
+  dirSpan.textContent = "▲";
+
+  el.append(busIcon, routeSpan, dirSpan);
+
+  if (detailed && b.nodeName) {
+    const nodeSpan = document.createElement("span");
+    nodeSpan.style.cssText = "font-weight:600;opacity:.88";
+    nodeSpan.textContent = b.nodeName.slice(0, 10);
+    el.append(nodeSpan);
+  }
+  if (detailed && b.crowded && CROWD[b.crowded]) {
+    const crowdSpan = document.createElement("span");
+    crowdSpan.style.cssText = "font-weight:700;opacity:.95";
+    crowdSpan.textContent = CROWD[b.crowded];
+    el.append(crowdSpan);
+  }
+  if (detailed && b.lowPlate) {
+    const lowSpan = document.createElement("span");
+    lowSpan.title = "저상버스";
+    lowSpan.style.opacity = ".9";
+    lowSpan.textContent = "♿";
+    el.append(lowSpan);
+  }
   return el;
 }
-
 
 /** 두 방향의 차 (-180~180). 화살표가 359°→1° 에서 한 바퀴 돌지 않게 */
 function angleDiff(a: number, b: number): number {
@@ -295,6 +331,13 @@ function aimArrow(el: HTMLElement, heading: number | null, animate: boolean) {
   arrow.style.opacity = "1";
 }
 
+export interface LandmarkItem {
+  name: string;
+  lat: number;
+  lng: number;
+  desc: string;
+}
+
 export interface KakaoMapProps {
   /** 카카오맵 JavaScript 키. 없거나 안 되면 OpenStreetMap 으로 대신 그린다 */
   appKey?: string;
@@ -304,8 +347,9 @@ export interface KakaoMapProps {
   incidents: Incident[];
   busStops: BusStop[];
   /** 진료중인 병원·약국 (의료 모드) */
-  medicalOpen: { id: string; name: string; kind: string; lat: number | null; lng: number | null }[];
-  /** 추적 중인 노선의 실시간 버스 위치 */
+  medicalOpen: MedicalPlace[];
+  /** 응급실 (의료 모드) */
+  emergencyRooms: EmergencyRoom[];
   /**
    * 실시간 버스. 노선 하나를 좇을 때는 한 개, 근처 노선을 함께 볼 때는
    * 여럿이 들어온다. 여럿을 다루는 쪽으로 통일했다.
@@ -314,7 +358,7 @@ export interface KakaoMapProps {
   /** 노선별 실제 주행 경로 — 버스를 그 위로 움직인다 */
   busPaths: Record<string, LatLng[]>;
   /** 랜드마크 (둘러보기 모드) */
-  landmarks: { name: string; lat: number; lng: number; desc: string }[];
+  landmarks: LandmarkItem[];
   /** 도로 소통상태 — 도로 형상에 ITS 속도를 입힌 조각들 */
   trafficSegments: TrafficSegment[];
   /** 내 위치 — 알아냈을 때만 */
@@ -338,9 +382,13 @@ export interface KakaoMapProps {
   /** 시트가 열려 지도 폭이 바뀌었는지 — 바뀌면 relayout 이 필요하다 */
   sheetOpen: boolean;
   selectedPlaceId: string | null;
-  /** 정류소·사고 등 지도에서 고른 대상 */
+  /** 정류소·사고·CCTV·응급실·랜드마크 등 지도에서 고른 대상 */
   selectedMarkerId: string | null;
   onSelectPlace: (p: Place) => void;
+  onSelectMedical?: (m: MedicalPlace) => void;
+  onSelectEmergency?: (r: EmergencyRoom) => void;
+  onSelectLandmark?: (l: LandmarkItem) => void;
+  onSelectBus?: (routeId: string, routeName: string) => void;
   onSelectStop: (s: BusStop) => void;
   onSelectIncident: (i: Incident) => void;
   onMapMoved: (c: { lat: number; lng: number }) => void;
@@ -356,6 +404,7 @@ export default function KakaoMap({
   incidents,
   busStops,
   medicalOpen,
+  emergencyRooms,
   busPositions,
   busPaths,
   landmarks,
@@ -372,6 +421,10 @@ export default function KakaoMap({
   selectedPlaceId,
   selectedMarkerId,
   onSelectPlace,
+  onSelectMedical,
+  onSelectEmergency,
+  onSelectLandmark,
+  onSelectBus,
   onSelectStop,
   onSelectIncident,
   onMapMoved,
@@ -385,25 +438,27 @@ export default function KakaoMap({
    * 지웠다 다시 그려서 화면이 깜빡인다.
    */
   /**
-   * 장소 마커는 배열이 아니라 키로 들고 있는다.
+   * 장소·진료·응급실·랜드마크 마커는 배열이 아니라 키로 들고 있는다.
    * 다시 그릴 때 무엇이 그대로인지 알아야 손대지 않고 둘 수 있다.
    */
   const placeMarks = useRef(
-    new Map<string, { ov: kakao.maps.CustomOverlay; sig: string; place?: Place }>(),
+    new Map<string, { ov: kakao.maps.CustomOverlay; sig: string; hit?: () => void }>(),
   );
   /** 정류소·사고·CCTV — 장소와 같이 키로 들고 있어야 확대할 때 깜빡이지 않는다 */
   const transitMarks = useRef(
     new Map<string, { ov: kakao.maps.CustomOverlay; sig: string; hit?: () => void }>(),
   );
-/**
- * 버스는 차량번호로 들고 있는다. 갱신마다 지웠다 만들면 방금 지나간
- * 위치를 이어 붙일 수 없고, 마커가 깜빡인다.
- */
+  /**
+   * 버스는 차량번호로 들고 있는다. 갱신마다 지웠다 만들면 방금 지나간
+   * 위치를 이어 붙일 수 없고, 마커가 깜빡인다.
+   */
   const busMarks = useRef(
     new Map<
       string,
       {
         ov: kakao.maps.CustomOverlay;
+        routeId: string;
+        routeName: string;
         /** 이번 구간의 출발점 — 새 관측이 왔을 때 화면에 있던 자리 */
         from: { lat: number; lng: number };
         /** 방금 관측된 위치 */
@@ -435,6 +490,7 @@ export default function KakaoMap({
     >(),
   );
   const busRaf = useRef<number | null>(null);
+  const startBusLoopRef = useRef<() => void>(() => {});
   const meRef = useRef<kakao.maps.CustomOverlay | null>(null);
   const boundaryRef = useRef<kakao.maps.Polygon[]>([]);
   const dongRef = useRef<kakao.maps.Polygon[]>([]);
@@ -447,6 +503,10 @@ export default function KakaoMap({
   const boundsRef = useRef(onBoundsChanged);
   // 마커를 그대로 두고 재사용하므로, 붙여둔 클릭 핸들러가 낡지 않게 ref 로 읽는다
   const selectRef = useRef(onSelectPlace);
+  const selectMedicalRef = useRef(onSelectMedical);
+  const selectEmergencyRef = useRef(onSelectEmergency);
+  const selectLandmarkRef = useRef(onSelectLandmark);
+  const selectBusRef = useRef(onSelectBus);
   /**
    * 시트가 열려 있는지. deps 에 넣으면 시트를 여닫을 때마다 지도가
    * 다시 맞춰져 제멋대로 움직인다. 범위를 맞추는 순간에만 들여다본다.
@@ -471,14 +531,28 @@ export default function KakaoMap({
   /** 키가 있는데도 카카오맵을 못 불러와 대체 지도로 그리는 중이면 그 이유 */
   const [fallback, setFallback] = useState<string | null>(null);
 
-  // 최신 콜백을 ref 로 유지 — 지도 재생성 없이 dragend 핸들러가 최신 함수를 참조
+  // 최신 콜백을 ref 로 유지 — 지도 재생성 없이 핸들러가 최신 함수를 참조
   useEffect(() => {
     movedRef.current = onMapMoved;
     fittedRef.current = onViewFitted;
     boundsRef.current = onBoundsChanged;
     selectRef.current = onSelectPlace;
+    selectMedicalRef.current = onSelectMedical;
+    selectEmergencyRef.current = onSelectEmergency;
+    selectLandmarkRef.current = onSelectLandmark;
+    selectBusRef.current = onSelectBus;
     sheetRef.current = sheetOpen;
-  }, [onMapMoved, onViewFitted, onBoundsChanged, onSelectPlace, sheetOpen]);
+  }, [
+    onMapMoved,
+    onViewFitted,
+    onBoundsChanged,
+    onSelectPlace,
+    onSelectMedical,
+    onSelectEmergency,
+    onSelectLandmark,
+    onSelectBus,
+    sheetOpen,
+  ]);
 
   // SDK 로드 + 지도 생성
   useEffect(() => {
@@ -713,7 +787,7 @@ export default function KakaoMap({
       sig: string;
       zIndex: number;
       el: () => HTMLElement;
-      payload?: Place;
+      hit?: () => void;
     };
     const want = new Map<string, Want>();
 
@@ -729,29 +803,48 @@ export default function KakaoMap({
         zIndex: active ? 90 : 10,
         el: () =>
           pin ? pinEl(def.emoji, def.color, p.name, { active }) : dotEl(def.color, def.emoji),
-        payload: p,
+        hit: () => selectRef.current(p),
       });
     }
 
     // 진료중인 곳은 수가 적고 중요도가 높아 항상 이름표를 붙인다
     for (const m of medicalOpen.slice(0, 40)) {
       if (m.lat == null || m.lng == null) continue;
+      const on = selectedPlaceId === `med:${m.id}`;
       want.set(`m:${m.id}`, {
         lat: m.lat,
         lng: m.lng,
-        sig: `med|${m.kind}|${m.name}`,
-        zIndex: 60,
-        el: () => pinEl(m.kind === "pharmacy" ? "💊" : "🏥", "#17734f", m.name),
+        sig: `med|${on}|${m.kind}|${m.name}`,
+        zIndex: on ? 92 : 60,
+        el: () => pinEl(m.kind === "pharmacy" ? "💊" : "🏥", "#17734f", m.name, { active: on }),
+        hit: () => selectMedicalRef.current?.(m),
+      });
+    }
+
+    // 응급실은 의료 모드에서 가장 눈에 띄게 표시한다
+    for (const r of emergencyRooms) {
+      const on = selectedMarkerId === `emergency:${r.id}`;
+      const suffix =
+        r.beds == null ? "" : r.beds <= 0 ? " · 포화" : ` · ${r.beds}병상`;
+      want.set(`er:${r.id}`, {
+        lat: r.lat,
+        lng: r.lng,
+        sig: `er|${on}|${r.name}${suffix}`,
+        zIndex: on ? 94 : 75,
+        el: () => pinEl("🚑", "#d92626", `${r.name}${suffix}`, { active: on }),
+        hit: () => selectEmergencyRef.current?.(r),
       });
     }
 
     for (const l of landmarks) {
+      const on = selectedMarkerId === `landmark:${l.name}`;
       want.set(`l:${l.name}`, {
         lat: l.lat,
         lng: l.lng,
-        sig: `mark|${l.name}`,
-        zIndex: 50,
-        el: () => pinEl("📍", "#7c3aed", l.name),
+        sig: `mark|${on}|${l.name}`,
+        zIndex: on ? 92 : 50,
+        el: () => pinEl("📍", "#7c3aed", l.name, { active: on }),
+        hit: () => selectLandmarkRef.current?.(l),
       });
     }
 
@@ -767,32 +860,27 @@ export default function KakaoMap({
 
     for (const [key, w] of want) {
       const cur = live.get(key);
-      if (!cur) {
+      const make = () => {
         const el = w.el();
-        el.addEventListener("click", () => {
-          const e = live.get(key);
-          if (e?.place) selectRef.current(e.place);
-        });
+        el.addEventListener("click", () => live.get(key)?.hit?.());
+        return el;
+      };
+      if (!cur) {
         const ov = new window.kakao.maps.CustomOverlay({
           position: new window.kakao.maps.LatLng(w.lat, w.lng),
-          content: el,
+          content: make(),
           yAnchor: 1,
           zIndex: w.zIndex,
           clickable: true,
         });
         ov.setMap(map);
-        live.set(key, { ov, sig: w.sig, place: w.payload });
+        live.set(key, { ov, sig: w.sig, hit: w.hit });
         continue;
       }
-      // 같은 마커가 그대로 있으면 최신 데이터만 갈아 끼우고 둔다
-      cur.place = w.payload;
+      // 같은 마커가 그대로 있으면 최신 핸들러만 갈아 끼우고 둔다
+      cur.hit = w.hit;
       if (cur.sig !== w.sig) {
-        const el = w.el();
-        el.addEventListener("click", () => {
-          const e = live.get(key);
-          if (e?.place) selectRef.current(e.place);
-        });
-        cur.ov.setContent(el);
+        cur.ov.setContent(make());
         cur.ov.setZIndex(w.zIndex);
         cur.sig = w.sig;
       }
@@ -802,9 +890,10 @@ export default function KakaoMap({
     level,
     places,
     medicalOpen,
+    emergencyRooms,
     landmarks,
     selectedPlaceId,
-    onSelectPlace,
+    selectedMarkerId,
   ]);
 
   /** 내 위치 — 다른 무엇이 바뀌든 이것 때문에 다시 그리지 않는다 */
@@ -950,134 +1039,16 @@ export default function KakaoMap({
   ]);
 
   /**
-   * 운행 중인 버스.
-   *
-   * GBIS 는 16초에 한 번만 새 위치를 준다 (실측 15.7·15.9·15.7초).
-   * 그대로 찍으면 버스가 16초마다 뚝 뛴다. 관측된 두 지점 사이를 그
-   * 시간에 걸쳐 이어 움직인다.
-   *
-   * 지어내지 않기 위해 지키는 것들.
-   *  - 실제로 관측된 두 점 사이만 움직인다. 최신 지점을 지나 앞질러
-   *    가지 않는다 — 그건 없는 위치를 만드는 것이다.
-   *  - 처음 본 차량은 애니메이션 없이 그 자리에 놓는다. 이어 붙일
-   *    직전 위치가 없다.
-   *  - 16초에 2km 를 넘는 도약은 잇지 않고 건너뛴다. 차고지 회차나
-   *    자료 오류이고, 이으면 버스가 시내를 가로지르는 것처럼 보인다.
-   */
-  useEffect(() => {
-    if (!ready || !mapRef.current) return;
-    const map = mapRef.current;
-    const live = busMarks.current;
-    const now = Date.now();
-
-    /*
-     * 자세히 보일지. 확대했거나, 화면에 버스가 한 대뿐일 때다.
-     * 노선 수가 아니라 버스 수로 센다 — 서버가 빈 노선도 돌려주므로
-     * 노선 수는 버스가 몇 대인지 말해주지 않는다.
-     */
-    const buses = busPositions.reduce((n, r) => n + r.positions.length, 0);
-    const detailed = level <= 3 || buses <= 1;
-    const seen = new Set<string>();
-
-    for (const r of busPositions) {
-      for (const b of r.positions) {
-        const key = b.vehicleNo || `${r.routeId}:${b.nodeName}:${b.lat},${b.lng}`;
-        seen.add(key);
-        const sig = `${detailed}|${r.routeName}|${b.crowded ?? ""}|${b.nodeName}`;
-        const cur = live.get(key);
-
-        if (!cur) {
-          const ov = new window.kakao.maps.CustomOverlay({
-            position: new window.kakao.maps.LatLng(b.lat, b.lng),
-            content: busEl(r.routeName || "버스", b, detailed),
-            yAnchor: 1,
-            zIndex: 95,
-          });
-          ov.setMap(map);
-          live.set(key, {
-            ov,
-            from: { lat: b.lat, lng: b.lng },
-            to: { lat: b.lat, lng: b.lng },
-            at: now,
-            dur: BUS_TWEEN_DEFAULT_MS,
-            shown: { lat: b.lat, lng: b.lng },
-            gap: null,
-            heading: null,
-            headFrom: { lat: b.lat, lng: b.lng },
-            done: true,
-            run: null,
-            sig,
-          });
-          continue;
-        }
-
-        // 같은 자리면 새 구간을 열지 않는다 — 정차 중인 버스가 떨지 않게
-        const moved = cur.to.lat !== b.lat || cur.to.lng !== b.lng;
-        if (moved) {
-          const jump = Math.hypot((b.lat - cur.to.lat) * 111_000, (b.lng - cur.to.lng) * 88_000);
-          /*
-           * 화면에 지금 있는 자리에서 출발한다. 예전에는 직전 관측 지점에서
-           * 출발해, 아직 가는 중에 새 관측이 오면 버스가 앞으로 툭 튀었다.
-           */
-          cur.from = jump > 2000 ? { lat: b.lat, lng: b.lng } : { ...cur.shown };
-          if (jump > 2000) {
-            cur.shown = { lat: b.lat, lng: b.lng };
-            cur.headFrom = cur.shown;
-          }
-          // 정류소를 옮긴 간격을 잰다. 너무 짧거나 긴 것(누락·정차 대기)은 버린다
-          const sample = now - cur.at;
-          if (sample >= 5_000 && sample <= 180_000) {
-            cur.gap = cur.gap === null ? sample : cur.gap * 0.6 + sample * 0.4;
-          }
-          cur.dur = Math.max(
-            BUS_TWEEN_MIN_MS,
-            Math.min(BUS_TWEEN_MAX_MS, cur.gap ?? BUS_TWEEN_DEFAULT_MS),
-          );
-          cur.to = { lat: b.lat, lng: b.lng };
-          cur.at = now;
-          cur.done = false;
-          // 노선 경로가 있으면 그 위를 걷는다. 붙이기가 어긋나면 null 이고
-          // 그때는 아래 애니메이션이 직선으로 잇는다.
-          const line = busPaths[r.routeId];
-          cur.run =
-            line && line.length > 1
-              ? planRun(line, [cur.from.lat, cur.from.lng], [cur.to.lat, cur.to.lng])
-              : null;
-        }
-        if (cur.sig !== sig) {
-          const el = busEl(r.routeName || "버스", b, detailed);
-          // 내용을 갈아도 가던 방향은 그대로 — 화살표가 매번 처음으로 돌아가지 않게
-          aimArrow(el, cur.heading, false);
-          el.style.animation = "none";
-          cur.ov.setContent(el);
-          cur.sig = sig;
-        }
-      }
-    }
-
-    // 운행을 마쳤거나 화면 밖으로 나간 버스는 흐려지며 사라진다
-    for (const [key, entry] of live) {
-      if (!seen.has(key)) {
-        const el = entry.ov.getContent();
-        if (el instanceof HTMLElement) el.style.opacity = "0";
-        const ov = entry.ov;
-        setTimeout(() => ov.setMap(null), BUS_FADE_MS);
-        live.delete(key);
-      }
-    }
-    // level 이 빠지면 확대해도 자세히 바뀌지 않는다
-  }, [ready, busPositions, level, busPaths]);
-
-  /**
    * 버스를 사이 위치로 옮긴다.
    *
-   * 매 프레임 두 관측 지점 사이를 비율로 나눈다. 16초가 지나면 1 에서
-   * 멈춘다 — 다음 관측을 앞질러 가지 않는다.
+   * 움직이는 버스가 하나라도 있을 때만 requestAnimationFrame 루프를 돌린다.
+   * 모든 버스가 구간 끝에 닿거나 버스 모드가 아니면 루프를 멈춰 배터리·CPU 를 아낀다.
    */
   useEffect(() => {
     if (!ready) return;
     const step = () => {
       const now = Date.now();
+      let anyActive = false;
       for (const m of busMarks.current.values()) {
         if (m.done) continue;
         const raw = Math.min(1, (now - m.at) / m.dur);
@@ -1106,15 +1077,200 @@ export default function KakaoMap({
         m.shown = { lat, lng };
         m.ov.setPosition(new window.kakao.maps.LatLng(lat, lng));
         if (raw >= 1) m.done = true;
+        else anyActive = true;
       }
-      busRaf.current = requestAnimationFrame(step);
+      busRaf.current = anyActive ? requestAnimationFrame(step) : null;
     };
-    busRaf.current = requestAnimationFrame(step);
+
+    startBusLoopRef.current = () => {
+      if (busRaf.current === null) {
+        busRaf.current = requestAnimationFrame(step);
+      }
+    };
+
+    // 이미 움직여야 할 버스가 있다면 즉시 시작
+    for (const m of busMarks.current.values()) {
+      if (!m.done) {
+        startBusLoopRef.current();
+        break;
+      }
+    }
+
     return () => {
+      startBusLoopRef.current = () => {};
       if (busRaf.current !== null) cancelAnimationFrame(busRaf.current);
       busRaf.current = null;
     };
   }, [ready]);
+
+  /**
+   * 운행 중인 버스.
+   *
+   * GBIS 는 16초에 한 번만 새 위치를 준다 (실측 15.7·15.9·15.7초).
+   * 그대로 찍으면 버스가 16초마다 뚝 뛴다. 관측된 두 지점 사이를 그
+   * 시간에 걸쳐 이어 움직인다.
+   *
+   * 지어내지 않기 위해 지키는 것들.
+   *  - 실제로 관측된 두 점 사이만 움직인다. 최신 지점을 지나 앞질러
+   *    가지 않는다 — 그건 없는 위치를 만드는 것이다.
+   *  - 처음 본 차량은 애니메이션 없이 그 자리에 놓는다. 이어 붙일
+   *    직전 위치가 없다.
+   *  - 16초에 2km 를 넘는 도약은 잇지 않고 건너뛴다. 차고지 회차나
+   *    자료 오류이고, 이으면 버스가 시내를 가로지르는 것처럼 보인다.
+   */
+  useEffect(() => {
+    if (!ready || !mapRef.current) return;
+    const map = mapRef.current;
+    const live = busMarks.current;
+    const now = Date.now();
+
+    /*
+     * 자세히 보일지. 확대했거나, 화면에 버스가 한 대뿐일 때다.
+     * 노선 수가 아니라 버스 수로 센다 — 서버가 빈 노선도 돌려주므로
+     * 노선 수는 버스가 몇 대인지 말해주지 않는다.
+     */
+    const buses = busPositions.reduce((n, r) => n + r.positions.length, 0);
+    const detailed = level <= 3 || buses <= 1;
+    const seen = new Set<string>();
+    let needsAnim = false;
+
+    const makeBusNode = (
+      key: string,
+      routeName: string,
+      b: BusPositionsPayload["positions"][number],
+    ) => {
+      const el = busEl(routeName, b, detailed);
+      el.addEventListener("click", () => {
+        const entry = live.get(key);
+        if (entry) selectBusRef.current?.(entry.routeId, entry.routeName);
+      });
+      return el;
+    };
+
+    for (const r of busPositions) {
+      for (const b of r.positions) {
+        const key = b.vehicleNo || `${r.routeId}:${b.nodeName}:${b.lat},${b.lng}`;
+        seen.add(key);
+        const label = r.routeName || "버스";
+        const sig = `${detailed}|${label}|${b.crowded ?? ""}|${b.nodeName}`;
+        const cur = live.get(key);
+
+        if (!cur) {
+          const ov = new window.kakao.maps.CustomOverlay({
+            position: new window.kakao.maps.LatLng(b.lat, b.lng),
+            content: makeBusNode(key, label, b),
+            yAnchor: 1,
+            zIndex: 95,
+            clickable: true,
+          });
+          ov.setMap(map);
+          live.set(key, {
+            ov,
+            routeId: r.routeId,
+            routeName: label,
+            from: { lat: b.lat, lng: b.lng },
+            to: { lat: b.lat, lng: b.lng },
+            at: now,
+            dur: BUS_TWEEN_DEFAULT_MS,
+            shown: { lat: b.lat, lng: b.lng },
+            gap: null,
+            heading: null,
+            headFrom: { lat: b.lat, lng: b.lng },
+            done: true,
+            run: null,
+            sig,
+          });
+          continue;
+        }
+
+        cur.routeId = r.routeId;
+        cur.routeName = label;
+
+        // 같은 자리면 새 구간을 열지 않는다 — 정차 중인 버스가 떨지 않게
+        const moved = cur.to.lat !== b.lat || cur.to.lng !== b.lng;
+        if (moved) {
+          const jump = Math.hypot((b.lat - cur.to.lat) * 111_000, (b.lng - cur.to.lng) * 88_000);
+          /*
+           * 화면에 지금 있는 자리에서 출발한다. 예전에는 직전 관측 지점에서
+           * 출발해, 아직 가는 중에 새 관측이 오면 버스가 앞으로 툭 튀었다.
+           */
+          cur.from = jump > 2000 ? { lat: b.lat, lng: b.lng } : { ...cur.shown };
+          if (jump > 2000) {
+            cur.shown = { lat: b.lat, lng: b.lng };
+            cur.headFrom = cur.shown;
+          }
+          // 정류소를 옮긴 간격을 잰다. 너무 짧거나 긴 것(누락·정차 대기)은 버린다
+          const sample = now - cur.at;
+          if (sample >= 5_000 && sample <= 180_000) {
+            cur.gap = cur.gap === null ? sample : cur.gap * 0.6 + sample * 0.4;
+          }
+          cur.dur = Math.max(
+            BUS_TWEEN_MIN_MS,
+            Math.min(BUS_TWEEN_MAX_MS, cur.gap ?? BUS_TWEEN_DEFAULT_MS),
+          );
+          cur.to = { lat: b.lat, lng: b.lng };
+          cur.at = now;
+          cur.done = false;
+          needsAnim = true;
+          // 노선 경로가 있으면 그 위를 걷는다. 붙이기가 어긋나면 null 이고
+          // 그때는 아래 애니메이션이 직선으로 잇는다.
+          const line = busPaths[r.routeId];
+          cur.run =
+            line && line.length > 1
+              ? planRun(line, [cur.from.lat, cur.from.lng], [cur.to.lat, cur.to.lng])
+              : null;
+        }
+        if (cur.sig !== sig) {
+          const el = makeBusNode(key, label, b);
+          // 내용을 갈아도 가던 방향은 그대로 — 화살표가 매번 처음으로 돌아가지 않게
+          aimArrow(el, cur.heading, false);
+          el.style.animation = "none";
+          cur.ov.setContent(el);
+          cur.sig = sig;
+        }
+      }
+    }
+
+    // 운행을 마쳤거나 화면 밖으로 나간 버스는 흐려지며 사라진다
+    for (const [key, entry] of live) {
+      if (!seen.has(key)) {
+        const el = entry.ov.getContent();
+        if (el instanceof HTMLElement) el.style.opacity = "0";
+        const ov = entry.ov;
+        setTimeout(() => ov.setMap(null), BUS_FADE_MS);
+        live.delete(key);
+      }
+    }
+
+    if (needsAnim) startBusLoopRef.current();
+    // level 이 빠지면 확대해도 자세히 바뀌지 않는다
+  }, [ready, busPositions, level, busPaths]);
+
+  // 언마운트 시 모든 오버레이·폴리곤·폴리라인을 정리한다
+  useEffect(() => {
+    const placesMap = placeMarks.current;
+    const transitMap = transitMarks.current;
+    const busesMap = busMarks.current;
+    const roadsMap = roadLines.current;
+    return () => {
+      if (busRaf.current !== null) cancelAnimationFrame(busRaf.current);
+      for (const e of placesMap.values()) e.ov.setMap(null);
+      placesMap.clear();
+      for (const e of transitMap.values()) e.ov.setMap(null);
+      transitMap.clear();
+      for (const e of busesMap.values()) e.ov.setMap(null);
+      busesMap.clear();
+      for (const e of roadsMap.values()) e.line.setMap(null);
+      roadsMap.clear();
+      meRef.current?.setMap(null);
+      meRef.current = null;
+      boundaryRef.current.forEach((p) => p.setMap(null));
+      boundaryRef.current = [];
+      dongRef.current.forEach((p) => p.setMap(null));
+      dongRef.current = [];
+      mapRef.current = null;
+    };
+  }, []);
 
   return (
     <div className="relative h-full w-full">

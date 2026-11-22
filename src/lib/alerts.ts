@@ -1,4 +1,4 @@
-import { timedFetch } from "./fetcher";
+import { timedFetch, normalizeServiceKey, parseDataGoKr, kstDateParts, asArray } from "./fetcher";
 
 /**
  * 기상특보 — 호우·폭염·한파·대설 같은 경보와 주의보.
@@ -39,10 +39,7 @@ interface Row {
 }
 
 function ymd(offsetDays = 0): string {
-  const t = new Date(Date.now() + offsetDays * 86_400_000);
-  const kst = new Date(t.toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${kst.getFullYear()}${p(kst.getMonth() + 1)}${p(kst.getDate())}`;
+  return kstDateParts(offsetDays * 86_400_000).ymd;
 }
 
 /** "202608171800" → ISO */
@@ -69,25 +66,44 @@ function coversUiwang(region: string): boolean {
 }
 
 /** "(1) 폭염주의보 발표 : 경기도(의왕), 서울(서울동남권)" */
-const LINE = /(\S*(?:주의보|경보))\s*(발표|발효|해제|대치)\s*:\s*(.+)$/;
+const LINE = /(\S*(?:주의보|경보))\s*(발표|발효|해제|대치|변경|확대|강화)\s*:\s*(.*)$/;
+
+/** 다음 줄로 이어진 지역 목록까지 한 항목으로 묶는다 */
+function parseEntries(t2: string): { kind: string; action: string; region: string }[] {
+  const entries: { kind: string; action: string; region: string }[] = [];
+  for (const rawLine of t2.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const m = line.match(LINE);
+    if (m) {
+      entries.push({ kind: m[1], action: m[2], region: m[3] });
+    } else if (entries.length > 0 && !/^\(\d+\)|^o\s|^※/.test(line)) {
+      entries[entries.length - 1].region += ` ${line}`;
+    }
+  }
+  return entries;
+}
 
 export async function fetchAlerts(): Promise<WeatherAlert[]> {
   const key = process.env.KMA_SERVICE_KEY;
   if (!key) throw new Error("기상청 인증키가 없습니다");
 
   const url =
-    `${KMA}?serviceKey=${key}&dataType=JSON&numOfRows=50&pageNo=1` +
+    `${KMA}?serviceKey=${normalizeServiceKey(key)}&dataType=JSON&numOfRows=50&pageNo=1` +
     `&stnId=${STN}&fromTmFc=${ymd(-DAYS_BACK)}&toTmFc=${ymd()}`;
   const res = await timedFetch(url, {}, 8000);
   if (!res.ok) throw new Error(`kma ${res.status}`);
 
-  const json = await res.json();
-  const header = json?.response?.header;
-  if (header?.resultCode !== "00") {
-    throw new Error(`${header?.resultCode}: ${header?.resultMsg}`);
+  const text = await res.text();
+  let json: { response?: { body?: { items?: { item?: Row | Row[] } } } };
+  try {
+    json = parseDataGoKr(text) as typeof json;
+  } catch (e) {
+    // 03: NO_DATA 는 최근 5일간 특보가 없었다는 정상 응답이다
+    if (e instanceof Error && /^0?3:/.test(e.message)) return [];
+    throw e;
   }
-  const raw = json?.response?.body?.items?.item;
-  const rows: Row[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  const rows = asArray<Row>(json?.response?.body?.items?.item);
 
   /** 특보 종류별 마지막 사건 */
   const last = new Map<string, { action: string; at: string }>();
@@ -99,12 +115,9 @@ export async function fetchAlerts(): Promise<WeatherAlert[]> {
 
   for (const r of ordered) {
     const at = parseTmFc(r.tmFc);
-    for (const line of String(r.t2 ?? "").split("\n")) {
-      const m = line.match(LINE);
-      if (!m) continue;
-      const [, kind, action, region] = m;
-      if (!coversUiwang(region)) continue;
-      last.set(kind, { action, at });
+    for (const entry of parseEntries(String(r.t2 ?? ""))) {
+      if (!coversUiwang(entry.region)) continue;
+      last.set(entry.kind, { action: entry.action, at });
     }
   }
 

@@ -6,19 +6,17 @@ import {
   nowISO,
   createTtlCache,
   parseDataGoKr,
+  normalizeServiceKey,
+  asArray,
+  kstDateParts,
 } from "@/lib/fetcher";
-import type { MedicalPayload, MedicalPlace } from "@/lib/types";
+import type { DayHours, MedicalPayload, MedicalPlace } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-/** 진료시간은 자주 바뀌지 않지만 "지금 열림" 판정이 시간에 의존하므로 짧게 */
-const CACHE_SEC = 600;
+/** "지금 진료중" 판정이 시간에 의존하므로 CDN 캐시는 짧게(60초) 통일한다 */
+const CDN_CACHE_SEC = 60;
 
-/**
- * 국립중앙의료원 병·의원 / 약국 정보 (공공데이터포털 B552657).
- * 엔드포인트는 실제 호출로 확인했다. 미구독 시 403 +
- * SERVICE_KEY_IS_NOT_REGISTERED_ERROR 가 온다.
- */
 const HOSPITAL =
   "https://apis.data.go.kr/B552657/HsptlAsembySearchService/getHsptlMdcncListInfoInqire";
 const PHARMACY =
@@ -26,36 +24,44 @@ const PHARMACY =
 
 const parser = new XMLParser({ ignoreAttributes: true, parseTagValue: false });
 
-function asArray<T>(v: T | T[] | undefined): T[] {
-  if (v == null) return [];
-  return Array.isArray(v) ? v : [v];
-}
+/** "0900" / "2500"(익일 01:00) 형태를 포함해 현재 진료 중인지 판정한다 */
+function isOpenNow(
+  todayStart?: string,
+  todayClose?: string,
+  prevStart?: string,
+  prevClose?: string,
+  nowHHMM?: number,
+): boolean | null {
+  if (nowHHMM == null) return null;
 
-/** KST 기준 요일(1=월 … 7=일)과 HHMM */
-function kstNow() {
-  const d = new Date(Date.now() + 9 * 3600_000);
-  const dow = d.getUTCDay(); // 0=일
-  return {
-    /** 공공데이터 규격: 1~7 = 월~일 */
-    day: dow === 0 ? 7 : dow,
-    hhmm: d.getUTCHours() * 100 + d.getUTCMinutes(),
-  };
-}
+  // 전날 심야 진료가 자정을 넘겨 오늘 새벽까지 이어지는 경우 (예: 2000~2600 또는 2000~0200)
+  if (prevStart && prevClose && nowHHMM < 600) {
+    const ps = Number(prevStart);
+    const pe = Number(prevClose);
+    if (Number.isFinite(ps) && Number.isFinite(pe)) {
+      if (pe > 2400 && nowHHMM < pe - 2400) return true;
+      if (pe < ps && nowHHMM < pe) return true;
+    }
+  }
 
-/** "0900" 형태를 분 단위 숫자로. 자정 넘김(예: 2000~0200)도 처리한다. */
-function isOpenNow(start?: string, end?: string, nowHHMM?: number): boolean | null {
-  if (!start || !end || nowHHMM == null) return null;
-  const s = Number(start);
-  const e = Number(end);
+  if (!todayStart || !todayClose) return null;
+  const s = Number(todayStart);
+  const e = Number(todayClose);
   if (!Number.isFinite(s) || !Number.isFinite(e)) return null;
-  // 종료가 시작보다 작으면 익일까지 운영하는 것으로 본다
+  // 2500 같은 24시 초과 표기도 nowHHMM >= s && nowHHMM < e 로 자연스럽게 처리된다
   return e >= s ? nowHHMM >= s && nowHHMM < e : nowHHMM >= s || nowHHMM < e;
 }
 
 function fmtTime(t?: string) {
-  if (!t || t.length < 3) return "";
-  const p = t.padStart(4, "0");
+  if (!t || t.trim().length < 3) return "";
+  const p = t.trim().padStart(4, "0");
   return `${p.slice(0, 2)}:${p.slice(2, 4)}`;
+}
+
+function parseCoord(v?: string): number | null {
+  if (!v || !v.trim()) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
 }
 
 interface RawItem {
@@ -69,17 +75,9 @@ interface RawItem {
   [k: string]: string | undefined;
 }
 
-/** 한 번에 받을 수 있는 양. 의왕시 병·의원이 171곳이라 한 장으로 안 끝난다. */
 const PAGE = 100;
-/** 안전장치 — 응답이 이상해도 무한히 돌지 않는다 */
 const MAX_PAGES = 5;
 
-/**
- * 목록을 끝까지 받는다.
- *
- * 처음에는 100곳만 받고 있었다. 의왕시 병·의원은 171곳이라 71곳이 빠졌고,
- * 그만큼 지도에서 병원을 눌러도 진료시간이 붙지 않았다 (25곳 중 9곳).
- */
 async function fetchList(
   url: string,
   key: string,
@@ -105,7 +103,7 @@ async function fetchPage(
   page: number,
 ): Promise<{ places: MedicalPlace[]; total: number }> {
   const qs =
-    `?serviceKey=${key}&Q0=${encodeURIComponent("경기도")}` +
+    `?serviceKey=${normalizeServiceKey(key)}&Q0=${encodeURIComponent("경기도")}` +
     `&Q1=${encodeURIComponent("의왕시")}&numOfRows=${PAGE}&pageNo=${page}`;
   const res = await timedFetch(`${url}${qs}`, {}, 15_000);
   const text = await res.text();
@@ -113,8 +111,6 @@ async function fetchPage(
   if (text.includes("SERVICE_KEY_IS_NOT_REGISTERED")) {
     throw new Error("등록되지 않은 서비스키 — 해당 서비스 활용신청 필요");
   }
-  // 이 서비스는 정상 응답이 XML 이라 XML 파서를 쓰되,
-  // 게이트웨이 오류(JSON 봉투)는 공용 파서로 먼저 걸러낸다.
   if (text.trimStart().startsWith("{")) parseDataGoKr(text);
 
   const json = parser.parse(text);
@@ -125,30 +121,37 @@ async function fetchPage(
 
   const total = Number(json?.response?.body?.totalCount ?? 0);
   const items = asArray<RawItem>(json?.response?.body?.items?.item);
+  const prevDay = day === 1 ? 7 : day - 1;
 
-  const places = items.map((it) => {
-    // dutyTime{1..8}s / {1..8}c = 요일별 시작/종료. 8은 공휴일.
+  const places = items.map((it): MedicalPlace => {
+    const weeklyHours: Record<number, DayHours> = {};
+    for (let d = 1; d <= 8; d++) {
+      const s = fmtTime(it[`dutyTime${d}s`]);
+      const c = fmtTime(it[`dutyTime${d}c`]);
+      if (s && c) weeklyHours[d] = { start: s, close: c };
+    }
     const start = it[`dutyTime${day}s`];
     const close = it[`dutyTime${day}c`];
+    const pStart = it[`dutyTime${prevDay}s`];
+    const pClose = it[`dutyTime${prevDay}c`];
     return {
       id: it.hpid ?? `${kind}-${it.dutyName}`,
       kind,
       name: it.dutyName ?? "",
       address: it.dutyAddr ?? "",
       phone: it.dutyTel1 ?? "",
-      lat: it.wgs84Lat ? Number(it.wgs84Lat) : null,
-      lng: it.wgs84Lon ? Number(it.wgs84Lon) : null,
+      lat: parseCoord(it.wgs84Lat),
+      lng: parseCoord(it.wgs84Lon),
       category: it.dutyDivNam ?? "",
       todayStart: fmtTime(start),
       todayClose: fmtTime(close),
-      openNow: isOpenNow(start, close, hhmm),
+      weeklyHours: Object.keys(weeklyHours).length > 0 ? weeklyHours : undefined,
+      openNow: isOpenNow(start, close, pStart, pClose, hhmm),
     };
   });
   return { places, total: Number.isFinite(total) ? total : places.length };
 }
 
-/** 데이터를 못 가져왔을 때 내보내는 빈 응답.
- * 존재하지 않는 병원을 만들어 보여주는 것은 위험하다. */
 const EMPTY: MedicalPayload = {
   places: [],
   day: 0,
@@ -156,7 +159,7 @@ const EMPTY: MedicalPayload = {
   updatedAt: "",
 };
 
-const cache = createTtlCache<MedicalPayload>(10 * 60_000, 8);
+const cache = createTtlCache<{ payload: MedicalPayload; notice?: string }>(10 * 60_000, 8);
 
 export async function GET() {
   const key = process.env.EMERGENCY_SERVICE_KEY ?? process.env.KMA_SERVICE_KEY;
@@ -164,28 +167,32 @@ export async function GET() {
     return fail(EMPTY, "응급의료 인증키가 설정되지 않았습니다.");
   }
 
-  const { day, hhmm } = kstNow();
+  const { isoDow: day, hhmm } = kstDateParts();
+  const prevDay = day === 1 ? 7 : day - 1;
   const cacheKey = `d${day}`;
   const cached = cache.get(cacheKey);
   if (cached) {
     // 캐시된 목록에 "지금 열림" 만 다시 계산한다 (시간이 흐르므로)
-    const places = cached.places.map((p) => ({
-      ...p,
-      openNow: isOpenNow(
-        p.todayStart.replace(":", ""),
-        p.todayClose.replace(":", ""),
-        hhmm,
-      ),
-    }));
-    return ok({ ...cached, places, updatedAt: nowISO() }, undefined, 60);
+    const places = cached.payload.places.map((p) => {
+      const prev = p.weeklyHours?.[prevDay];
+      return {
+        ...p,
+        openNow: isOpenNow(
+          p.todayStart.replace(":", ""),
+          p.todayClose.replace(":", ""),
+          prev?.start.replace(":", ""),
+          prev?.close.replace(":", ""),
+          hhmm,
+        ),
+      };
+    });
+    return ok(
+      { ...cached.payload, places, updatedAt: nowISO() },
+      cached.notice,
+      cached.notice ? undefined : CDN_CACHE_SEC,
+    );
   }
 
-  /*
-   * 병·의원과 약국은 data.go.kr 에서 서로 다른 서비스다. 활용신청도 따로
-   * 받아야 해서 한쪽만 승인된 기간이 생긴다. 실제로 그랬다 — 병·의원은
-   * 열렸는데 약국이 아직이라, 함께 묶어 던지는 바람에 둘 다 사라졌다.
-   * 따로 받아 되는 쪽은 보여주고, 안 되는 쪽만 이유를 적는다.
-   */
   const [hos, pha] = await Promise.allSettled([
     fetchList(HOSPITAL, key, "hospital", day, hhmm),
     fetchList(PHARMACY, key, "pharmacy", day, hhmm),
@@ -208,10 +215,11 @@ export async function GET() {
     );
   }
 
+  const notice = failed.length ? `일부 미연동 — ${failed.join(" / ")}` : undefined;
   const payload: MedicalPayload = { places, day, source: "nmc", updatedAt: nowISO() };
-  cache.set(cacheKey, payload);
-  // 한쪽만 되는 동안에도 무엇이 빠졌는지 화면에 남긴다
-  return ok(payload, failed.length ? `일부 미연동 — ${failed.join(" / ")}` : undefined, CACHE_SEC);
+  // 일부 실패는 2분만 짧게 캐시해 승인/복구 직후 반영되게 한다
+  cache.set(cacheKey, { payload, notice }, notice ? 2 * 60_000 : undefined);
+  return ok(payload, notice, notice ? undefined : CDN_CACHE_SEC);
 }
 
 function reasonOf(e: unknown): string {

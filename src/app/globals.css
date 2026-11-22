@@ -18,6 +18,7 @@
 
   /* 외곽선·그림자에 쓰는 먹색 */
   --ink: #23201c;
+  --frame: #23201c;
 
   --bg: #fff6e6;
   --surface: #ffffff;
@@ -26,31 +27,27 @@
 
   /* 지도 위 패널 */
   --glass: #ffffff;
-  --glass-strong: #ffffff;
-  --glass-border: var(--ink);
-  --glass-ring: var(--ink);
 
   --text: #23201c;
   --text-muted: #5e574d;
-  --text-faint: #958b7c;
+  --text-faint: #73695c;
 
   --border: #eadbc2;
   --border-strong: #23201c;
 
   /* 강조 — 귤색. 선택된 것과 주요 버튼 */
-  --brand: #e8590c;
+  --brand: #c84600;
   --brand-2: #ff922b;
   --brand-soft: #fff0e0;
   --on-brand: #ffffff;
-  --brand-grad: #ff922b;
 
-  --danger: #e03131;
+  --danger: #d92626;
   --danger-soft: #ffe3e3;
-  --warn: #c76a00;
+  --warn: #a85500;
   --warn-soft: #fff3bf;
-  --ok: #2b8a3e;
+  --ok: #237a35;
   --ok-soft: #d3f9d8;
-  --info: #1c7ed6;
+  --info: #1864ab;
 
   --shadow-sm: 2px 2px 0 var(--ink);
   --shadow-md: 3px 3px 0 var(--ink);
@@ -82,7 +79,10 @@
   :root {
     color-scheme: dark;
 
-    --ink: #000000;
+    /* 밝은 파스텔·귤색 버튼 위 글자색으로는 어두운 잉크를 유지하고,
+       패널 외곽선(--frame)은 어두운 배경 위에서도 보이도록 분리한다. */
+    --ink: #1a1626;
+    --frame: #6b6190;
 
     --bg: #1f1b2e;
     --surface: #2c2740;
@@ -90,20 +90,18 @@
     --surface-3: #433c60;
 
     --glass: #2c2740;
-    --glass-strong: #2c2740;
 
     --text: #fff8ec;
     --text-muted: #d2c8e8;
-    --text-faint: #9a90b5;
+    --text-faint: #aba0c7;
 
     --border: #4a4268;
-    --border-strong: #000000;
+    --border-strong: #6b6190;
 
     --brand: #ffa94d;
     --brand-2: #ffa94d;
     --brand-soft: #3d2f2a;
     --on-brand: #23201c;
-    --brand-grad: #ffa94d;
 
     --danger: #ff8787;
     --danger-soft: #4a2530;
@@ -112,6 +110,10 @@
     --ok: #69db7c;
     --ok-soft: #22402b;
     --info: #74c0fc;
+
+    --shadow-sm: 2px 2px 0 #0d0a16;
+    --shadow-md: 3px 3px 0 #0d0a16;
+    --shadow-lg: 4px 4px 0 #0d0a16;
   }
 }
 
@@ -199,7 +201,7 @@ a {
    예전 그대로 둔다. */
 .glass {
   background: var(--glass);
-  border: 2px solid var(--ink);
+  border: 2px solid var(--frame);
   box-shadow: var(--shadow-md);
 }
 
@@ -276,7 +278,7 @@ a {
 
 /* 지도 바탕에 깔리는 땡땡이 — 지도가 아직 안 떴을 때 비어 보이지 않게 */
 .dots {
-  background-image: radial-gradient(color-mix(in srgb, var(--ink) 9%, transparent) 1.2px, transparent 1.2px);
+  background-image: radial-gradient(color-mix(in srgb, var(--text) 10%, transparent) 1.2px, transparent 1.2px);
   background-size: 18px 18px;
 }
 
@@ -352,16 +354,6 @@ a {
 .fade-up {
   animation: fade-up 0.2s var(--ease-out) both;
 }
-
-/* 목록 항목이 차례로 떠오른다 — 처음 몇 개만, 늦게 뜨면 답답하다 */
-.stagger > * {
-  animation: fade-up 0.36s var(--ease-out) both;
-}
-.stagger > *:nth-child(2) { animation-delay: 30ms; }
-.stagger > *:nth-child(3) { animation-delay: 60ms; }
-.stagger > *:nth-child(4) { animation-delay: 90ms; }
-.stagger > *:nth-child(5) { animation-delay: 120ms; }
-.stagger > *:nth-child(n + 6) { animation-delay: 150ms; }
 
 /* 오버레이 배경 */
 .scrim {

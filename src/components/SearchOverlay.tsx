@@ -4,10 +4,11 @@ import Icon from "@/components/Icon";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import { swrFetcher } from "@/lib/fetcher";
+import { formatDistance } from "@/lib/format";
 import { useDebounced } from "@/lib/useDebounced";
 import { CATEGORY_MAP } from "@/lib/uiwang";
-import { Empty } from "@/components/ui";
-import type { ApiEnvelope, Place } from "@/lib/types";
+import { Empty, Notice } from "@/components/ui";
+import type { ApiEnvelope, Place, SearchPayload } from "@/lib/types";
 
 /**
  * 이름으로 찾기.
@@ -37,13 +38,24 @@ export function pushRecent(p: Place) {
   }
 }
 
-function Row({ p, onPick }: { p: Place; onPick: (p: Place) => void }) {
+function Row({
+  p,
+  active,
+  onPick,
+}: {
+  p: Place;
+  active: boolean;
+  onPick: (p: Place) => void;
+}) {
   const def = CATEGORY_MAP[p.category];
+  const dist = formatDistance(p.distance);
   return (
     <button
       type="button"
       onClick={() => onPick(p)}
-      className="flex w-full items-center gap-2.5 rounded-[var(--radius)] px-2.5 py-2.5 text-left transition hover:bg-[var(--surface-2)]"
+      className={`flex w-full items-center gap-2.5 rounded-[var(--radius)] px-2.5 py-2.5 text-left transition ${
+        active ? "bg-[var(--surface-2)]" : "hover:bg-[var(--surface-2)]"
+      }`}
     >
       <span
         aria-hidden
@@ -58,9 +70,9 @@ function Row({ p, onPick }: { p: Place; onPick: (p: Place) => void }) {
           {p.roadAddress || p.address}
         </span>
       </span>
-      {p.distance != null && (
+      {dist && (
         <span className="shrink-0 text-[length:var(--text-2xs)] font-semibold tabular-nums text-[var(--text-faint)]">
-          {p.distance >= 1000 ? `${(p.distance / 1000).toFixed(1)}km` : `${p.distance}m`}
+          {dist}
         </span>
       )}
     </button>
@@ -77,6 +89,7 @@ export default function SearchOverlay({
   onClose: () => void;
 }) {
   const [q, setQ] = useState("");
+  const [activeIdx, setActiveIdx] = useState(0);
   /*
    * 최근 목록은 처음 그릴 때 한 번 읽는다.
    * 이 오버레이는 버튼을 눌러야 생기므로 그 시점엔 이미 브라우저 안이다.
@@ -86,14 +99,19 @@ export default function SearchOverlay({
   );
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // 열리자마자 바로 칠 수 있게
+  // 열리자마자 바로 칠 수 있게 + 어디에 초점이 있든 Escape 로 닫히게
   useEffect(() => {
     inputRef.current?.focus();
-  }, []);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   // 한 글자 칠 때마다 부르면 카카오를 너무 자주 두드린다
   const dq = useDebounced(q.trim(), 300);
-  const { data, isLoading } = useSWR<ApiEnvelope<{ places: Place[] }>>(
+  const { data, error, isLoading } = useSWR<ApiEnvelope<SearchPayload>>(
     dq.length >= 2
       ? `/api/search?q=${encodeURIComponent(dq)}&lat=${center.lat.toFixed(4)}&lng=${center.lng.toFixed(4)}`
       : null,
@@ -102,6 +120,9 @@ export default function SearchOverlay({
   );
 
   const results = useMemo(() => data?.data.places ?? [], [data]);
+  const showingRecent = q.trim().length < 2;
+  const activeList = showingRecent ? recent : results;
+  const safeIdx = activeList.length > 0 ? Math.min(activeIdx, activeList.length - 1) : -1;
 
   const pick = useCallback(
     (p: Place) => {
@@ -122,35 +143,69 @@ export default function SearchOverlay({
   }, []);
 
   return (
-    <div className="scrim fade-up absolute inset-0 z-50 flex flex-col">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="장소 검색"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="scrim fade-up absolute inset-0 z-50 flex flex-col"
+    >
       <div className="mx-auto flex max-h-full w-full max-w-[520px] flex-col p-3">
-        <div className="flex items-center gap-2 rounded-[var(--radius-full)] bg-[var(--surface)] pl-4 pr-1.5 shadow-[var(--shadow-lg)] border-2 border-[var(--ink)] focus-within:ring-[var(--text)]">
+        <div className="flex items-center gap-2 rounded-[var(--radius-full)] border-2 border-[var(--ink)] bg-[var(--surface)] pl-4 pr-1.5 shadow-[var(--shadow-lg)] focus-within:ring-2 focus-within:ring-[var(--brand)]">
           <span className="text-[var(--text-muted)]">
             <Icon name="search" size={18} />
           </span>
           <input
             ref={inputRef}
             value={q}
-            onChange={(e) => setQ(e.target.value)}
+            aria-label="의왕시 장소 검색"
+            onChange={(e) => {
+              setQ(e.target.value);
+              setActiveIdx(0);
+            }}
             onKeyDown={(e) => {
-              if (e.key === "Escape") onClose();
-              if (e.key === "Enter" && results[0]) pick(results[0]);
+              if (e.key === "ArrowDown" && activeList.length > 0) {
+                e.preventDefault();
+                setActiveIdx((i) => (i + 1) % activeList.length);
+              } else if (e.key === "ArrowUp" && activeList.length > 0) {
+                e.preventDefault();
+                setActiveIdx((i) => (i - 1 + activeList.length) % activeList.length);
+              } else if (e.key === "Enter" && safeIdx >= 0 && activeList[safeIdx]) {
+                e.preventDefault();
+                pick(activeList[safeIdx]);
+              }
             }}
             placeholder="의왕시 안에서 찾기 — 도서관, 우체국, 가게 이름"
             className="min-h-[48px] min-w-0 flex-1 bg-transparent text-[length:var(--text-base)] outline-none focus-visible:outline-none"
           />
+          {q && (
+            <button
+              type="button"
+              onClick={() => {
+                setQ("");
+                setActiveIdx(0);
+                inputRef.current?.focus();
+              }}
+              aria-label="검색어 지우기"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-[var(--radius-full)] text-[length:var(--text-xs)] font-bold text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
+            >
+              지움
+            </button>
+          )}
           <button
             type="button"
             onClick={onClose}
             aria-label="검색 닫기"
-            className="press grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius-full)] text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
+            className="press grid h-11 w-11 shrink-0 place-items-center rounded-[var(--radius-full)] text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
           >
             <Icon name="close" size={18} />
           </button>
         </div>
 
-        <div className="thin-scroll mt-2 min-h-0 flex-1 overflow-y-auto rounded-[var(--radius-xl)] bg-[var(--surface)] p-2 shadow-[var(--shadow-lg)] border-2 border-[var(--ink)]">
-          {q.trim().length < 2 ? (
+        <div className="thin-scroll mt-2 min-h-0 flex-1 overflow-y-auto rounded-[var(--radius-xl)] border-2 border-[var(--ink)] bg-[var(--surface)] p-2 shadow-[var(--shadow-lg)]">
+          {showingRecent ? (
             recent.length > 0 ? (
               <>
                 <div className="flex items-center px-2 pb-1 pt-1.5">
@@ -165,8 +220,8 @@ export default function SearchOverlay({
                     지우기
                   </button>
                 </div>
-                {recent.map((p) => (
-                  <Row key={p.id} p={p} onPick={pick} />
+                {recent.map((p, i) => (
+                  <Row key={p.id} p={p} active={i === safeIdx} onPick={pick} />
                 ))}
               </>
             ) : (
@@ -176,6 +231,10 @@ export default function SearchOverlay({
             <p className="px-2.5 py-4 text-[length:var(--text-sm)] text-[var(--text-muted)]">
               찾는 중…
             </p>
+          ) : error ? (
+            <Notice tone="danger">검색 요청에 실패했습니다. 잠시 후 다시 시도해 주세요.</Notice>
+          ) : data?.ok === false ? (
+            <Notice>{data.notice || "검색 기능을 사용할 수 없습니다."}</Notice>
           ) : results.length === 0 ? (
             <Empty>
               의왕시 안에서 찾지 못했습니다.
@@ -183,7 +242,7 @@ export default function SearchOverlay({
               이웃 도시에 있는 곳은 나오지 않습니다.
             </Empty>
           ) : (
-            results.map((p) => <Row key={p.id} p={p} onPick={pick} />)
+            results.map((p, i) => <Row key={p.id} p={p} active={i === safeIdx} onPick={pick} />)
           )}
         </div>
       </div>
