@@ -105,14 +105,24 @@ export async function GET(req: Request) {
   }
 }
 
+function safeDecode(v: string): string {
+  try {
+    return decodeURIComponent(v);
+  } catch {
+    return v;
+  }
+}
+
 async function manyRoutes(raw: string) {
   const wanted = raw
     .split(",")
     .map((pair) => {
-      const [id, name] = pair.split(":");
+      const colon = pair.indexOf(":");
+      const id = colon >= 0 ? pair.slice(0, colon) : pair;
+      const name = colon >= 0 ? pair.slice(colon + 1) : "";
       return {
-        id: (id ?? "").replace(/[^0-9]/g, "").slice(0, 20),
-        name: decodeURIComponent(name ?? "").slice(0, 40),
+        id: id.replace(/[^0-9]/g, "").slice(0, 20),
+        name: safeDecode(name).slice(0, 40),
       };
     })
     .filter((r) => r.id)

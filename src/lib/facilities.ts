@@ -4,10 +4,10 @@ import {
   UIWANG_TOILETS,
   UIWANG_SECURITY_CAMS,
 } from "./uiwang-facilities";
-import { haversine } from "./busStations";
+import { haversine } from "./geo";
 import { UIWANG_FACTORIES } from "./uiwang-factories";
 import { industryGroup } from "./factories";
-import type { Place } from "./types";
+import type { FactoryItem, Place } from "./types";
 
 /**
  * 표준데이터로 온 시설을 장소로 바꾼다.
@@ -27,29 +27,16 @@ function fmtArea(m2: number | null): string {
 }
 
 /**
- * 상세 카드는 categoryName 을 부제로 보여준다. 그 한 줄에 이 시설에서
- * 가장 궁금할 것을 담는다 — 주차장은 요금, 화장실은 갖춰진 것.
- */
-/**
  * 방범 CCTV 는 787곳이라 다른 시설과 달리 화면 안만 준다.
- *
- * 공원·주차장·화장실은 합쳐 243곳뿐이라 전부 보내도 부담이 없다.
- * CCTV 까지 다 보내면 응답이 1,000곳을 넘어 휴대폰에서 100KB 를 넘게
- * 받는다. 방범 CCTV 는 "지금 이 근처에 있나" 를 보는 것이라 화면 밖까지
- * 알 필요도 없다.
- */
-/**
- * 화면 안이라도 개수를 묶는다.
- *
- * 시 전체를 보면 화면 안에 700곳이 들어와 응답이 285KB 가 됐다. 지도는
- * 마커 크기만 한 칸마다 하나만 그리므로 그렇게 많이 보내도 대부분 버려진다.
  * 중심에서 가까운 것부터 이만큼만 보낸다.
  */
 const SEC_LIMIT = 120;
 
 function inRect(lat: number, lng: number, rect: string | null): boolean {
-  if (!rect) return true;
-  const [minX, minY, maxX, maxY] = rect.split(",").map(Number);
+  if (rect === null) return false;
+  const parts = rect.split(",").map(Number);
+  if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) return false;
+  const [minX, minY, maxX, maxY] = parts;
   return lng >= minX && lng <= maxX && lat >= minY && lat <= maxY;
 }
 
@@ -57,6 +44,7 @@ export function facilityPlaces(
   kinds: FacilityKind[],
   center: { lat: number; lng: number },
   rect: string | null = null,
+  dynamicFactories?: FactoryItem[],
 ): Place[] {
   const out: Place[] = [];
 
@@ -112,6 +100,7 @@ export function facilityPlaces(
         t.diaper ? "기저귀교환대" : "",
         t.disabled ? "장애인용" : "",
         t.bell ? "비상벨" : "",
+        t.cctv ? "CCTV" : "",
       ].filter(Boolean);
       out.push({
         id: `wc:${i}`,
@@ -157,10 +146,13 @@ export function facilityPlaces(
 
   /*
    * 등록 공장 — 우리 동네의 제조업 분포를 지도에 찍는다.
-   * 이름 옆에는 업종 묶음과 종업원 수만 둔다. 원본 업종명은 길다.
+   * 정적 스냅샷이 있으면 우선 쓰고, 없으면 공공 API 로 받아 지오코딩된 공장을 쓴다.
    */
   if (kinds.includes("MFG")) {
-    for (const [i, f] of UIWANG_FACTORIES.entries()) {
+    const factories: FactoryItem[] =
+      UIWANG_FACTORIES.length > 0 ? UIWANG_FACTORIES : (dynamicFactories ?? []);
+    for (const [i, f] of factories.entries()) {
+      if (f.lat == null || f.lng == null) continue;
       if (!inRect(f.lat, f.lng, rect)) continue;
       const g = industryGroup(f.industry);
       out.push({
@@ -187,10 +179,3 @@ export function facilityPlaces(
 
   return out.sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
 }
-
-export const FACILITY_COUNTS = {
-  PARK: UIWANG_PARKS.length,
-  PKG: UIWANG_PARKING.length,
-  WC: UIWANG_TOILETS.length,
-  SEC: UIWANG_SECURITY_CAMS.length,
-} as const;

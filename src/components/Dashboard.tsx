@@ -21,13 +21,20 @@ import {
   LEVEL_LABEL,
   type TrafficSegment,
 } from "@/lib/traffic";
+import { FACTORY_SUMMARY, industryGroup, summarizeFactories } from "@/lib/factories";
+import { formatDistance } from "@/lib/format";
 import type { Cctv, CctvPayload } from "@/lib/cctvTypes";
 import { timeAgo } from "@/components/ui";
+import type { LandmarkItem } from "@/components/KakaoMap";
 import type {
   ApiEnvelope,
   Place,
   BusStop,
   Incident,
+  MedicalPlace,
+  EmergencyRoom,
+  FactoryItem,
+  FactoriesPayload,
   PlacesPayload,
   WeatherPayload,
   AirPayload,
@@ -76,12 +83,12 @@ const NO_PLACES: Place[] = [];
 const NO_INCIDENTS: Incident[] = [];
 const NO_STOPS: BusStop[] = [];
 const NO_MEDICAL: MedicalPayload["places"] = [];
+const NO_EMERGENCY: EmergencyRoom[] = [];
 const NO_LANDMARKS: typeof LANDMARKS = [];
 const NO_SEGMENTS: TrafficSegment[] = [];
 const NO_CCTVS: Cctv[] = [];
 const NO_BUSES: BusPositionsPayload[] = [];
 const NO_PATHS: Record<string, LatLng[]> = {};
-
 
 const POLL = {
   weather: 10 * 60_000,
@@ -110,19 +117,23 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
   const [mode, setMode] = useState<ModeId | null>(initial.mode);
   const [center, setCenter] = useState({ lat: initial.lat, lng: initial.lng });
   const [level, setLevel] = useState(initial.level);
-  const [fitBounds, setFitBounds] = useState<LatLngBox | null>(null);
+  const [fitBounds, setFitBounds] = useState<LatLngBox | null>(() =>
+    initial.dong && DONG_BBOX[initial.dong] ? { ...DONG_BBOX[initial.dong] } : null,
+  );
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   /**
-   * 지도에서 고른 정류소·사고. 장소 선택과 상호 배타다 —
+   * 지도에서 고른 정류소·사고·CCTV·응급실·랜드마크. 장소 선택과 상호 배타다 —
    * 카드가 두 개 겹쳐 뜨면 어느 것을 보고 있는지 알 수 없다.
    */
   const [marker, setMarker] = useState<
     | { kind: "stop"; stop: BusStop }
     | { kind: "incident"; incident: Incident }
     | { kind: "cctv"; cctv: Cctv }
+    | { kind: "emergency"; room: EmergencyRoom }
+    | { kind: "landmark"; landmark: LandmarkItem }
     | null
   >(null);
-  const [activeDong, setActiveDong] = useState<string | null>(null);
+  const [activeDong, setActiveDong] = useState<string | null>(initial.dong);
   const [tracked, setTracked] = useState<{ id: string; name: string } | null>(null);
   const [newsQuery, setNewsQuery] = useState("의왕시");
   const [sheetOpen, setSheetOpen] = useState(!!initial.mode);
@@ -130,9 +141,13 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
    * 좁히기 — 모드 안에서 한 종류만 볼 때.
    * 지도와 목록이 함께 좁혀져야 해서 여기서 들고 있는다.
    */
-  const [only, setOnly] = useState<CategoryKey | null>(null);
+  const [only, setOnly] = useState<CategoryKey | null>(initial.only);
+  /** 우리 동네 모드에서 업종 막대를 눌러 지도 공장 핀을 좁힐 때 */
+  const [industryFilter, setIndustryFilter] = useState<string | null>(null);
+  /** 상단 요약줄에서 날씨와 공기 중 어느 쪽을 눌러 열었는지 */
+  const [summaryWeatherTab, setSummaryWeatherTab] = useState<"weather" | "air">("weather");
   const [searchOpen, setSearchOpen] = useState(false);
-  /** 검색으로 고른 곳 — 지금 목록에 없어도 지도와 카드에 남는다 */
+  /** 검색·병원·공장 목록에서 고른 곳 — 지금 목록에 없어도 지도와 카드에 남는다 */
   const [pinned, setPinned] = useState<Place | null>(null);
 
   const def = mode ? MODE_MAP[mode] : null;
@@ -208,9 +223,8 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
   }, [level]);
 
   const urlState = useMemo(
-    // radius 는 조회에 쓰이지 않으므로 주소에도 싣지 않는다
-    () => ({ mode, lat: center.lat, lng: center.lng, level, radius: initial.radius }),
-    [mode, center.lat, center.lng, level, initial.radius],
+    () => ({ mode, lat: center.lat, lng: center.lng, level, dong: activeDong, only }),
+    [mode, center.lat, center.lng, level, activeDong, only],
   );
   useSyncUrl(urlState);
 
@@ -262,6 +276,19 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     swrFetcher,
     { refreshInterval: POLL.news, keepPreviousData: true },
   );
+  const factories = useSWR<ApiEnvelope<FactoriesPayload>>(
+    needs("industry") || activeDong ? "/api/factories" : null,
+    swrFetcher,
+    { revalidateOnFocus: false, dedupingInterval: 30 * 60_000 },
+  );
+
+  const dongFactoryCounts = useMemo(() => {
+    const summary =
+      factories.data?.ok && factories.data.data.factories.length > 0
+        ? summarizeFactories(factories.data.data.factories, factories.data.data.asOf)
+        : FACTORY_SUMMARY;
+    return Object.fromEntries(summary.byDong.map((t) => [t.key, t.count])) as Record<string, number>;
+  }, [factories.data]);
 
   const placeList = useMemo(() => places.data?.data.places ?? [], [places.data]);
 
@@ -353,36 +380,46 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     });
   }, []);
 
+  /**
+   * 휴대폰에서는 시트가 화면을 다 덮는다.
+   * 목록에서 무엇을 고르면 상세 카드가 시트 뒤에 깔려 보이지 않았다.
+   * 고르는 순간 시트를 접어 지도와 카드를 드러낸다 — 손잡이로 다시 연다.
+   */
+  const revealMap = useCallback(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 640) setSheetOpen(false);
+  }, []);
+
   /** 같은 모드를 다시 누르면 해제되어 둘러보기로 돌아간다 */
   const toggleMode = useCallback((next: ModeId) => {
     setMode((cur) => {
       const off = cur === next;
       setSheetOpen(!off);
       setSelectedPlaceId(null);
+      setMarker(null);
       setTracked(null);
       // 모드가 바뀌면 좁히기를 푼다 — 이전 모드의 종류는 여기 없다
       setOnly(null);
+      setIndustryFilter(null);
       return off ? null : next;
     });
   }, []);
 
-  const toggleDong = useCallback((d: { name: string }) => {
-    setActiveDong((cur) => {
-      if (cur === d.name) {
-        setFitBounds(null);
-        return null;
-      }
-      const box = DONG_BBOX[d.name];
-      if (box) setFitBounds({ ...box });
-      return d.name;
-    });
-  }, []);
+  const toggleDong = useCallback(
+    (d: { name: string }) => {
+      setActiveDong((cur) => {
+        if (cur === d.name) {
+          setFitBounds(null);
+          return null;
+        }
+        const box = DONG_BBOX[d.name];
+        if (box) setFitBounds({ ...box });
+        revealMap();
+        return d.name;
+      });
+    },
+    [revealMap],
+  );
 
-  /**
-   * 휴대폰에서는 시트가 화면을 다 덮는다.
-   * 목록에서 무엇을 고르면 상세 카드가 시트 뒤에 깔려 보이지 않았다.
-   * 고르는 순간 시트를 접어 지도와 카드를 드러낸다 — 손잡이로 다시 연다.
-   */
   /**
    * 내 위치로.
    *
@@ -417,17 +454,16 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
    * 그 장소는 지금 보고 있는 목록에 없을 수 있다 (다른 모드이거나 화면
    * 밖이거나). 따로 들고 있다가 지도와 상세 카드에 얹는다.
    */
-  const pickSearched = useCallback((p: Place) => {
-    setPinned(p);
-    setMarker(null);
-    setSelectedPlaceId(p.id);
-    focus(p.lat, p.lng, 250);
-    setSheetOpen(false);
-  }, [focus]);
-
-  const revealMap = useCallback(() => {
-    if (typeof window !== "undefined" && window.innerWidth < 640) setSheetOpen(false);
-  }, []);
+  const pickSearched = useCallback(
+    (p: Place) => {
+      setPinned(p);
+      setMarker(null);
+      setSelectedPlaceId(p.id);
+      focus(p.lat, p.lng, 250);
+      setSheetOpen(false);
+    },
+    [focus],
+  );
 
   const handleSelectPlace = useCallback(
     (p: Place) => {
@@ -442,16 +478,86 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     [revealMap, focus],
   );
 
+  const selectMedical = useCallback(
+    (m: MedicalPlace) => {
+      if (m.lat == null || m.lng == null) return;
+      const pid = `med:${m.id}`;
+      setMarker(null);
+      setSelectedPlaceId((cur) => {
+        if (cur === pid) return null;
+        const synthetic: Place = {
+          id: pid,
+          name: m.name,
+          category: m.kind === "pharmacy" ? "PM9" : "HP8",
+          categoryName: m.category || (m.kind === "pharmacy" ? "약국" : "병·의원"),
+          phone: m.phone,
+          address: m.address,
+          roadAddress: m.address,
+          lat: m.lat!,
+          lng: m.lng!,
+          distance: null,
+          url: "",
+        };
+        setPinned(synthetic);
+        focus(m.lat!, m.lng!, 250);
+        revealMap();
+        return pid;
+      });
+    },
+    [focus, revealMap],
+  );
+
+  const selectFactory = useCallback(
+    (f: FactoryItem) => {
+      if (f.lat == null || f.lng == null) return;
+      const existing = placeList.find(
+        (p) => p.category === "MFG" && p.name === f.name,
+      );
+      if (existing) {
+        handleSelectPlace(existing);
+        return;
+      }
+      const pid = `fac:live:${f.name}`;
+      const detail = [
+        f.industry,
+        f.employees ? `종업원 ${f.employees.toLocaleString("ko-KR")}명` : "",
+        f.product,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      const synthetic: Place = {
+        id: pid,
+        name: f.name,
+        category: "MFG",
+        categoryName: detail || "공장",
+        phone: "",
+        address: f.address,
+        roadAddress: f.address,
+        lat: f.lat,
+        lng: f.lng,
+        distance: null,
+        url: "",
+      };
+      setPinned(synthetic);
+      setMarker(null);
+      setSelectedPlaceId(pid);
+      focus(f.lat, f.lng, 300);
+      revealMap();
+    },
+    [placeList, handleSelectPlace, focus, revealMap],
+  );
+
   const selectStop = useCallback(
     (stop: BusStop) => {
       setSelectedPlaceId(null);
       setMarker((cur) => {
         if (cur?.kind === "stop" && cur.stop.stationId === stop.stationId) return null;
+        focus(stop.lat, stop.lng, 280);
         revealMap();
         return { kind: "stop", stop };
       });
     },
-    [revealMap],
+    [focus, revealMap],
   );
 
   const selectIncident = useCallback(
@@ -459,11 +565,12 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
       setSelectedPlaceId(null);
       setMarker((cur) => {
         if (cur?.kind === "incident" && cur.incident.id === incident.id) return null;
+        if (incident.lat != null && incident.lng != null) focus(incident.lat, incident.lng, 500);
         revealMap();
         return { kind: "incident", incident };
       });
     },
-    [revealMap],
+    [focus, revealMap],
   );
 
   const selectCctv = useCallback(
@@ -478,6 +585,36 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     [revealMap],
   );
 
+  const selectEmergency = useCallback(
+    (room: EmergencyRoom) => {
+      setSelectedPlaceId(null);
+      setMarker((cur) => {
+        if (cur?.kind === "emergency" && cur.room.id === room.id) return null;
+        focus(room.lat, room.lng, 600);
+        revealMap();
+        return { kind: "emergency", room };
+      });
+    },
+    [focus, revealMap],
+  );
+
+  const selectLandmark = useCallback(
+    (landmark: LandmarkItem) => {
+      setSelectedPlaceId(null);
+      setMarker((cur) => {
+        if (cur?.kind === "landmark" && cur.landmark.name === landmark.name) return null;
+        focus(landmark.lat, landmark.lng, 450);
+        revealMap();
+        return { kind: "landmark", landmark };
+      });
+    },
+    [focus, revealMap],
+  );
+
+  const toggleBusTrack = useCallback((rid: string, name: string) => {
+    setTracked((cur) => (cur?.id === rid ? null : { id: rid, name }));
+  }, []);
+
   const markerId =
     marker?.kind === "stop"
       ? `stop:${marker.stop.stationId}`
@@ -485,7 +622,11 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
         ? `incident:${marker.incident.id}`
         : marker?.kind === "cctv"
           ? `cctv:${marker.cctv.id}`
-          : null;
+          : marker?.kind === "emergency"
+            ? `emergency:${marker.room.id}`
+            : marker?.kind === "landmark"
+              ? `landmark:${marker.landmark.name}`
+              : null;
 
   const selectedPlace = useMemo(
     () =>
@@ -500,12 +641,17 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
   const basePlaces = def?.layers.places ? placeList : NO_PLACES;
   const mapPlaces = useMemo(() => {
     // 한 종류만 고르면 지도도 그것만 남긴다
-    const narrowed = only ? basePlaces.filter((p) => p.category === only) : basePlaces;
-    // 검색으로 고른 곳은 좁히기와 무관하게 남긴다 — 방금 찾은 것이 사라지면 당황한다
+    let narrowed = only ? basePlaces.filter((p) => p.category === only) : basePlaces;
+    if (mode === "dong" && industryFilter) {
+      narrowed = narrowed.filter(
+        (p) => p.category !== "MFG" || industryGroup(p.categoryName).id === industryFilter,
+      );
+    }
+    // 검색·목록에서 고른 곳은 좁히기와 무관하게 남긴다 — 방금 찾은 것이 사라지면 당황한다
     return pinned && !narrowed.some((p) => p.id === pinned.id)
       ? [...narrowed, pinned]
       : narrowed;
-  }, [basePlaces, pinned, only]);
+  }, [basePlaces, pinned, only, mode, industryFilter]);
   const mapIncidents = def?.layers.incidents
     ? (traffic.data?.data.incidents ?? NO_INCIDENTS)
     : NO_INCIDENTS;
@@ -582,22 +728,50 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     [mode, medical.data],
   );
 
+  const emergencyMarkers = useMemo(
+    () => (mode === "medical" ? (emergency.data?.data.rooms ?? NO_EMERGENCY) : NO_EMERGENCY),
+    [mode, emergency.data],
+  );
+
   // ── 시트 내용 ─────────────────────────────────────────
   const card = (id: CardId) => {
     switch (id) {
       case "emergency":
-        return <EmergencyPanel key={id} res={emergency.data} isLoading={emergency.isLoading} />;
+        return (
+          <EmergencyPanel
+            key={id}
+            res={emergency.data}
+            isLoading={emergency.isLoading}
+            error={emergency.error}
+            onFocus={selectEmergency}
+          />
+        );
       case "weather":
-        return <WeatherPanel key={id} res={weather.data} isLoading={weather.isLoading} />;
+        return (
+          <WeatherPanel
+            key={id}
+            res={weather.data}
+            isLoading={weather.isLoading}
+            error={weather.error}
+          />
+        );
       case "air":
-        return <AirPanel key={id} res={air.data} isLoading={air.isLoading} />;
+        return (
+          <AirPanel
+            key={id}
+            res={air.data}
+            isLoading={air.isLoading}
+            error={air.error}
+          />
+        );
       case "medical":
         return (
           <MedicalPanel
             key={id}
             res={medical.data}
             isLoading={medical.isLoading}
-            onFocus={(lat, lng) => focus(lat, lng, 250)}
+            error={medical.error}
+            onSelect={selectMedical}
           />
         );
       case "traffic":
@@ -606,7 +780,8 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             key={id}
             res={traffic.data}
             isLoading={traffic.isLoading}
-            onFocus={(lat, lng) => focus(lat, lng, 500)}
+            error={traffic.error}
+            onSelectIncident={selectIncident}
           />
         );
       case "cctv":
@@ -615,6 +790,8 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             key={id}
             res={cctv.data}
             isLoading={cctv.isLoading}
+            error={cctv.error}
+            activeCctvId={marker?.kind === "cctv" ? marker.cctv.id : null}
             onSelect={(c) => {
               selectCctv(c);
               focus(c.lat, c.lng, 500);
@@ -627,17 +804,34 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             key={id}
             res={transit.data}
             isLoading={transit.isLoading}
-            onFocus={(lat, lng) => focus(lat, lng, 250)}
+            error={transit.error}
+            onSelectStop={selectStop}
             trackedRouteId={tracked?.id ?? null}
-            onTrackRoute={(rid, name) =>
-              setTracked((cur) => (cur?.id === rid ? null : { id: rid, name }))
-            }
+            onTrackRoute={(rid, name) => {
+              toggleBusTrack(rid, name);
+              revealMap();
+            }}
           />
         );
       case "waste":
         return <WastePanel key={id} />;
       case "industry":
-        return <IndustryPanel key={id} onSelectDong={toggleDong} activeDong={activeDong} />;
+        return (
+          <IndustryPanel
+            key={id}
+            res={factories.data}
+            isLoading={factories.isLoading}
+            error={factories.error}
+            onSelectDong={toggleDong}
+            activeDong={activeDong}
+            activeGroup={industryFilter}
+            onSelectGroup={(g) => {
+              setIndustryFilter(g);
+              if (g) revealMap();
+            }}
+            onFocusFactory={selectFactory}
+          />
+        );
       case "population":
         return (
           <PopulationPanel key={id} onSelectDong={toggleDong} activeDong={activeDong} />
@@ -648,6 +842,8 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             key={id}
             res={news.data}
             isLoading={news.isLoading}
+            isValidating={news.isValidating}
+            error={news.error}
             query={newsQuery}
             onQueryChange={setNewsQuery}
           />
@@ -668,12 +864,10 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     news: "news",
     traffic: "transit",
     medical: "medical",
-    waste: "waste",
-    population: "dong",
   };
   const openTab: InfoTab | null =
     mode === "weather"
-      ? "weather"
+      ? summaryWeatherTab
       : mode === "news"
         ? "news"
         : mode === "transit"
@@ -681,7 +875,16 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           : mode === "medical"
             ? "medical"
             : null;
-  const openFromSummary = (t: InfoTab) => toggleMode(TAB_MODE[t]);
+  const openFromSummary = (t: InfoTab) => {
+    if (t === "weather" || t === "air") {
+      if (mode === "weather" && sheetOpen && summaryWeatherTab !== t) {
+        setSummaryWeatherTab(t);
+        return;
+      }
+      setSummaryWeatherTab(t);
+    }
+    toggleMode(TAB_MODE[t]);
+  };
 
   const summary = (
     <SummaryStrip
@@ -712,6 +915,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           incidents={mapIncidents}
           busStops={mapStops}
           medicalOpen={medicalMarkers}
+          emergencyRooms={emergencyMarkers}
           busPositions={mapBusPositions}
           busPaths={busRoutePaths.data?.data.paths ?? NO_PATHS}
           landmarks={mapLandmarks}
@@ -726,6 +930,10 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           selectedPlaceId={selectedPlaceId}
           selectedMarkerId={markerId}
           onSelectPlace={handleSelectPlace}
+          onSelectMedical={selectMedical}
+          onSelectEmergency={selectEmergency}
+          onSelectLandmark={selectLandmark}
+          onSelectBus={toggleBusTrack}
           onSelectStop={selectStop}
           onSelectIncident={selectIncident}
           onMapMoved={setCenter}
@@ -751,6 +959,8 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
               onClick={() => {
                 setMode(null);
                 setSheetOpen(false);
+                setSelectedPlaceId(null);
+                setMarker(null);
               }}
               className="flex shrink-0 items-center gap-2 rounded-[var(--radius-full)] py-1 pl-1 pr-2"
               title="처음 화면으로"
@@ -832,7 +1042,10 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
       {airGrade && !sheetOpen && !bottomCard && (
         <button
           type="button"
-          onClick={() => toggleMode("weather")}
+          onClick={() => {
+            setSummaryWeatherTab("air");
+            toggleMode("weather");
+          }}
           title="공기 자세히 보기"
           className="glass press pop-in absolute left-3 top-[128px] z-20 flex items-center gap-2 rounded-[var(--radius-lg)] py-2 pl-2.5 pr-3.5 text-left sm:top-[76px]"
           style={{ background: AIR_STYLE[airGrade].tint, color: "#23201c" }}
@@ -889,9 +1102,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           key={marker.stop.stationId}
           stop={marker.stop}
           trackedRouteId={tracked?.id ?? null}
-          onTrackRoute={(rid, name) =>
-            setTracked((cur) => (cur?.id === rid ? null : { id: rid, name }))
-          }
+          onTrackRoute={toggleBusTrack}
           onClose={() => setMarker(null)}
         />
       )}
@@ -917,6 +1128,90 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
         <CctvCard key={marker.cctv.id} cctv={marker.cctv} onClose={() => setMarker(null)} />
       )}
 
+      {marker?.kind === "emergency" && (
+        <MapCard
+          key={marker.room.id}
+          title={marker.room.name}
+          accent="var(--danger)"
+          subtitle={[marker.room.level, formatDistance(marker.room.distance)].filter(Boolean).join(" · ")}
+          onClose={() => setMarker(null)}
+        >
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="text-[length:var(--text-xs)] font-bold text-[var(--text-muted)]">
+              가용 병상
+            </span>
+            <span
+              className="tnum text-[length:var(--text-lg)] font-extrabold"
+              style={{
+                color:
+                  marker.room.beds == null
+                    ? "var(--text-muted)"
+                    : marker.room.beds <= 0
+                      ? "var(--danger)"
+                      : marker.room.beds <= 2
+                        ? "var(--warn)"
+                        : "var(--ok)",
+              }}
+            >
+              {marker.room.beds == null
+                ? "정보 없음"
+                : marker.room.beds <= 0
+                  ? "포화"
+                  : marker.room.totalBeds
+                    ? `${marker.room.beds} / ${marker.room.totalBeds}병상`
+                    : `${marker.room.beds}병상`}
+            </span>
+          </div>
+          {marker.room.address && (
+            <p className="mt-2 text-[length:var(--text-xs)] text-[var(--text-muted)]">
+              {marker.room.address}
+            </p>
+          )}
+          <div className="mt-3 flex gap-2">
+            {marker.room.phone && (
+              <a
+                href={`tel:${marker.room.phone}`}
+                className="brand-fill press inline-flex min-h-[44px] flex-1 items-center justify-center rounded-[var(--radius-full)] border-2 px-3 text-[length:var(--text-xs)] font-extrabold shadow-[var(--shadow-sm)]"
+              >
+                📞 {marker.room.phone}
+              </a>
+            )}
+            <a
+              href={`https://map.kakao.com/link/to/${encodeURIComponent(marker.room.name)},${marker.room.lat},${marker.room.lng}`}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="press inline-flex min-h-[44px] flex-1 items-center justify-center rounded-[var(--radius-full)] border-2 border-[var(--ink)] text-[length:var(--text-sm)] font-bold shadow-[var(--shadow-sm)]"
+            >
+              길찾기
+            </a>
+          </div>
+        </MapCard>
+      )}
+
+      {marker?.kind === "landmark" && (
+        <MapCard
+          key={marker.landmark.name}
+          title={marker.landmark.name}
+          accent="#7c3aed"
+          subtitle="의왕 대표 명소"
+          onClose={() => setMarker(null)}
+        >
+          <p className="mt-3 text-[length:var(--text-sm)] leading-relaxed text-[var(--text-muted)]">
+            {marker.landmark.desc}
+          </p>
+          <div className="mt-3 flex gap-2">
+            <a
+              href={`https://map.kakao.com/link/to/${encodeURIComponent(marker.landmark.name)},${marker.landmark.lat},${marker.landmark.lng}`}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="brand-fill press inline-flex min-h-[44px] flex-1 items-center justify-center rounded-[var(--radius-full)] border-2 text-[length:var(--text-sm)] font-bold shadow-[var(--shadow-sm)]"
+            >
+              길찾기 ↗
+            </a>
+          </div>
+        </MapCard>
+      )}
+
       {selectedPlace && (
         <PlaceDetailCard
           key={selectedPlace.id}
@@ -936,6 +1231,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
         <DongCard
           key={activeDong}
           name={activeDong}
+          factoryCount={dongFactoryCounts[activeDong]}
           onClose={() => {
             setActiveDong(null);
             setFitBounds(null);
@@ -960,7 +1256,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
         <aside
           key={def.id}
           aria-label={def.label}
-          className="pop-in absolute inset-x-3 bottom-[calc(var(--dock-h)+6px)] top-[128px] z-30 flex flex-col overflow-hidden rounded-[var(--radius-xl)] border-2 border-[var(--ink)] bg-[var(--surface)] shadow-[var(--shadow-lg)] sm:right-auto sm:top-[76px] sm:w-[400px]"
+          className="pop-in absolute inset-x-3 bottom-[calc(var(--dock-h)+6px)] top-[128px] z-30 flex flex-col overflow-hidden rounded-[var(--radius-xl)] border-2 border-[var(--frame)] bg-[var(--surface)] shadow-[var(--shadow-lg)] sm:right-auto sm:top-[76px] sm:w-[400px]"
         >
           <header
             className="flex items-center gap-3 border-b-2 border-[var(--ink)] py-3 pl-3 pr-2"
@@ -997,6 +1293,8 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
               <PlacesPanel
                 res={places.data}
                 isLoading={places.isLoading}
+                isValidating={places.isValidating}
+                error={places.error}
                 categories={def.categories}
                 onSearchHere={searchHere}
                 only={only}

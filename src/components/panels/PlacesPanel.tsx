@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Notice, Skeleton, Empty } from "@/components/ui";
+import { formatDistance } from "@/lib/format";
 import { CATEGORY_MAP, type CategoryKey } from "@/lib/uiwang";
 import type { PlacesPayload, ApiEnvelope, Place, PlaceSource } from "@/lib/types";
 
@@ -12,11 +13,18 @@ const SOURCE_META: Record<PlaceSource, { label: string; color: string; title: st
     color: "var(--info)",
     title: "OpenStreetMap 실제 데이터 © OpenStreetMap contributors (ODbL)",
   },
+  public: {
+    label: "공공",
+    color: "var(--brand)",
+    title: "공공데이터포털·지자체 공개 시설 데이터",
+  },
 };
 
 export default function PlacesPanel({
   res,
   isLoading,
+  isValidating,
+  error,
   categories,
   onSearchHere,
   only,
@@ -26,6 +34,8 @@ export default function PlacesPanel({
 }: {
   res?: ApiEnvelope<PlacesPayload>;
   isLoading: boolean;
+  isValidating?: boolean;
+  error?: unknown;
   /** 모드가 정한 카테고리 — 사용자가 개별 토글하지 않는다 */
   categories: CategoryKey[];
   /** 지금 화면 범위로 다시 조회한다 */
@@ -61,11 +71,16 @@ export default function PlacesPanel({
 
   // 좁히기·검색을 바꾸면 다시 접는다 — 펼친 상태가 남으면 또 길어진다
   const narrowed = useMemo(() => {
-    const k = keyword.trim();
+    const k = keyword.trim().toLowerCase();
     return places.filter((p) => {
       if (only && p.category !== only) return false;
       if (!k) return true;
-      return p.name.includes(k) || p.roadAddress.includes(k) || p.address.includes(k);
+      return (
+        p.name.toLowerCase().includes(k) ||
+        p.roadAddress.toLowerCase().includes(k) ||
+        p.address.toLowerCase().includes(k) ||
+        p.categoryName.toLowerCase().includes(k)
+      );
     });
   }, [places, keyword, only]);
 
@@ -84,6 +99,7 @@ export default function PlacesPanel({
         <div className="mb-2 flex flex-wrap gap-1">
           <button
             type="button"
+            aria-pressed={only === null}
             onClick={() => {
               onOnlyChange(null);
               setLimit(20);
@@ -91,8 +107,17 @@ export default function PlacesPanel({
             className="press rounded-full px-3 py-1.5 text-[length:var(--text-xs)] font-bold"
             style={
               only === null
-                ? { background: "var(--brand-2)", color: "var(--ink)", border: "2px solid var(--ink)", boxShadow: "var(--shadow-sm)" }
-                : { background: "var(--surface)", color: "var(--text)", border: "2px solid var(--border)" }
+                ? {
+                    background: "var(--brand-2)",
+                    color: "var(--ink)",
+                    border: "2px solid var(--ink)",
+                    boxShadow: "var(--shadow-sm)",
+                  }
+                : {
+                    background: "var(--surface)",
+                    color: "var(--text)",
+                    border: "2px solid var(--border)",
+                  }
             }
           >
             전체 {places.length}
@@ -104,17 +129,32 @@ export default function PlacesPanel({
               <button
                 key={c}
                 type="button"
+                aria-pressed={on}
                 onClick={() => {
                   onOnlyChange(on ? null : c);
                   setLimit(20);
                 }}
-                className="flex items-center gap-1 press rounded-full px-3 py-1.5 text-[length:var(--text-xs)] font-bold"
+                className="press flex items-center gap-1 rounded-full px-3 py-1.5 text-[length:var(--text-xs)] font-bold"
                 style={
                   on
-                    ? { background: def.color, color: "#fff", border: "2px solid var(--ink)", boxShadow: "var(--shadow-sm)" }
-                    : { background: "var(--surface)", color: "var(--text)", border: "2px solid var(--border)" }
+                    ? {
+                        background: "var(--brand-2)",
+                        color: "var(--ink)",
+                        border: "2px solid var(--ink)",
+                        boxShadow: "var(--shadow-sm)",
+                      }
+                    : {
+                        background: "var(--surface)",
+                        color: "var(--text)",
+                        border: "2px solid var(--border)",
+                      }
                 }
               >
+                <span
+                  aria-hidden
+                  className="h-2 w-2 rounded-full"
+                  style={{ background: def.color }}
+                />
                 {def.label}
                 <span className="opacity-70">{countByCat[c] ?? 0}</span>
               </button>
@@ -124,6 +164,7 @@ export default function PlacesPanel({
 
         <input
           value={keyword}
+          aria-label="목록 안에서 이름이나 주소로 찾기"
           onChange={(e) => {
             setKeyword(e.target.value);
             setLimit(20);
@@ -144,9 +185,10 @@ export default function PlacesPanel({
         <button
           type="button"
           onClick={onSearchHere}
-          className="press min-h-[42px] w-full rounded-[var(--radius-full)] border-2 border-[var(--ink)] shadow-[var(--shadow-sm)] text-[length:var(--text-xs)] font-bold hover:border-[var(--brand)] hover:text-[var(--brand)]"
+          disabled={!!isValidating}
+          className="press min-h-[42px] w-full rounded-[var(--radius-full)] border-2 border-[var(--ink)] text-[length:var(--text-xs)] font-bold shadow-[var(--shadow-sm)] hover:border-[var(--brand)] hover:text-[var(--brand)] disabled:opacity-60"
         >
-          이 화면에서 다시 찾기
+          {isValidating ? "이 화면에서 찾는 중…" : "이 화면에서 다시 찾기"}
         </button>
       </div>
 
@@ -155,7 +197,10 @@ export default function PlacesPanel({
           <Skeleton rows={6} />
         ) : (
           <>
-            {res?.ok === false && <Notice>{res?.notice}</Notice>}
+            {error && !res && (
+              <Notice tone="danger">장소 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</Notice>
+            )}
+            {res?.notice && <Notice>{res.notice}</Notice>}
 
             <div className="mb-1.5 flex items-center">
               <p className="text-[length:var(--text-2xs)] font-semibold text-[var(--text-muted)]">
@@ -170,7 +215,7 @@ export default function PlacesPanel({
                   / 화면 안 {res?.data.total}곳
                 </span>
               )}
-              {source && (
+              {source && SOURCE_META[source] && (
                 <span
                   title={SOURCE_META[source].title}
                   className="ml-auto text-[length:var(--text-2xs)] font-bold"
@@ -188,13 +233,22 @@ export default function PlacesPanel({
                 {shown.map((p) => {
                   const def = CATEGORY_MAP[p.category];
                   const active = selectedPlaceId === p.id;
+                  const dist = formatDistance(p.distance);
+                  const sub =
+                    p.categoryName && p.categoryName.trim() !== def.label
+                      ? p.categoryName.trim()
+                      : null;
                   return (
-                    <li key={p.id}>
+                    <li
+                      key={p.id}
+                      className="rounded-[var(--radius)] transition hover:bg-[var(--surface-2)]"
+                      style={active ? { background: "var(--surface-2)" } : undefined}
+                    >
                       <button
                         type="button"
                         onClick={() => onSelectPlace(p)}
-                        className="press w-full rounded-[var(--radius)] px-2 py-2.5 text-left hover:bg-[var(--surface-2)]"
-                        style={active ? { background: "var(--surface-2)" } : undefined}
+                        aria-expanded={active}
+                        className="w-full rounded-[var(--radius)] px-2 py-2.5 text-left"
                       >
                         <div className="flex items-center gap-2.5">
                           <span
@@ -205,25 +259,32 @@ export default function PlacesPanel({
                           <span className="flex-1 truncate text-[length:var(--text-sm)] font-semibold">
                             {p.name}
                           </span>
-                          {p.distance != null && (
-                            <span className="shrink-0 text-[length:var(--text-2xs)] font-semibold text-[var(--text-muted)]">
-                              {p.distance >= 1000
-                                ? `${(p.distance / 1000).toFixed(1)}km`
-                                : `${p.distance}m`}
+                          {dist && (
+                            <span className="shrink-0 tabular-nums text-[length:var(--text-2xs)] font-semibold text-[var(--text-muted)]">
+                              {dist}
                             </span>
                           )}
                         </div>
-                        {active && (
-                          <div className="mt-1 pl-4">
+                      </button>
+
+                      {active && (
+                        <div className="px-2 pb-2.5 pl-6">
+                          {sub && (
+                            <p className="mb-0.5 text-[length:var(--text-2xs)] font-semibold text-[var(--text)]">
+                              {sub}
+                            </p>
+                          )}
+                          {(p.roadAddress || p.address) && (
                             <p className="truncate text-[length:var(--text-xs)] text-[var(--text-muted)]">
                               {p.roadAddress || p.address}
                             </p>
-                            <div className="mt-1 flex gap-1.5">
+                          )}
+                          {(p.phone || p.url) && (
+                            <div className="mt-1.5 flex flex-wrap gap-1.5">
                               {p.phone && (
                                 <a
                                   href={`tel:${p.phone}`}
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="rounded-full border border-[var(--border-strong)] px-2.5 py-1 text-[length:var(--text-2xs)] font-medium"
+                                  className="inline-flex min-h-[34px] items-center rounded-full border border-[var(--border-strong)] px-2.5 py-1 text-[length:var(--text-2xs)] font-medium hover:bg-[var(--surface)]"
                                 >
                                   {p.phone}
                                 </a>
@@ -233,16 +294,15 @@ export default function PlacesPanel({
                                   href={p.url}
                                   target="_blank"
                                   rel="noreferrer noopener"
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="rounded-full border border-[var(--border-strong)] px-2.5 py-1 text-[length:var(--text-2xs)] font-medium"
+                                  className="inline-flex min-h-[34px] items-center rounded-full border border-[var(--border-strong)] px-2.5 py-1 text-[length:var(--text-2xs)] font-medium hover:bg-[var(--surface)]"
                                 >
                                   상세 ↗
                                 </a>
                               )}
                             </div>
-                          </div>
-                        )}
-                      </button>
+                          )}
+                        </div>
+                      )}
                     </li>
                   );
                 })}

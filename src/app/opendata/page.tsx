@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 const all = DATASET_GROUPS.flatMap((g) => g.items);
 const total = all.length;
 const live = all.filter((d) => d.kind === "live").length;
-const providers = new Set(all.map((d) => d.provider.split(" ")[0])).size;
+const providers = new Set(all.map((d) => d.provider)).size;
 
 /**
  * 장식 없이 글자와 선만으로 짠다. 자료 목록은 표에 가깝게 — 한 줄에
@@ -43,15 +43,20 @@ export default function DataPage() {
           있고, 화면의 모든 숫자는 아래 기관이 공개한 자료에서 옵니다.
         </p>
 
-        <dl className="mt-10 flex gap-10 border-t border-[var(--border)] pt-5">
+        <dl className="mt-8 grid grid-cols-3 gap-2.5 sm:max-w-md">
           {[
             { k: "자료", v: total },
             { k: "실시간", v: live },
             { k: "제공 기관", v: providers },
           ].map((x) => (
-            <div key={x.k}>
-              <dt className="text-[length:var(--text-xs)] text-[var(--text-muted)]">{x.k}</dt>
-              <dd className="tnum mt-1 text-[1.75rem] font-semibold leading-none tracking-tight">
+            <div
+              key={x.k}
+              className="rounded-[var(--radius)] border-2 border-[var(--frame)] bg-[var(--surface)] px-3.5 py-3 shadow-[var(--shadow-sm)]"
+            >
+              <dt className="text-[length:var(--text-xs)] font-semibold text-[var(--text-muted)]">
+                {x.k}
+              </dt>
+              <dd className="tnum mt-1 text-[1.75rem] font-extrabold leading-none tracking-tight">
                 {x.v}
               </dd>
             </div>

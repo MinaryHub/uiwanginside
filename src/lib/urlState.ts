@@ -2,7 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import type { ReadonlyURLSearchParams } from "next/navigation";
-import { UIWANG } from "./uiwang";
+import { UIWANG, CATEGORY_MAP, type CategoryKey } from "./uiwang";
+import { DONG_BOUNDARIES } from "./dong-boundaries";
 import { isModeId, type ModeId } from "./modes";
 
 /**
@@ -16,7 +17,8 @@ export interface UrlState {
   lat: number;
   lng: number;
   level: number;
-  radius: number;
+  dong: string | null;
+  only: CategoryKey | null;
 }
 
 export const DEFAULT_STATE: UrlState = {
@@ -24,7 +26,8 @@ export const DEFAULT_STATE: UrlState = {
   lat: UIWANG.center.lat,
   lng: UIWANG.center.lng,
   level: 7,
-  radius: UIWANG.defaultRadius,
+  dong: null,
+  only: null,
 };
 
 function numOr(raw: string | null, fallback: number, min: number, max: number) {
@@ -35,12 +38,15 @@ function numOr(raw: string | null, fallback: number, min: number, max: number) {
 /** URL → 상태. 잘못된 값은 조용히 기본값으로 되돌린다 (링크가 깨져도 화면은 떠야 한다) */
 export function parseUrlState(sp: ReadonlyURLSearchParams | URLSearchParams): UrlState {
   const m = sp.get("m");
+  const d = sp.get("d");
+  const c = sp.get("c");
   return {
     mode: isModeId(m) ? m : null,
     lat: numOr(sp.get("lat"), DEFAULT_STATE.lat, 33, 39),
     lng: numOr(sp.get("lng"), DEFAULT_STATE.lng, 124, 132),
     level: numOr(sp.get("z"), DEFAULT_STATE.level, 1, 12),
-    radius: numOr(sp.get("r"), DEFAULT_STATE.radius, 500, 20000),
+    dong: d && d in DONG_BOUNDARIES ? d : null,
+    only: c && c in CATEGORY_MAP ? (c as CategoryKey) : null,
   };
 }
 
@@ -50,8 +56,9 @@ function toQuery(s: UrlState): string {
   if (s.lat.toFixed(4) !== DEFAULT_STATE.lat.toFixed(4)) p.set("lat", s.lat.toFixed(4));
   if (s.lng.toFixed(4) !== DEFAULT_STATE.lng.toFixed(4)) p.set("lng", s.lng.toFixed(4));
   if (s.level !== DEFAULT_STATE.level) p.set("z", String(s.level));
-  if (s.radius !== DEFAULT_STATE.radius) p.set("r", String(s.radius));
   if (s.mode) p.set("m", s.mode);
+  if (s.dong) p.set("d", s.dong);
+  if (s.only) p.set("c", s.only);
   return p.toString();
 }
 

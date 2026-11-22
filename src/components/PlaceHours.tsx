@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { flatMetres } from "@/lib/geo";
 import { osmHours } from "@/lib/hours";
 import type { MedicalPlace, Place } from "@/lib/types";
 
@@ -32,7 +34,7 @@ function matchMedical(place: Place, list: MedicalPlace[]): MedicalPlace | null {
 
   for (const m of list) {
     if (m.lat == null || m.lng == null) continue;
-    const d = Math.hypot((place.lat - m.lat) * 111_000, (place.lng - m.lng) * 88_000);
+    const d = flatMetres(place.lat, place.lng, m.lat, m.lng);
     if (d > NEAR_M) continue;
     const n = norm(m.name);
     if (n === target || n.includes(target) || target.includes(n)) return m;
@@ -42,7 +44,8 @@ function matchMedical(place: Place, list: MedicalPlace[]): MedicalPlace | null {
   return nearest && nearest.d <= 40 ? nearest.m : null;
 }
 
-const DAY_KO = ["", "월", "화", "수", "목", "금", "토", "일"];
+const DAY_KO = ["", "월", "화", "수", "목", "금", "토", "일", "공휴일"];
+const WEEK_DAYS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
 
 export default function PlaceHours({
   place,
@@ -55,29 +58,70 @@ export default function PlaceHours({
   /** 1=월 … 7=일 */
   day: number;
 }) {
+  const [showWeek, setShowWeek] = useState(false);
   const isClinic = place.category === "HP8" || place.category === "PM9";
   const med = isClinic ? matchMedical(place, medical) : null;
+  const weekly = med?.weeklyHours;
+  const hasWeekly = !!weekly && Object.keys(weekly).length > 0;
 
-  if (med && (med.todayStart || med.todayClose)) {
+  if (med && (med.todayStart || med.todayClose || hasWeekly)) {
     return (
-      <div className="mt-2 flex items-center gap-2">
-        <span className="text-[length:var(--text-2xs)] font-bold text-[var(--text-muted)]">
-          {DAY_KO[day] ? `${DAY_KO[day]}요일 진료` : "진료시간"}
-        </span>
-        <span className="text-[length:var(--text-xs)] font-semibold tabular-nums">
-          {med.todayStart || "?"} ~ {med.todayClose || "?"}
-        </span>
-        {med.openNow !== null && (
-          <span
-            className="rounded-full px-2 py-0.5 text-[length:var(--text-2xs)] font-bold"
-            style={
-              med.openNow
-                ? { background: "var(--ok)", color: "#fff" }
-                : { background: "var(--surface-2)", color: "var(--text-muted)" }
-            }
-          >
-            {med.openNow ? "진료중" : "진료 종료"}
+      <div className="mt-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[length:var(--text-2xs)] font-bold text-[var(--text-muted)]">
+            {DAY_KO[day] ? `${DAY_KO[day]}요일 진료` : "진료시간"}
           </span>
+          {med.todayStart || med.todayClose ? (
+            <span className="text-[length:var(--text-xs)] font-semibold tabular-nums">
+              {med.todayStart || "?"} ~ {med.todayClose || "?"}
+            </span>
+          ) : (
+            <span className="text-[length:var(--text-xs)] text-[var(--text-muted)]">오늘 휴진</span>
+          )}
+          {med.openNow !== null && (
+            <span
+              className="rounded-full px-2 py-0.5 text-[length:var(--text-2xs)] font-bold"
+              style={
+                med.openNow
+                  ? { background: "var(--ok-soft)", color: "var(--ok)" }
+                  : { background: "var(--surface-2)", color: "var(--text-muted)" }
+              }
+            >
+              {med.openNow ? "진료중" : "진료 종료"}
+            </span>
+          )}
+          {hasWeekly && (
+            <button
+              type="button"
+              onClick={() => setShowWeek((v) => !v)}
+              aria-expanded={showWeek}
+              className="ml-auto rounded-[var(--radius)] px-1.5 py-0.5 text-[length:var(--text-2xs)] font-bold text-[var(--brand)] hover:bg-[var(--surface-2)]"
+            >
+              {showWeek ? "접기 ▲" : "요일별 ▼"}
+            </button>
+          )}
+        </div>
+
+        {showWeek && weekly && (
+          <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 rounded-[var(--radius)] bg-[var(--surface-2)] px-3 py-2 text-[length:var(--text-2xs)]">
+            {WEEK_DAYS.map((d) => {
+              const h = weekly[d];
+              const isToday = d === day;
+              return (
+                <div
+                  key={d}
+                  className={`flex items-center justify-between gap-2 ${
+                    isToday ? "font-extrabold text-[var(--text)]" : "text-[var(--text-muted)]"
+                  }`}
+                >
+                  <dt>{DAY_KO[d]}</dt>
+                  <dd className="tabular-nums">
+                    {h ? `${h.start || "?"}~${h.close || "?"}` : "휴진"}
+                  </dd>
+                </div>
+              );
+            })}
+          </dl>
         )}
       </div>
     );

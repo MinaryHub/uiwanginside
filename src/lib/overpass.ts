@@ -1,4 +1,5 @@
-import { timedFetch } from "./fetcher";
+import { timedFetch, createTtlCache } from "./fetcher";
+import { haversine } from "./geo";
 import { CATEGORY_MAP, type CategoryKey } from "./uiwang";
 import type { Place } from "./types";
 
@@ -52,21 +53,8 @@ interface OverpassElement {
   tags?: Record<string, string>;
 }
 
-/** 미터 단위 거리 */
-function haversine(aLat: number, aLng: number, bLat: number, bLng: number) {
-  const R = 6371000;
-  const dLat = ((bLat - aLat) * Math.PI) / 180;
-  const dLng = ((bLng - aLng) * Math.PI) / 180;
-  const s =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((aLat * Math.PI) / 180) *
-      Math.cos((bLat * Math.PI) / 180) *
-      Math.sin(dLng / 2) ** 2;
-  return Math.round(2 * R * Math.asin(Math.sqrt(s)));
-}
-
 /** Overpass bbox 는 (남,서,북,동) 순서다 */
-function buildQuery(codes: CategoryKey[], box: string) {
+function buildQuery(codes: CategoryKey[], box: string): string | null {
   const parts: string[] = [];
   for (const code of codes) {
     for (const filter of OSM_FILTERS[code] ?? []) {
@@ -74,7 +62,8 @@ function buildQuery(codes: CategoryKey[], box: string) {
       parts.push(`way${filter}(${box});`);
     }
   }
-  return `[out:json][timeout:20];(${parts.join("")});out center tags;`;
+  if (parts.length === 0) return null;
+  return `[out:json][timeout:15];(${parts.join("")});out center tags;`;
 }
 
 /** 어떤 카테고리에 속하는지 태그로 역판정 (한 요소가 여러 필터에 걸릴 수 있어 우선순위대로) */
@@ -141,15 +130,16 @@ function addressOf(t: Record<string, string>) {
   return parts.join(" ");
 }
 
-/** 10분 메모리 캐시 — Overpass 는 공용 무료 서버라 과호출을 피한다 */
-const cache = new Map<string, { at: number; places: Place[] }>();
+/** 10분 bounded 메모리 캐시 — 공용 무료 서버 과호출과 메모리 누수를 함께 막는다 */
 const TTL = 10 * 60_000;
+const cache = createTtlCache<Place[]>(TTL, 100);
+const stopCache = createTtlCache<OsmBusStop[]>(TTL, 60);
 
 /**
  * Overpass 공통 호출 — 미러를 순차 시도.
  * 미러 3곳 × 타임아웃이 그대로 응답 지연이 되므로 개별 타임아웃을 짧게 잡는다.
  */
-async function runOverpass(query: string, timeoutMs = 10_000): Promise<OverpassElement[]> {
+async function runOverpass(query: string, timeoutMs = 8_000): Promise<OverpassElement[]> {
   const body = `data=${encodeURIComponent(query)}`;
   let lastErr: unknown = null;
 
@@ -165,7 +155,7 @@ async function runOverpass(query: string, timeoutMs = 10_000): Promise<OverpassE
         timeoutMs,
       );
       if (!res.ok) throw new Error(`overpass ${res.status}`);
-      const json = (await res.json()) as { elements: OverpassElement[] };
+      const json = (await res.json()) as { elements?: OverpassElement[] };
       return json.elements ?? [];
     } catch (e) {
       lastErr = e;
@@ -173,8 +163,6 @@ async function runOverpass(query: string, timeoutMs = 10_000): Promise<OverpassE
   }
   throw lastErr instanceof Error ? lastErr : new Error("Overpass 호출 실패");
 }
-
-const stopCache = new Map<string, { at: number; stops: OsmBusStop[] }>();
 
 export interface OsmBusStop {
   id: string;
@@ -197,12 +185,13 @@ export async function fetchOverpassBusStops(
   radius: number,
   limit: number,
 ): Promise<OsmBusStop[]> {
+  const safeLimit = Math.max(1, Math.min(Math.floor(limit), 50));
   const key = `stops|${lat.toFixed(3)}|${lng.toFixed(3)}|${radius}`;
   const hit = stopCache.get(key);
-  if (hit && Date.now() - hit.at < TTL) return hit.stops.slice(0, limit);
+  if (hit) return hit.slice(0, safeLimit);
 
   const query =
-    `[out:json][timeout:20];(` +
+    `[out:json][timeout:15];(` +
     `node["highway"="bus_stop"](around:${radius},${lat},${lng});` +
     `node["public_transport"="platform"]["bus"="yes"](around:${radius},${lat},${lng});` +
     // out body: 노드의 lat/lon 을 함께 반환한다 (out tags 는 좌표가 빠진다)
@@ -230,8 +219,8 @@ export async function fetchOverpassBusStops(
   }
 
   stops.sort((a, b) => a.distance - b.distance);
-  stopCache.set(key, { at: Date.now(), stops });
-  return stops.slice(0, limit);
+  stopCache.set(key, stops);
+  return stops.slice(0, safeLimit);
 }
 
 export async function fetchOverpassPlaces(
@@ -240,39 +229,23 @@ export async function fetchOverpassPlaces(
   center: { lat: number; lng: number },
 ): Promise<Place[]> {
   // rect 는 카카오 형식(minLng,minLat,maxLng,maxLat) — Overpass 순서로 바꾼다
-  const [minLng, minLat, maxLng, maxLat] = rect.split(",").map(Number);
+  const nums = rect.split(",").map(Number);
+  if (nums.length !== 4 || nums.some((n) => !Number.isFinite(n))) return [];
+  const [minLng, minLat, maxLng, maxLat] = nums;
   const box = `${minLat},${minLng},${maxLat},${maxLng}`;
-  const key = `${codes.slice().sort().join(",")}|${rect}`;
+  const roundedRect = nums.map((n) => n.toFixed(3)).join(",");
+  const key = `${codes.slice().sort().join(",")}|${roundedRect}`;
   const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < TTL) return hit.places;
-
-  const body = `data=${encodeURIComponent(buildQuery(codes, box))}`;
-  let elements: OverpassElement[] | null = null;
-  let lastErr: unknown = null;
-
-  for (const endpoint of ENDPOINTS) {
-    try {
-      const res = await timedFetch(
-        endpoint,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body,
-        },
-        20_000,
-      );
-      if (!res.ok) throw new Error(`overpass ${res.status}`);
-      const json = (await res.json()) as { elements: OverpassElement[] };
-      elements = json.elements ?? [];
-      break;
-    } catch (e) {
-      lastErr = e;
-    }
+  if (hit) {
+    return hit
+      .map((p) => ({ ...p, distance: haversine(center.lat, center.lng, p.lat, p.lng) }))
+      .sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
   }
 
-  if (elements === null) {
-    throw lastErr instanceof Error ? lastErr : new Error("Overpass 호출 실패");
-  }
+  const query = buildQuery(codes, box);
+  if (!query) return [];
+
+  const elements = await runOverpass(query, 8_000);
 
   const places: Place[] = [];
   const seen = new Set<string>();
@@ -310,6 +283,6 @@ export async function fetchOverpassPlaces(
   }
 
   places.sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
-  cache.set(key, { at: Date.now(), places });
+  cache.set(key, places);
   return places;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Section, Skeleton, Badge, Empty, LiveDot, Unavailable, timeAgo } from "@/components/ui";
+import { Section, Skeleton, Badge, Empty, LiveDot, Notice, Unavailable, timeAgo } from "@/components/ui";
 import type { TrafficPayload, ApiEnvelope, Incident } from "@/lib/types";
 
 type Tone = "danger" | "warn" | "info" | "neutral";
@@ -14,19 +14,21 @@ const KIND_META: Record<Incident["kind"], { label: string; tone: Tone; emoji: st
 };
 
 const LEVEL_META = {
-  congested: { label: "정체", color: "var(--danger)" },
-  slow: { label: "서행", color: "var(--warn)" },
-  smooth: { label: "원활", color: "var(--ok)" },
+  congested: { label: "정체", color: "var(--danger)", soft: "var(--danger-soft)" },
+  slow: { label: "서행", color: "var(--warn)", soft: "var(--warn-soft)" },
+  smooth: { label: "원활", color: "var(--ok)", soft: "var(--ok-soft)" },
 } as const;
 
 export default function TrafficPanel({
   res,
   isLoading,
-  onFocus,
+  error,
+  onSelectIncident,
 }: {
   res?: ApiEnvelope<TrafficPayload>;
   isLoading: boolean;
-  onFocus: (lat: number, lng: number) => void;
+  error?: unknown;
+  onSelectIncident: (inc: Incident) => void;
 }) {
   const d = res?.data;
   const incidents = d?.incidents ?? [];
@@ -36,25 +38,31 @@ export default function TrafficPanel({
     (acc, l) => ({ ...acc, [l.level]: (acc[l.level] ?? 0) + 1 }),
     {} as Record<string, number>,
   );
+  const hasSlow = (counts.congested ?? 0) + (counts.slow ?? 0) > 0;
 
   return (
-    <Section title="교통 · 사고" right={<LiveDot live={d?.source === "its"} />}>
+    <Section
+      title="교통 · 사고"
+      right={<LiveDot live={d?.source === "its" && !!res?.ok} stale={!!res?.notice} />}
+    >
       {isLoading && !d ? (
         <Skeleton rows={3} />
-      ) : res?.ok === false ? (
-        <Unavailable reason={res.notice} />
+      ) : !res?.ok ? (
+        <Unavailable reason={res?.notice} error={error} />
       ) : (
         <>
+          {res.notice && <Notice>{res.notice}</Notice>}
+
           {links.length > 0 && (
             <div className="mb-3 flex gap-1.5">
               {(["congested", "slow", "smooth"] as const).map((lv) => (
                 <div
                   key={lv}
                   className="flex flex-1 flex-col items-center rounded-[var(--radius)] py-1.5"
-                  style={{ background: `${LEVEL_META[lv].color}18` }}
+                  style={{ background: LEVEL_META[lv].soft }}
                 >
                   <span
-                    className="text-base font-bold leading-none"
+                    className="tnum text-base font-bold leading-none"
                     style={{ color: LEVEL_META[lv].color }}
                   >
                     {counts[lv] ?? 0}
@@ -67,25 +75,25 @@ export default function TrafficPanel({
             </div>
           )}
 
-          <h3 className="mb-1.5 text-[length:var(--text-xs)] font-bold text-[var(--text-muted)]">돌발상황</h3>
+          <h3 className="mb-1.5 text-[length:var(--text-xs)] font-bold text-[var(--text-muted)]">
+            돌발상황
+          </h3>
           {incidents.length === 0 ? (
             <Empty>현재 보고된 사고·통제가 없습니다 👍</Empty>
           ) : (
             <ul className="space-y-1.5">
               {incidents.slice(0, 8).map((inc) => {
                 const m = KIND_META[inc.kind];
-                const clickable = inc.lat != null && inc.lng != null;
                 return (
                   <li key={inc.id}>
                     <button
                       type="button"
-                      disabled={!clickable}
-                      onClick={() => clickable && onFocus(inc.lat!, inc.lng!)}
-                      className="w-full rounded-[var(--radius)] bg-[var(--surface-2)] px-2.5 py-2 text-left transition hover:brightness-95 disabled:cursor-default"
+                      onClick={() => onSelectIncident(inc)}
+                      className="w-full rounded-[var(--radius)] bg-[var(--surface-2)] px-2.5 py-2 text-left transition hover:brightness-95"
                     >
                       <div className="mb-0.5 flex items-center gap-1.5">
                         <Badge tone={m.tone} filled>
-                          {m.emoji} {m.label}
+                          <span aria-hidden>{m.emoji}</span> {m.label}
                         </Badge>
                         <span className="truncate text-[length:var(--text-xs)] font-semibold text-[var(--text-muted)]">
                           {inc.road}
@@ -94,7 +102,9 @@ export default function TrafficPanel({
                           {timeAgo(inc.startedAt)}
                         </span>
                       </div>
-                      <p className="line-clamp-2 text-[length:var(--text-xs)] leading-snug">{inc.message}</p>
+                      <p className="line-clamp-2 text-[length:var(--text-xs)] leading-snug">
+                        {inc.message}
+                      </p>
                     </button>
                   </li>
                 );
@@ -105,7 +115,7 @@ export default function TrafficPanel({
           {links.length > 0 && (
             <>
               <h3 className="mb-1.5 mt-3 text-[length:var(--text-xs)] font-bold text-[var(--text-muted)]">
-                느린 도로 {Math.min(6, links.length)}곳
+                {hasSlow ? `느린 도로 ${Math.min(6, links.length)}곳` : `주요 도로 소통 ${Math.min(6, links.length)}곳`}
               </h3>
               <ul className="space-y-1">
                 {links.slice(0, 6).map((l) => (
@@ -119,7 +129,7 @@ export default function TrafficPanel({
                     />
                     <span className="flex-1 truncate text-[length:var(--text-xs)]">{l.name}</span>
                     <span
-                      className="shrink-0 text-[length:var(--text-xs)] font-bold"
+                      className="tnum shrink-0 text-[length:var(--text-xs)] font-bold"
                       style={{ color: LEVEL_META[l.level].color }}
                     >
                       {l.speed}

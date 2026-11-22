@@ -1,4 +1,4 @@
-import { timedFetch, createTtlCache } from "./fetcher";
+import { timedFetch, createTtlCache, kstDateParts } from "./fetcher";
 
 /**
  * 나이스 교육정보 개방 포털.
@@ -65,8 +65,15 @@ export interface SchoolMeal {
 }
 
 function pick<T>(json: unknown, service: string): T[] {
-  const j = json as Record<string, [unknown, { row?: T[] }] | undefined>;
-  return j[service]?.[1]?.row ?? [];
+  const j = json as Record<string, unknown>;
+  // NEIS 오류 응답은 최상위 { RESULT: { CODE, MESSAGE } } 로 내려온다.
+  // INFO-200(해당 데이터 없음)만 정상 빈 배열로 보고, ERROR-* 는 예외로 던져 캐시 오염을 막는다.
+  const result = j.RESULT as { CODE?: string; MESSAGE?: string } | undefined;
+  if (result?.CODE && result.CODE !== "INFO-200") {
+    throw new Error(`neis ${service} ${result.CODE}: ${result.MESSAGE ?? ""}`);
+  }
+  const block = j[service] as [unknown, { row?: T[] }] | undefined;
+  return block?.[1]?.row ?? [];
 }
 
 async function neis<T>(
@@ -74,14 +81,14 @@ async function neis<T>(
   params: Record<string, string>,
   pSize = 5,
 ): Promise<T[]> {
+  const key = process.env.NEIS_API_KEY;
   const q = new URLSearchParams({
     Type: "json",
     pIndex: "1",
-    pSize: String(pSize),
+    pSize: String(key ? pSize : Math.min(pSize, 5)),
     ATPT_OFCDC_SC_CODE: OFFICE,
     ...params,
   });
-  const key = process.env.NEIS_API_KEY;
   // 키가 있으면 붙인다. 없어도 동작하지만 요청당 5행으로 묶인다.
   if (key) q.set("KEY", key);
 
@@ -96,15 +103,12 @@ function dashed(v?: string): string | null {
 }
 
 function kstYmd(offsetDays = 0): string {
-  const now = new Date(Date.now() + offsetDays * 86_400_000);
-  const kst = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
-  return `${kst.getFullYear()}${String(kst.getMonth() + 1).padStart(2, "0")}${String(
-    kst.getDate(),
-  ).padStart(2, "0")}`;
+  return kstDateParts(offsetDays * 86_400_000).ymd;
 }
 
 interface NeisMeal {
   MLSV_YMD: string;
+  MMEAL_SC_NM?: string;
   DDISH_NM: string;
   CAL_INFO: string;
 }
@@ -114,25 +118,32 @@ interface NeisMeal {
  *
  * 방학이나 주말에는 오늘 급식이 없는 것이 정상이다 (INFO-200). 그때
  * "정보 없음" 만 띄우면 고장처럼 보이므로, 다음 급식일을 대신 보여준다.
- * 날짜 범위로 한 번에 받아 하루씩 일곱 번 두드리지 않는다.
+ * 조·중·석식이 함께 있는 학교는 중식을 우선 고른다.
  */
 async function fetchMeal(code: string): Promise<SchoolMeal | null> {
   const today = kstYmd();
-  const rows = await neis<NeisMeal>("mealServiceDietInfo", {
-    SD_SCHUL_CODE: code,
-    MLSV_FROM_YMD: today,
-    MLSV_TO_YMD: kstYmd(7),
-  });
+  const rows = await neis<NeisMeal>(
+    "mealServiceDietInfo",
+    {
+      SD_SCHUL_CODE: code,
+      MLSV_FROM_YMD: today,
+      MLSV_TO_YMD: kstYmd(7),
+    },
+    30,
+  );
   if (rows.length === 0) return null;
 
+  const lunches = rows.filter((r) => r.MMEAL_SC_NM === "중식");
+  const pool = lunches.length > 0 ? lunches : rows;
+
   // 날짜순으로 정렬해 가장 이른 것을 고른다
-  rows.sort((a, b) => a.MLSV_YMD.localeCompare(b.MLSV_YMD));
-  const r = rows[0];
+  pool.sort((a, b) => a.MLSV_YMD.localeCompare(b.MLSV_YMD));
+  const r = pool[0];
   return {
     date: dashed(r.MLSV_YMD) ?? r.MLSV_YMD,
     when: r.MLSV_YMD === today ? "today" : "next",
     dishes: (r.DDISH_NM ?? "")
-      .split(/<br\s*\/?>/)
+      .split(/<br\s*\/?>/i)
       // 알레르기 유발식품 번호는 괄호로 붙어 온다. 화면에서는 덜어낸다.
       .map((d) => d.replace(/\([\d.\s]+\)/g, "").trim())
       .filter(Boolean),
@@ -182,8 +193,8 @@ async function fetchClasses(
  * 학년도. 3월에 바뀐다 — 1·2월에 올해를 물으면 아직 편성되지 않아 빈다.
  */
 function schoolYear(): string {
-  const kst = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
-  return String(kst.getMonth() + 1 >= 3 ? kst.getFullYear() : kst.getFullYear() - 1);
+  const { year, month } = kstDateParts();
+  return String(month >= 3 ? year : year - 1);
 }
 
 const cache = createTtlCache<SchoolFacts | null>(TTL_MS);
@@ -208,7 +219,7 @@ export async function fetchSchool(name: string): Promise<SchoolFacts | null> {
     return hit && { ...hit, meal: await withMeal(hit) };
   }
 
-  const rows = await neis<NeisSchool>("schoolInfo", { SCHUL_NM: trimmed });
+  const rows = await neis<NeisSchool>("schoolInfo", { SCHUL_NM: trimmed }, 30);
   const found = rows.find((r) => (r.ORG_RDNMA ?? "").includes("의왕시"));
   if (!found) {
     cache.set(trimmed, null);
@@ -253,7 +264,7 @@ async function withMeal(facts: SchoolFacts): Promise<SchoolMeal | null> {
     mealCache.set(facts.code, meal);
     return meal;
   } catch {
-    // 급식을 못 받아도 학교 정보는 보여준다
+    // 급식을 못 받아도 학교 정보는 보여준다 — 오류는 캐시하지 않는다
     return null;
   }
 }
@@ -262,5 +273,5 @@ async function withMeal(facts: SchoolFacts): Promise<SchoolMeal | null> {
 function normalizeUrl(v?: string): string | null {
   const s = v?.trim();
   if (!s) return null;
-  return /^https?:\/\//.test(s) ? s : `http://${s}`;
+  return /^https?:\/\//i.test(s) ? s : `http://${s}`;
 }

@@ -15,7 +15,7 @@ import type { SchoolFacts as Facts } from "@/lib/neis";
  * 없는 것을 있는 척하지 않고, 무엇이 빠졌는지 적어 둔다.
  */
 export default function SchoolFacts({ name }: { name: string }) {
-  const { data, isLoading } = useSWR<ApiEnvelope<{ school: Facts | null }>>(
+  const { data, error, isLoading } = useSWR<ApiEnvelope<{ school: Facts | null }>>(
     `/api/school?name=${encodeURIComponent(name)}`,
     swrFetcher,
     { revalidateOnFocus: false, dedupingInterval: 60 * 60_000 },
@@ -25,6 +25,14 @@ export default function SchoolFacts({ name }: { name: string }) {
     return (
       <p className="mt-3 border-t border-[var(--border)] pt-3 text-[length:var(--text-xs)] text-[var(--text-muted)]">
         학교 정보를 불러오는 중…
+      </p>
+    );
+  }
+
+  if (error && !data) {
+    return (
+      <p className="mt-3 border-t border-[var(--border)] pt-3 text-[length:var(--text-xs)] text-[var(--text-muted)]">
+        나이스 학교 정보를 불러오지 못했습니다.
       </p>
     );
   }
@@ -91,7 +99,7 @@ export default function SchoolFacts({ name }: { name: string }) {
             href={s.homepage}
             target="_blank"
             rel="noreferrer noopener"
-            className="inline-flex min-h-[36px] items-center rounded-[var(--radius)] border border-[var(--border)] px-2.5 text-[length:var(--text-2xs)] font-semibold"
+            className="inline-flex min-h-[44px] items-center rounded-[var(--radius)] border border-[var(--border)] px-3 text-[length:var(--text-2xs)] font-semibold hover:bg-[var(--surface-2)]"
           >
             학교 홈페이지 ↗
           </a>
@@ -105,7 +113,7 @@ export default function SchoolFacts({ name }: { name: string }) {
           href="https://www.schoolinfo.go.kr/ei/ss/pneiss_a03_s0.do"
           target="_blank"
           rel="noreferrer noopener"
-          className="inline-flex min-h-[36px] items-center rounded-[var(--radius)] border border-[var(--border)] px-2.5 text-[length:var(--text-2xs)] font-semibold"
+          className="inline-flex min-h-[44px] items-center rounded-[var(--radius)] border border-[var(--border)] px-3 text-[length:var(--text-2xs)] font-semibold hover:bg-[var(--surface-2)]"
         >
           학생수·진학률 ↗
         </a>

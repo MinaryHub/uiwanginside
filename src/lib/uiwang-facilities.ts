@@ -56,7 +56,6 @@ export interface PublicToilet {
 }
 
 export const UIWANG_PARKS: Park[] = [
-  { name: "포일공원(1호)", kind: "근린공원", addr: "경기도 안양시 동안구 평촌동 999", area: 638.4, lat: 37.395337, lng: 126.981654 },
   { name: "은빛공원", kind: "수변공원", addr: "경기도 의왕시 학의동 1114", area: 8317.3, lat: 37.372086, lng: 127.003751 },
   { name: "풍경공원", kind: "수변공원", addr: "경기도 의왕시 학의동 1162", area: 14205.2, lat: 37.369241, lng: 127.003027 },
   { name: "맞이공원", kind: "수변공원", addr: "경기도 의왕시 학의동 1168", area: 4258.6, lat: 37.365904, lng: 127.003166 },

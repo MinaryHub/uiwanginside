@@ -1,4 +1,4 @@
-import { timedFetch, parseDataGoKr, retryTransient } from "./fetcher";
+import { timedFetch, parseDataGoKr, retryTransient, normalizeServiceKey, asArray } from "./fetcher";
 import { fetchStationIndex } from "./busStations";
 import type { BusPosition } from "./types";
 
@@ -33,11 +33,6 @@ function num(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function asArray<T>(v: unknown): T[] {
-  if (v == null) return [];
-  return (Array.isArray(v) ? v : [v]) as T[];
-}
-
 export interface GbisLocationResult {
   positions: BusPosition[];
   /** 운행 중이지만 좌표를 못 구한 대수 (수도권 밖 구간) */
@@ -49,13 +44,13 @@ export async function fetchGbisPositions(
   ggKey: string,
   routeId: string,
 ): Promise<GbisLocationResult> {
-  const url = `${GBIS_LOCATION}?serviceKey=${serviceKey}&routeId=${routeId}&format=json`;
+  const url = `${GBIS_LOCATION}?serviceKey=${normalizeServiceKey(serviceKey)}&routeId=${routeId}&format=json`;
 
   const [json, stationIndex] = await Promise.all([
     retryTransient(async () => {
       const res = await timedFetch(url, {}, 12_000);
       return parseDataGoKr(await res.text()) as {
-        response?: { msgHeader?: { resultCode?: number }; msgBody?: { busLocationList?: unknown } };
+        response?: { msgHeader?: { resultCode?: number }; msgBody?: { busLocationList?: RawLoc | RawLoc[] } };
       };
     }, "gbis:positions"),
     fetchStationIndex(ggKey),

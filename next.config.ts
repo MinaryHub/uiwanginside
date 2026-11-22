@@ -15,6 +15,19 @@ const nextConfig: NextConfig = {
    * Vercel 은 빌드 때 VERCEL=1 을 넣는다. GitHub 의 도커 빌드에는 없다.
    */
   output: process.env.VERCEL ? undefined : "standalone",
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(self)" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

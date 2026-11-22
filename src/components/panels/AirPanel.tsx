@@ -1,6 +1,6 @@
 "use client";
 
-import { Section, Skeleton, LiveDot, Unavailable } from "@/components/ui";
+import { Section, Skeleton, LiveDot, Notice, Unavailable } from "@/components/ui";
 import { AIR_STYLE, overallGrade, worse } from "@/lib/air";
 import type { AirPayload, ApiEnvelope, AirGrade, AirStation, AirForecast } from "@/lib/types";
 
@@ -19,26 +19,52 @@ function GradeTag({ g }: { g: AirGrade | null }) {
 }
 
 function StationRow({ s }: { s: AirStation }) {
+  const extras = [
+    s.o3 != null ? `오존 ${s.o3}ppm` : null,
+    s.no2 != null ? `이산화질소 ${s.no2}ppm` : null,
+    s.khai != null ? `통합지수 ${s.khai}` : null,
+  ].filter(Boolean);
+
   return (
-    <li className="flex items-center gap-2 py-2.5">
-      <span className="w-14 shrink-0 font-extrabold">{s.name}</span>
-      <span className="min-w-0 flex-1 text-[length:var(--text-xs)] text-[var(--text-muted)]">
-        미세 <b className="tnum text-[var(--text)]">{s.pm10 ?? "-"}</b> · 초미세{" "}
-        <b className="tnum text-[var(--text)]">{s.pm25 ?? "-"}</b>
-        <span className="text-[length:var(--text-2xs)]"> ㎍/㎥</span>
-      </span>
-      <GradeTag g={worse(s.pm10Grade, s.pm25Grade)} />
+    <li className="py-2.5">
+      <div className="flex items-center gap-2">
+        <span className="w-14 shrink-0 font-extrabold">{s.name}</span>
+        <span className="min-w-0 flex-1 text-[length:var(--text-xs)] text-[var(--text-muted)]">
+          미세 <b className="tnum text-[var(--text)]">{s.pm10 ?? "-"}</b> · 초미세{" "}
+          <b className="tnum text-[var(--text)]">{s.pm25 ?? "-"}</b>
+          <span className="text-[length:var(--text-2xs)]"> ㎍/㎥</span>
+        </span>
+        <GradeTag g={worse(s.pm10Grade, s.pm25Grade)} />
+      </div>
+      {extras.length > 0 && (
+        <p className="mt-0.5 pl-16 text-[length:var(--text-2xs)] tabular-nums text-[var(--text-faint)]">
+          {extras.join(" · ")}
+        </p>
+      )}
     </li>
   );
 }
 
-function dayLabel(date: string, i: number) {
-  // 한국 정오로 잡으면 UTC 로도 같은 날이다
-  const w = "일월화수목금토"[new Date(`${date}T12:00:00+09:00`).getUTCDay()];
-  return `${i === 0 ? "오늘" : "내일"} (${w})`;
+function kstYmd(ms: number): string {
+  const d = new Date(ms + 9 * 3600_000);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
-function ForecastCard({ f, i }: { f: AirForecast; i: number }) {
+function dayLabel(date: string, updatedAt?: string) {
+  const refMs = updatedAt && Number.isFinite(Date.parse(updatedAt)) ? Date.parse(updatedAt) : Date.now();
+  const today = kstYmd(refMs);
+  const tomorrow = kstYmd(refMs + 86_400_000);
+  const w = "일월화수목금토"[new Date(`${date}T12:00:00+09:00`).getUTCDay()];
+  if (date === today) return `오늘 (${w})`;
+  if (date === tomorrow) return `내일 (${w})`;
+  const [, mm, dd] = date.split("-");
+  return mm && dd ? `${Number(mm)}/${Number(dd)} (${w})` : date;
+}
+
+function ForecastCard({ f, updatedAt }: { f: AirForecast; updatedAt?: string }) {
   const g = worse(f.pm10, f.pm25);
   const st = g ? AIR_STYLE[g] : null;
   return (
@@ -46,7 +72,9 @@ function ForecastCard({ f, i }: { f: AirForecast; i: number }) {
       className="flex flex-col items-center rounded-[var(--radius)] border-2 border-[var(--ink)] px-2 py-2.5 text-[#23201c] shadow-[var(--shadow-sm)]"
       style={{ background: st?.tint ?? "var(--surface-2)" }}
     >
-      <span className="text-[length:var(--text-xs)] font-extrabold">{dayLabel(f.date, i)}</span>
+      <span className="text-[length:var(--text-xs)] font-extrabold">
+        {dayLabel(f.date, updatedAt)}
+      </span>
       <span aria-hidden className="mt-1 text-[1.8rem] leading-none">
         {st?.emoji ?? "❔"}
       </span>
@@ -61,9 +89,11 @@ function ForecastCard({ f, i }: { f: AirForecast; i: number }) {
 export default function AirPanel({
   res,
   isLoading,
+  error,
 }: {
   res?: ApiEnvelope<AirPayload>;
   isLoading: boolean;
+  error?: unknown;
 }) {
   const d = res?.data;
   const stations = d?.stations ?? [];
@@ -76,9 +106,11 @@ export default function AirPanel({
       {isLoading && !d ? (
         <Skeleton rows={3} />
       ) : stations.length === 0 ? (
-        <Unavailable reason={res?.notice} />
+        <Unavailable reason={res?.notice} error={error} />
       ) : (
         <>
+          {res?.notice && <Notice>{res.notice}</Notice>}
+
           {/* 한눈에 — 얼굴, 등급, 해야 할 일 */}
           <div
             className="flex items-center gap-3 rounded-[var(--radius-lg)] border-2 border-[var(--ink)] p-3.5 text-[#23201c] shadow-[var(--shadow-md)]"
@@ -110,8 +142,8 @@ export default function AirPanel({
                 예보 · 경기남부
               </h3>
               <div className={`grid gap-2 ${forecast.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
-                {forecast.map((f, i) => (
-                  <ForecastCard key={f.date} f={f} i={i} />
+                {forecast.map((f) => (
+                  <ForecastCard key={f.date} f={f} updatedAt={d?.updatedAt} />
                 ))}
               </div>
               {d?.forecastAt && (

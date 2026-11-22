@@ -1,4 +1,7 @@
-import { timedFetch, createTtlCache } from "./fetcher";
+import { timedFetch, createTtlCache, createInFlight } from "./fetcher";
+import { haversine } from "./geo";
+
+export { haversine };
 
 /**
  * 의왕시 버스정류소 목록.
@@ -35,18 +38,7 @@ interface RawRow {
 
 /** 정류소는 자주 바뀌지 않으므로 길게 캐시한다 */
 const cache = createTtlCache<BusStation[]>(24 * 3600_000, 2);
-
-export function haversine(aLat: number, aLng: number, bLat: number, bLng: number) {
-  const R = 6371000;
-  const dLat = ((bLat - aLat) * Math.PI) / 180;
-  const dLng = ((bLng - aLng) * Math.PI) / 180;
-  const s =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((aLat * Math.PI) / 180) *
-      Math.cos((bLat * Math.PI) / 180) *
-      Math.sin(dLng / 2) ** 2;
-  return Math.round(2 * R * Math.asin(Math.sqrt(s)));
-}
+const uiwangInFlight = createInFlight<BusStation[]>();
 
 const PAGE_SIZE = 1000;
 
@@ -57,7 +49,7 @@ async function fetchStations(
   page = 1,
 ): Promise<BusStation[]> {
   const url =
-    `${GG_BUS_STATION}?KEY=${key}&Type=json&pIndex=${page}&pSize=${PAGE_SIZE}` +
+    `${GG_BUS_STATION}?KEY=${encodeURIComponent(key)}&Type=json&pIndex=${page}&pSize=${PAGE_SIZE}` +
     `&SIGUN_NM=${encodeURIComponent(sigun)}`;
   const res = await timedFetch(url, { headers: { "User-Agent": UA } }, 15_000);
   const text = await res.text();
@@ -101,10 +93,12 @@ async function fetchStations(
 export async function fetchUiwangStations(key: string): Promise<BusStation[]> {
   const hit = cache.get("uiwang");
   if (hit) return hit;
-  const stations = await fetchStations(key, "의왕시");
-  if (stations.length === 0) throw new Error("의왕시 정류소 목록이 비어 있습니다");
-  cache.set("uiwang", stations);
-  return stations;
+  return uiwangInFlight("uiwang", async () => {
+    const stations = await fetchStations(key, "의왕시");
+    if (stations.length === 0) throw new Error("의왕시 정류소 목록이 비어 있습니다");
+    cache.set("uiwang", stations);
+    return stations;
+  });
 }
 
 /**
@@ -120,27 +114,33 @@ export async function fetchUiwangStations(key: string): Promise<BusStation[]> {
 const NEARBY_SIGUN = ["의왕시", "안양시", "군포시", "수원시", "과천시", "성남시"];
 
 const indexCache = createTtlCache<Map<string, BusStation>>(24 * 3600_000, 2);
+const indexInFlight = createInFlight<Map<string, BusStation>>();
 
 export async function fetchStationIndex(key: string): Promise<Map<string, BusStation>> {
   const hit = indexCache.get("idx");
   if (hit) return hit;
 
-  const index = new Map<string, BusStation>();
-  for (const sigun of NEARBY_SIGUN) {
-    try {
-      // 수원·성남은 1000건을 넘어 두 쪽까지 받는다
-      for (let page = 1; page <= 2; page++) {
-        const list = await fetchStations(key, sigun, page);
-        for (const st of list) index.set(st.stationId, st);
-        if (list.length < PAGE_SIZE) break;
+  return indexInFlight("idx", async () => {
+    const index = new Map<string, BusStation>();
+    let failed = 0;
+    for (const sigun of NEARBY_SIGUN) {
+      try {
+        // 수원·성남 등은 1000건을 넘어 여러 쪽을 받는다
+        for (let page = 1; page <= 4; page++) {
+          const list = await fetchStations(key, sigun, page);
+          for (const st of list) index.set(st.stationId, st);
+          if (list.length < PAGE_SIZE) break;
+        }
+      } catch (e) {
+        failed++;
+        console.error("[busStations:index]", sigun, e);
       }
-    } catch (e) {
-      console.error("[busStations:index]", sigun, e);
     }
-  }
-  if (index.size === 0) throw new Error("정류소 색인을 만들지 못했습니다");
-  indexCache.set("idx", index);
-  return index;
+    if (index.size === 0) throw new Error("정류소 색인을 만들지 못했습니다");
+    // 일부 도시가 실패했으면 10분만 캐시해 복구 시 다시 채운다
+    indexCache.set("idx", index, failed > 0 ? 10 * 60_000 : undefined);
+    return index;
+  });
 }
 
 /** 좌표에서 가까운 정류소 */
@@ -150,8 +150,9 @@ export function nearestStations(
   lng: number,
   limit: number,
 ): (BusStation & { distance: number })[] {
+  const safeLimit = Math.max(1, Math.min(Math.floor(limit), 50));
   return all
     .map((s) => ({ ...s, distance: haversine(lat, lng, s.lat, s.lng) }))
     .sort((a, b) => a.distance - b.distance)
-    .slice(0, limit);
+    .slice(0, safeLimit);
 }

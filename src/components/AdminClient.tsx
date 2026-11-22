@@ -2,15 +2,10 @@
 
 import { useMemo } from "react";
 import useSWR from "swr";
+import { swrFetcher } from "@/lib/fetcher";
 import { Skeleton, Empty, Notice } from "@/components/ui";
 import type { ApiEnvelope } from "@/lib/types";
 import type { StatsPayload, StatsSummary, Bucket, NamedCount } from "@/lib/statsTypes";
-
-async function fetcher(url: string) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return (await res.json()) as ApiEnvelope<StatsPayload>;
-}
 
 const DEVICE_LABEL: Record<string, string> = {
   mobile: "휴대폰",
@@ -53,7 +48,7 @@ function Card({
   before?: StatsSummary;
 }) {
   return (
-    <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-3.5">
+    <div className="rounded-[var(--radius)] border-2 border-[var(--ink)] bg-[var(--surface)] p-3.5 shadow-[var(--shadow-sm)]">
       <p className="text-[length:var(--text-2xs)] font-bold text-[var(--text-muted)]">{label}</p>
       <p className="mt-1 flex items-baseline gap-1.5 text-[length:var(--text-2xl)] font-bold tabular-nums leading-none">
         {num(sum.visitors)}
@@ -75,34 +70,44 @@ function Card({
 function Bars({ data, empty }: { data: Bucket[]; empty: string }) {
   const max = useMemo(() => Math.max(1, ...data.map((d) => d.views)), [data]);
   if (data.length === 0) return <Empty>{empty}</Empty>;
+  const step = Math.max(1, Math.ceil(data.length / 6));
   return (
-    <div className="flex items-end gap-[3px] overflow-x-auto pb-1" style={{ height: 120 }}>
-      {data.map((d) => (
-        <div
-          key={d.label}
-          title={`${d.label} · ${num(d.views)}회 열람, ${num(d.visitors)}명`}
-          className="flex min-w-[10px] flex-1 flex-col justify-end"
-          style={{ height: "100%" }}
-        >
+    <div
+      role="list"
+      aria-label="열람 추이 그래프"
+      className="flex items-end gap-[3px] overflow-x-auto pb-1"
+      style={{ height: 120 }}
+    >
+      {data.map((d, i) => {
+        const desc = `${d.label} · ${num(d.views)}회 열람, ${num(d.visitors)}명`;
+        return (
           <div
-            className="rounded-t-[3px]"
-            style={{
-              height: `${Math.max(2, (d.views / max) * 100)}%`,
-              background: "var(--brand)",
-            }}
-          />
-          {/*
-            눈금이 빽빽하면 못 읽는다. 일정 간격으로만, 그것도 뒤쪽만
-            적는다 ("08/15 16시" → "16시"). 타이포 스케일 밖의 크기를
-            쓰지 않으려면 글자를 줄이는 대신 개수를 줄여야 한다.
-          */}
-          <span className="mt-1 truncate text-center text-[length:var(--text-2xs)] text-[var(--text-faint)]">
-            {data.indexOf(d) % Math.max(1, Math.ceil(data.length / 6)) === 0
-              ? d.label.split(" ").pop()
-              : ""}
-          </span>
-        </div>
-      ))}
+            key={d.label}
+            role="listitem"
+            tabIndex={0}
+            title={desc}
+            aria-label={desc}
+            className="flex min-w-[10px] flex-1 flex-col justify-end rounded-t-[3px]"
+            style={{ height: "100%" }}
+          >
+            <div
+              className="rounded-t-[3px]"
+              style={{
+                height: `${Math.max(2, (d.views / max) * 100)}%`,
+                background: "var(--brand)",
+              }}
+            />
+            {/*
+              눈금이 빽빽하면 못 읽는다. 일정 간격으로만, 그것도 뒤쪽만
+              적는다 ("08/15 16시" → "16시"). 타이포 스케일 밖의 크기를
+              쓰지 않으려면 글자를 줄이는 대신 개수를 줄여야 한다.
+            */}
+            <span className="mt-1 truncate text-center text-[length:var(--text-2xs)] text-[var(--text-faint)]">
+              {i % step === 0 ? d.label.split(" ").pop() : ""}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -142,9 +147,9 @@ function Ranking({
   );
 }
 
-function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+function StatsSection({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-4">
+    <section className="rounded-[var(--radius-lg)] border-2 border-[var(--ink)] bg-[var(--surface)] p-4 shadow-[var(--shadow-sm)]">
       <h2 className="text-[length:var(--text-base)] font-bold">{title}</h2>
       {hint && (
         <p className="mb-2.5 mt-0.5 text-[length:var(--text-2xs)] text-[var(--text-muted)]">{hint}</p>
@@ -160,13 +165,14 @@ export default function AdminClient({
 }: {
   endpoint: string;
 }) {
-  const { data, isLoading } = useSWR<ApiEnvelope<StatsPayload>>(
+  const { data, error, isLoading } = useSWR<ApiEnvelope<StatsPayload>>(
     endpoint,
-    fetcher,
+    swrFetcher,
     { refreshInterval: 60_000, revalidateOnFocus: true, shouldRetryOnError: false },
   );
 
   if (isLoading && !data) return <Skeleton rows={8} />;
+  if (error) return <Notice tone="danger">통계를 불러오지 못했습니다. 잠시 후 새로고침해 주세요.</Notice>;
   if (!data) return <Empty>통계를 불러오지 못했습니다.</Empty>;
   if (!data.ok) return <Notice>{data.notice}</Notice>;
 
@@ -200,35 +206,35 @@ export default function AdminClient({
         <Card label="최근 30일" sum={s.last30} />
       </div>
 
-      <Section title="시간대별" hint="최근 24시간 · 막대에 손을 올리면 정확한 수가 나옵니다">
+      <StatsSection title="시간대별" hint="최근 24시간 · 막대에 손을 올리면 정확한 수가 나옵니다">
         <Bars data={s.hourly} empty="최근 24시간 안에 접속이 없습니다." />
-      </Section>
+      </StatsSection>
 
-      <Section title="날짜별" hint="최근 30일">
+      <StatsSection title="날짜별" hint="최근 30일">
         <Bars data={s.daily} empty="아직 날짜별로 보여줄 만큼 쌓이지 않았습니다." />
-      </Section>
+      </StatsSection>
 
       <div className="grid gap-3 md:grid-cols-2">
-        <Section title="무엇을 보러 오는가" hint="첫 화면에서 고른 목적">
+        <StatsSection title="무엇을 보러 오는가" hint="첫 화면에서 고른 목적">
           <Ranking rows={s.modes} empty="아직 기록이 없습니다." />
-        </Section>
-        <Section title="화면별" hint="최근 30일">
+        </StatsSection>
+        <StatsSection title="화면별" hint="최근 30일">
           <Ranking
             rows={s.paths}
             empty="아직 기록이 없습니다."
             label={(p) => PATH_LABEL[p] ?? p}
           />
-        </Section>
-        <Section title="어디서 들어오는가" hint="주소를 직접 치거나 앱에서 열면 잡히지 않습니다">
+        </StatsSection>
+        <StatsSection title="어디서 들어오는가" hint="주소를 직접 치거나 앱에서 열면 잡히지 않습니다">
           <Ranking rows={s.referrers} empty="외부에서 들어온 기록이 없습니다." />
-        </Section>
-        <Section title="기기" hint="최근 30일">
+        </StatsSection>
+        <StatsSection title="기기" hint="최근 30일">
           <Ranking
             rows={s.devices}
             empty="아직 기록이 없습니다."
             label={(d) => DEVICE_LABEL[d] ?? d}
           />
-        </Section>
+        </StatsSection>
       </div>
 
       <p className="px-1 text-[length:var(--text-2xs)] leading-relaxed text-[var(--text-faint)]">

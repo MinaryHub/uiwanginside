@@ -2,8 +2,11 @@ import type { BusPosition } from "./types";
 import {
   timedFetch,
   createTtlCache,
+  createInFlight,
   parseDataGoKr,
   retryTransient,
+  normalizeServiceKey,
+  asArray,
 } from "./fetcher";
 
 /**
@@ -51,46 +54,47 @@ function num(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function asArray<T>(v: unknown): T[] {
-  if (v == null) return [];
-  return (Array.isArray(v) ? v : [v]) as T[];
-}
-
 /** GBIS 노선ID → TAGO 도시코드. 노선은 거의 바뀌지 않아 하루 캐시한다. */
 const indexCache = createTtlCache<Map<string, number>>(24 * 3600_000, 2);
+const indexInFlight = createInFlight<Map<string, number>>();
 
 async function buildRouteCityIndex(key: string): Promise<Map<string, number>> {
   const hit = indexCache.get("idx");
   if (hit) return hit;
 
-  const index = new Map<string, number>();
-  // TAGO 는 초당 30건 제한이 있다. 하루 한 번 만드는 색인이라
-  // 병렬로 몰아쳐 세션 오류를 낼 이유가 없다.
-  for (const code of Object.keys(CITIES)) {
-    try {
-      const url =
-        `${TAGO}/BusRouteInfoInqireService/getRouteNoList` +
-        `?serviceKey=${key}&cityCode=${code}&_type=json&numOfRows=500&pageNo=1`;
-      const json = await retryTransient(async () => {
-        const res = await timedFetch(url, {}, 12_000);
-        return parseDataGoKr(await res.text()) as {
-          response?: { body?: { items?: { item?: unknown } } };
-        };
-      }, `tago:index:${code}`);
-      for (const r of asArray<RawRoute>(json?.response?.body?.items?.item)) {
-        const id = String(r.routeid ?? "");
-        // GGB226000032 → 226000032 (GBIS 노선ID)
-        if (id.startsWith("GGB")) index.set(id.slice(3), Number(code));
+  return indexInFlight("idx", async () => {
+    const encodedKey = normalizeServiceKey(key);
+    const index = new Map<string, number>();
+    let failed = 0;
+    // TAGO 는 초당 30건 제한이 있다. 하루 한 번 만드는 색인이라
+    // 병렬로 몰아쳐 세션 오류를 낼 이유가 없다.
+    for (const code of Object.keys(CITIES)) {
+      try {
+        const url =
+          `${TAGO}/BusRouteInfoInqireService/getRouteNoList` +
+          `?serviceKey=${encodedKey}&cityCode=${code}&_type=json&numOfRows=1000&pageNo=1`;
+        const json = await retryTransient(async () => {
+          const res = await timedFetch(url, {}, 12_000);
+          return parseDataGoKr(await res.text()) as {
+            response?: { body?: { items?: { item?: RawRoute | RawRoute[] } } };
+          };
+        }, `tago:index:${code}`);
+        for (const r of asArray<RawRoute>(json?.response?.body?.items?.item)) {
+          const id = String(r.routeid ?? "");
+          // GGB226000032 → 226000032 (GBIS 노선ID)
+          if (id.startsWith("GGB")) index.set(id.slice(3), Number(code));
+        }
+      } catch (e) {
+        failed++;
+        // 한 도시가 실패해도 나머지 색인은 쓸 수 있다
+        console.error("[tago:index]", code, e);
       }
-    } catch (e) {
-      // 한 도시가 실패해도 나머지 색인은 쓸 수 있다
-      console.error("[tago:index]", code, e);
     }
-  }
 
-  if (index.size === 0) throw new Error("노선 색인을 만들지 못했습니다");
-  indexCache.set("idx", index);
-  return index;
+    if (index.size === 0) throw new Error("노선 색인을 만들지 못했습니다");
+    indexCache.set("idx", index, failed > 0 ? 10 * 60_000 : undefined);
+    return index;
+  });
 }
 
 export interface BusPositionResult {
@@ -113,12 +117,12 @@ export async function fetchBusPositions(
 
   const url =
     `${TAGO}/BusLcInfoInqireService/getRouteAcctoBusLcList` +
-    `?serviceKey=${key}&cityCode=${cityCode}&routeId=GGB${gbisRouteId}` +
+    `?serviceKey=${normalizeServiceKey(key)}&cityCode=${cityCode}&routeId=GGB${gbisRouteId}` +
     `&_type=json&numOfRows=100&pageNo=1`;
   const json = await retryTransient(async () => {
     const res = await timedFetch(url, {}, 12_000);
     return parseDataGoKr(await res.text()) as {
-      response?: { body?: { items?: { item?: unknown } } };
+      response?: { body?: { items?: { item?: RawPos | RawPos[] } } };
     };
   }, "tago:positions");
 

@@ -1,4 +1,4 @@
-import { timedFetch } from "./fetcher";
+import { timedFetch, asArray, createInFlight } from "./fetcher";
 import { UIWANG_BBOX } from "./uiwang-boundary";
 import { UIWANG_CCTV } from "./uiwang-cctv";
 import { getSql, ensureSchema, hasDb } from "./db";
@@ -35,50 +35,70 @@ interface ItsCctv {
 
 /** 프로세스가 살아 있는 동안의 캐시. DB 왕복을 줄인다. */
 const mem = new Map<string, { url: string; at: number }>();
+const refreshInFlight = createInFlight<Map<string, string>>();
 
-async function refresh(): Promise<Map<string, string>> {
-  const key = process.env.ITS_API_KEY;
-  if (!key) throw new Error("ITS 인증키가 설정되지 않았습니다.");
-
-  const { minLng, maxLng, minLat, maxLat } = UIWANG_BBOX;
-  const res = await timedFetch(
-    `${ITS}/cctvInfo?apiKey=${key}&type=all&cctvType=3` +
-      `&minX=${minLng}&maxX=${maxLng}&minY=${minLat}&maxY=${maxLat}&getType=json`,
-    {},
-    12_000,
-  );
-  if (!res.ok) throw new Error(`its ${res.status}`);
-
-  // 소통정보와 응답 모양이 다르다 — body.items 가 아니라 response.data 다
-  const json = (await res.json()) as { response?: { data?: ItsCctv[] } };
-  const byRaw = new Map<string, string>();
-  for (const c of json.response?.data ?? []) {
-    if (c.cctvname && c.cctvurl) byRaw.set(c.cctvname, c.cctvurl);
+function isSafeHttpUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
   }
+}
 
-  const now = Date.now();
-  const found = new Map<string, string>();
-  for (const cam of UIWANG_CCTV) {
-    const url = byRaw.get(cam.raw);
-    if (!url) continue;
-    found.set(cam.id, url);
-    mem.set(cam.id, { url, at: now });
-  }
-  if (found.size > 0) void save(found);
-  return found;
+async function refresh(schedule?: (work: () => Promise<void>) => void): Promise<Map<string, string>> {
+  return refreshInFlight("its-cctv", async () => {
+    const key = process.env.ITS_API_KEY;
+    if (!key) throw new Error("ITS 인증키가 설정되지 않았습니다.");
+
+    const { minLng, maxLng, minLat, maxLat } = UIWANG_BBOX;
+    const res = await timedFetch(
+      `${ITS}/cctvInfo?apiKey=${encodeURIComponent(key)}&type=all&cctvType=3` +
+        `&minX=${minLng}&maxX=${maxLng}&minY=${minLat}&maxY=${maxLat}&getType=json`,
+      {},
+      12_000,
+    );
+    if (!res.ok) throw new Error(`its ${res.status}`);
+
+    // 소통정보와 응답 모양이 다르다 — body.items 가 아니라 response.data 다
+    // 카메라가 1건일 때 ITS 가 배열 대신 단일 객체를 보낼 수 있어 asArray 로 받는다
+    const json = (await res.json()) as { response?: { data?: ItsCctv | ItsCctv[] } };
+    const byRaw = new Map<string, string>();
+    for (const c of asArray(json.response?.data)) {
+      if (c.cctvname && c.cctvurl && isSafeHttpUrl(c.cctvurl)) {
+        byRaw.set(c.cctvname, c.cctvurl);
+      }
+    }
+
+    const now = Date.now();
+    const found = new Map<string, string>();
+    for (const cam of UIWANG_CCTV) {
+      const url = byRaw.get(cam.raw);
+      if (!url) continue;
+      found.set(cam.id, url);
+      mem.set(cam.id, { url, at: now });
+    }
+    if (found.size > 0) {
+      if (schedule) schedule(() => save(found));
+      else await save(found);
+    }
+    return found;
+  });
 }
 
 async function save(urls: Map<string, string>) {
-  if (!hasDb()) return;
+  if (!hasDb() || urls.size === 0) return;
   try {
     await ensureSchema();
     const sql = getSql();
-    for (const [id, url] of urls) {
-      await sql`
-        INSERT INTO cctv_urls (id, url, at) VALUES (${id}, ${url}, now())
-        ON CONFLICT (id) DO UPDATE SET url = EXCLUDED.url, at = now()
-      `;
-    }
+    const ids = [...urls.keys()];
+    const vals = [...urls.values()];
+    await sql`
+      INSERT INTO cctv_urls (id, url, at)
+      SELECT id, url, now()
+      FROM unnest(${ids}::text[], ${vals}::text[]) AS t(id, url)
+      ON CONFLICT (id) DO UPDATE SET url = EXCLUDED.url, at = now()
+    `;
   } catch (e) {
     // 저장에 실패해도 이번 요청은 이미 주소를 들고 있다
     console.error("[cctv:save]", e);
@@ -93,7 +113,7 @@ async function fromDb(id: string): Promise<{ url: string; age: number } | null> 
     const rows = (await sql`
       SELECT url, at FROM cctv_urls WHERE id = ${id}
     `) as { url: string; at: string }[];
-    if (rows.length === 0) return null;
+    if (rows.length === 0 || !isSafeHttpUrl(rows[0].url)) return null;
     return { url: rows[0].url, age: Date.now() - new Date(rows[0].at).getTime() };
   } catch (e) {
     console.error("[cctv:load]", e);
@@ -115,7 +135,10 @@ let itsDownUntil = 0;
  * 이 카메라의 지금 영상 주소.
  * 없으면 null — 카드가 "지금은 영상을 받을 수 없습니다" 를 보여준다.
  */
-export async function cctvUrl(id: string): Promise<string | null> {
+export async function cctvUrl(
+  id: string,
+  schedule?: (work: () => Promise<void>) => void,
+): Promise<string | null> {
   if (!UIWANG_CCTV.some((c) => c.id === id)) return null;
 
   const hit = mem.get(id);
@@ -130,7 +153,7 @@ export async function cctvUrl(id: string): Promise<string | null> {
 
   if (Date.now() >= itsDownUntil) {
     try {
-      const fresh = await refresh();
+      const fresh = await refresh(schedule);
       const url = fresh.get(id);
       if (url) return url;
     } catch (e) {
