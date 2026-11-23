@@ -43,6 +43,9 @@ import type {
   LibraryItem,
   LibrariesPayload,
   NoticesPayload,
+  SubwayPayload,
+  LocalCurrencyMerchant,
+  LocalCurrencyPayload,
   PlacesPayload,
   WeatherPayload,
   AirPayload,
@@ -55,6 +58,14 @@ import type {
   BusFleetPayload,
   RoadsPayload,
 } from "@/lib/types";
+import {
+  useSavedStops,
+  useHomeDong,
+  toggleSavedStop,
+  removeSavedStop,
+  setHomeDong,
+  type SavedStop,
+} from "@/lib/preferences";
 import Link from "next/link";
 import Logo from "@/components/Logo";
 import Icon from "@/components/Icon";
@@ -66,6 +77,7 @@ import CctvCard from "@/components/CctvCard";
 import SearchOverlay from "@/components/SearchOverlay";
 import DongCard from "@/components/DongCard";
 import MapCard from "@/components/MapCard";
+import InstallHint from "@/components/InstallHint";
 import PlacesPanel from "@/components/panels/PlacesPanel";
 import WeatherPanel from "@/components/panels/WeatherPanel";
 import AirPanel from "@/components/panels/AirPanel";
@@ -83,6 +95,8 @@ import ShelterPanel from "@/components/panels/ShelterPanel";
 import LibrariesPanel from "@/components/panels/LibrariesPanel";
 import NoticesPanel from "@/components/panels/NoticesPanel";
 import DongComparePanel from "@/components/panels/DongComparePanel";
+import SubwayPanel from "@/components/panels/SubwayPanel";
+import LocalCurrencyPanel from "@/components/panels/LocalCurrencyPanel";
 
 const KakaoMap = dynamic(() => import("@/components/KakaoMap"), { ssr: false });
 
@@ -150,9 +164,12 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     | { kind: "ev"; station: EvStation }
     | { kind: "shelter"; shelter: ShelterItem }
     | { kind: "library"; library: LibraryItem }
+    | { kind: "currency"; merchant: LocalCurrencyMerchant }
     | null
   >(null);
   const [activeDong, setActiveDong] = useState<string | null>(initial.dong);
+  const savedStops = useSavedStops();
+  const homeDong = useHomeDong();
   const [tracked, setTracked] = useState<{ id: string; name: string } | null>(null);
   /** 클라이언트 전용 버스 도착 알림 (설정된 정류소·노선이 임계 시간 이하로 오면 울린다) */
   const [busAlert, setBusAlert] = useState<BusAlertTarget | null>(null);
@@ -379,6 +396,16 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     needs("notices") ? "/api/notices" : null,
     swrFetcher,
     { refreshInterval: POLL.news, keepPreviousData: true },
+  );
+  const subway = useSWR<ApiEnvelope<SubwayPayload>>(
+    needs("subway") ? "/api/subway" : null,
+    swrFetcher,
+    { refreshInterval: 30_000, keepPreviousData: true },
+  );
+  const localCurrency = useSWR<ApiEnvelope<LocalCurrencyPayload>>(
+    needs("currency") ? "/api/local-currency" : null,
+    swrFetcher,
+    { revalidateOnFocus: false, dedupingInterval: 60 * 60_000 },
   );
 
   const dongFactoryCounts = useMemo(() => {
@@ -753,6 +780,56 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     [focus, revealMap],
   );
 
+  const selectCurrencyMerchant = useCallback(
+    (merchant: LocalCurrencyMerchant) => {
+      setSelectedPlaceId(null);
+      setMarker((cur) => {
+        if (cur?.kind === "currency" && cur.merchant.id === merchant.id) return null;
+        if (merchant.lat != null && merchant.lng != null) {
+          focus(merchant.lat, merchant.lng, 280);
+        }
+        revealMap();
+        return { kind: "currency", merchant };
+      });
+    },
+    [focus, revealMap],
+  );
+
+  const focusSavedStop = useCallback(
+    (st: SavedStop) => {
+      const live = transit.data?.data.stops.find((s) => s.stationId === st.stationId);
+      const stop: BusStop = live ?? {
+        stationId: st.stationId,
+        name: st.name,
+        mobileNo: st.mobileNo,
+        lat: st.lat,
+        lng: st.lng,
+        distance: null,
+        arrivals: [],
+      };
+      setSelectedPlaceId(null);
+      setMarker({ kind: "stop", stop });
+      focus(st.lat, st.lng, 260);
+      revealMap();
+    },
+    [transit.data, focus, revealMap],
+  );
+
+  const handleToggleHomeDong = useCallback(
+    (name: string) => {
+      setHomeDong(homeDong === name ? null : name);
+    },
+    [homeDong],
+  );
+
+  const goToHomeDong = useCallback(() => {
+    if (!homeDong) return;
+    const box = DONG_BBOX[homeDong];
+    if (box) setFitBounds({ ...box });
+    setActiveDong(homeDong);
+    revealMap();
+  }, [homeDong, revealMap]);
+
   const toggleBusTrack = useCallback((rid: string, name: string) => {
     setTracked((cur) => (cur?.id === rid ? null : { id: rid, name }));
   }, []);
@@ -792,7 +869,9 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
                   ? `shelter:${marker.shelter.id}`
                   : marker?.kind === "library"
                     ? `library:${marker.library.id}`
-                    : null;
+                    : marker?.kind === "currency"
+                      ? `currency:${marker.merchant.id}`
+                      : null;
 
   const selectedPlace = useMemo(
     () =>
@@ -970,6 +1049,19 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             onSelect={selectMedical}
           />
         );
+      case "subway":
+        return (
+          <SubwayPanel
+            key={id}
+            res={subway.data}
+            isLoading={subway.isLoading}
+            error={subway.error}
+            onFocusStation={(lat, lng) => {
+              focus(lat, lng, 320);
+              revealMap();
+            }}
+          />
+        );
       case "traffic":
         return (
           <TrafficPanel
@@ -1019,6 +1111,21 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             }}
             busAlert={busAlert}
             onToggleAlert={toggleBusAlert}
+            savedStops={savedStops}
+            onFocusSavedStop={focusSavedStop}
+            onToggleSaveStop={toggleSavedStop}
+            onRemoveSavedStop={removeSavedStop}
+          />
+        );
+      case "currency":
+        return (
+          <LocalCurrencyPanel
+            key={id}
+            res={localCurrency.data}
+            isLoading={localCurrency.isLoading}
+            error={localCurrency.error}
+            defaultCategory={mode === "food" ? "food" : "all"}
+            onSelect={selectCurrencyMerchant}
           />
         );
       case "libraries":
@@ -1063,7 +1170,13 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
         );
       case "population":
         return (
-          <PopulationPanel key={id} onSelectDong={toggleDong} activeDong={activeDong} />
+          <PopulationPanel
+            key={id}
+            onSelectDong={toggleDong}
+            activeDong={activeDong}
+            homeDong={homeDong}
+            onToggleHomeDong={handleToggleHomeDong}
+          />
         );
       case "notices":
         return (
@@ -1248,6 +1361,24 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             : "top-[calc(114px+env(safe-area-inset-top,0px))]"
         }`}
       >
+        {homeDong && (
+          <button
+            type="button"
+            onClick={goToHomeDong}
+            title={`내 동네 (${homeDong})로 이동`}
+            aria-label={`내 동네 (${homeDong})로 이동`}
+            className={mapBtn}
+            style={
+              activeDong === homeDong
+                ? { background: "var(--brand-2)", color: "var(--ink)" }
+                : undefined
+            }
+          >
+            <span aria-hidden className="text-[1.2rem] leading-none">
+              🏠
+            </span>
+          </button>
+        )}
         {/*
           내 위치.
           위치는 방문 즉시 묻지 않는다 — 그때 뜨는 권한 팝업은 대부분
@@ -1412,6 +1543,8 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           onTrackRoute={toggleBusTrack}
           busAlert={busAlert}
           onToggleAlert={toggleBusAlert}
+          isSaved={savedStops.some((s) => s.stationId === marker.stop.stationId)}
+          onToggleSave={toggleSavedStop}
           onClose={() => setMarker(null)}
         />
       )}
@@ -1443,6 +1576,13 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           title={marker.room.name}
           accent="var(--danger)"
           subtitle={[marker.room.level, formatDistance(marker.room.distance)].filter(Boolean).join(" · ")}
+          copyAddress={marker.room.address || undefined}
+          share={{
+            title: marker.room.name,
+            text: marker.room.address || "응급실",
+            lat: marker.room.lat,
+            lng: marker.room.lng,
+          }}
           onClose={() => setMarker(null)}
         >
           <div className="mt-3 flex items-baseline gap-2">
@@ -1503,6 +1643,12 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           title={marker.landmark.name}
           accent="#7c3aed"
           subtitle="의왕 대표 명소"
+          share={{
+            title: marker.landmark.name,
+            text: marker.landmark.desc,
+            lat: marker.landmark.lat,
+            lng: marker.landmark.lng,
+          }}
           onClose={() => setMarker(null)}
         >
           <p className="mt-3 text-[length:var(--text-sm)] leading-relaxed text-[var(--text-muted)]">
@@ -1527,6 +1673,13 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           title={marker.station.name}
           accent={marker.station.available > 0 ? "#237a35" : "#6b7280"}
           subtitle={[marker.station.operator, marker.station.dong].filter(Boolean).join(" · ") || "전기차 충전소"}
+          copyAddress={marker.station.address || undefined}
+          share={{
+            title: marker.station.name,
+            text: marker.station.address || "전기차 충전소",
+            lat: marker.station.lat,
+            lng: marker.station.lng,
+          }}
           onClose={() => setMarker(null)}
         >
           <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -1595,6 +1748,13 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           ]
             .filter(Boolean)
             .join(" · ")}
+          copyAddress={marker.shelter.address || undefined}
+          share={{
+            title: marker.shelter.name,
+            text: marker.shelter.address || "의왕시 쉼터",
+            lat: marker.shelter.lat,
+            lng: marker.shelter.lng,
+          }}
           onClose={() => setMarker(null)}
         >
           <div className="mt-3 space-y-1 text-[length:var(--text-xs)] text-[var(--text-muted)]">
@@ -1626,6 +1786,17 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           title={marker.library.name}
           accent="#4f46e5"
           subtitle={[marker.library.kind || "공공도서관", marker.library.dong].filter(Boolean).join(" · ")}
+          copyAddress={marker.library.address || undefined}
+          share={
+            marker.library.lat != null && marker.library.lng != null
+              ? {
+                  title: marker.library.name,
+                  text: marker.library.address || "의왕시 공공도서관",
+                  lat: marker.library.lat,
+                  lng: marker.library.lng,
+                }
+              : undefined
+          }
           onClose={() => setMarker(null)}
         >
           <div className="mt-3 space-y-1 text-[length:var(--text-xs)] text-[var(--text-muted)]">
@@ -1681,6 +1852,59 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
         </MapCard>
       )}
 
+      {marker?.kind === "currency" && (
+        <MapCard
+          key={marker.merchant.id}
+          title={marker.merchant.name}
+          accent="#c84600"
+          subtitle={[
+            "💳 의왕사랑상품권 가맹점",
+            marker.merchant.industry,
+            marker.merchant.dong,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+          copyAddress={marker.merchant.address || undefined}
+          share={
+            marker.merchant.lat != null && marker.merchant.lng != null
+              ? {
+                  title: marker.merchant.name,
+                  text: marker.merchant.address || "의왕사랑상품권 가맹점",
+                  lat: marker.merchant.lat,
+                  lng: marker.merchant.lng,
+                }
+              : undefined
+          }
+          onClose={() => setMarker(null)}
+        >
+          {marker.merchant.address && (
+            <p className="mt-3 text-[length:var(--text-xs)] text-[var(--text-muted)]">
+              {marker.merchant.address}
+            </p>
+          )}
+          <div className="mt-3 flex gap-2">
+            {marker.merchant.phone && (
+              <a
+                href={`tel:${marker.merchant.phone}`}
+                className="press inline-flex min-h-[44px] flex-1 items-center justify-center rounded-[var(--radius-full)] border-2 border-[var(--ink)] px-3 text-[length:var(--text-xs)] font-bold shadow-[var(--shadow-sm)]"
+              >
+                📞 {marker.merchant.phone}
+              </a>
+            )}
+            {marker.merchant.lat != null && marker.merchant.lng != null && (
+              <a
+                href={`https://map.kakao.com/link/to/${encodeURIComponent(marker.merchant.name)},${marker.merchant.lat},${marker.merchant.lng}`}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="brand-fill press inline-flex min-h-[44px] flex-1 items-center justify-center rounded-[var(--radius-full)] border-2 px-3 text-[length:var(--text-sm)] font-bold shadow-[var(--shadow-sm)]"
+              >
+                길찾기 ↗
+              </a>
+            )}
+          </div>
+        </MapCard>
+      )}
+
       {selectedPlace && (
         <PlaceDetailCard
           key={selectedPlace.id}
@@ -1701,6 +1925,8 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           key={activeDong}
           name={activeDong}
           factoryCount={dongFactoryCounts[activeDong]}
+          isHome={homeDong === activeDong}
+          onToggleHome={handleToggleHomeDong}
           onClose={() => {
             setActiveDong(null);
             setFitBounds(null);
@@ -1811,6 +2037,9 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
               />
             )}
             {def.cards.filter((c) => c !== "emergency").map(card)}
+
+            {/* 안드로이드 등 설치 가능 환경에서 1-탭 홈 화면 추가 안내 */}
+            <InstallHint />
 
             {/* 숫자가 어디서 왔는지 — 메뉴가 아니라 내용 맨 아래의 안내 한 줄이다 */}
             <p className="px-5 pb-6 pt-2 text-[length:var(--text-xs)] text-[var(--text-muted)]">

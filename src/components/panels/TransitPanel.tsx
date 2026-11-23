@@ -126,6 +126,10 @@ export default function TransitPanel({
   onTrackRoute,
   busAlert,
   onToggleAlert,
+  savedStops = [],
+  onFocusSavedStop,
+  onToggleSaveStop,
+  onRemoveSavedStop,
 }: {
   res?: ApiEnvelope<TransitPayload>;
   isLoading: boolean;
@@ -136,10 +140,15 @@ export default function TransitPanel({
   onTrackRoute: (routeId: string, routeName: string) => void;
   busAlert?: { stationId: string; routeId: string } | null;
   onToggleAlert?: (stop: BusStop, routeId: string, routeName: string, predictSec: number) => void;
+  savedStops?: Array<{ stationId: string; name: string; mobileNo: string; lat: number; lng: number }>;
+  onFocusSavedStop?: (stop: { stationId: string; name: string; mobileNo: string; lat: number; lng: number }) => void;
+  onToggleSaveStop?: (stop: BusStop) => void;
+  onRemoveSavedStop?: (stationId: string) => void;
 }) {
   const d = res?.data;
   const stops = d?.stops ?? [];
   const positionOnly = d?.source === "osm";
+  const savedSet = new Set(savedStops.map((s) => s.stationId));
 
   return (
     <Section
@@ -157,6 +166,41 @@ export default function TransitPanel({
         )
       }
     >
+      {/* 자주 타는 정류소 즐겨찾기 (로그인 없이 브라우저 저장) */}
+      {savedStops.length > 0 && onFocusSavedStop && (
+        <div className="mb-3 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--brand-soft)] p-2">
+          <p className="mb-1.5 text-[length:var(--text-2xs)] font-extrabold text-[var(--brand)]">
+            ⭐ 자주 타는 정류소
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {savedStops.map((st) => (
+              <span
+                key={st.stationId}
+                className="inline-flex items-center overflow-hidden rounded-full border border-[var(--ink)] bg-[var(--surface)] shadow-[var(--shadow-sm)]"
+              >
+                <button
+                  type="button"
+                  onClick={() => onFocusSavedStop(st)}
+                  className="px-2.5 py-1 text-[length:var(--text-2xs)] font-bold hover:bg-[var(--surface-2)]"
+                >
+                  {st.name}
+                </button>
+                {onRemoveSavedStop && (
+                  <button
+                    type="button"
+                    onClick={() => onRemoveSavedStop(st.stationId)}
+                    aria-label={`${st.name} 즐겨찾기 삭제`}
+                    className="border-l border-[var(--border)] px-1.5 py-1 text-[11px] text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
+                  >
+                    ✕
+                  </button>
+                )}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {isLoading && !d ? (
         <Skeleton rows={3} />
       ) : !res?.ok ? (
@@ -168,28 +212,43 @@ export default function TransitPanel({
           {res.notice && <Notice>{res.notice}</Notice>}
           {stops.map((s) => {
             const dist = formatDistance(s.distance);
+            const isSaved = savedSet.has(s.stationId);
             return (
               <div key={s.stationId} className="rounded-[var(--radius)] bg-[var(--surface-2)] p-2.5">
-                <button
-                  type="button"
-                  onClick={() => onSelectStop(s)}
-                  className="mb-1 flex min-h-[36px] w-full items-center gap-1.5 text-left"
-                >
-                  <span className="truncate text-[length:var(--text-sm)] font-bold">{s.name}</span>
-                  {s.mobileNo && (
-                    <span
-                      title="정류소 번호 (표지판에 적힌 숫자)"
-                      className="shrink-0 rounded bg-[var(--surface)] px-1 text-[length:var(--text-2xs)] font-semibold text-[var(--text-muted)]"
+                <div className="mb-1 flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onSelectStop(s)}
+                    className="flex min-h-[36px] min-w-0 flex-1 items-center gap-1.5 text-left"
+                  >
+                    <span className="truncate text-[length:var(--text-sm)] font-bold">{s.name}</span>
+                    {s.mobileNo && (
+                      <span
+                        title="정류소 번호 (표지판에 적힌 숫자)"
+                        className="shrink-0 rounded bg-[var(--surface)] px-1 text-[length:var(--text-2xs)] font-semibold text-[var(--text-muted)]"
+                      >
+                        {s.mobileNo}
+                      </span>
+                    )}
+                    {dist && (
+                      <span className="ml-auto shrink-0 tabular-nums text-[length:var(--text-2xs)] text-[var(--text-muted)]">
+                        {dist}
+                      </span>
+                    )}
+                  </button>
+                  {onToggleSaveStop && (
+                    <button
+                      type="button"
+                      onClick={() => onToggleSaveStop(s)}
+                      aria-pressed={isSaved}
+                      aria-label={isSaved ? "자주 타는 정류소 해제" : "자주 타는 정류소 저장"}
+                      title={isSaved ? "자주 타는 정류소 해제" : "자주 타는 정류소 저장"}
+                      className="grid h-9 w-9 shrink-0 place-items-center rounded-[var(--radius)] text-sm hover:bg-[var(--surface-3)]"
                     >
-                      {s.mobileNo}
-                    </span>
+                      <span aria-hidden>{isSaved ? "⭐" : "☆"}</span>
+                    </button>
                   )}
-                  {dist && (
-                    <span className="ml-auto shrink-0 tabular-nums text-[length:var(--text-2xs)] text-[var(--text-muted)]">
-                      {dist}
-                    </span>
-                  )}
-                </button>
+                </div>
 
                 {s.arrivals && s.arrivals.length > 0 ? (
                   <ul className="divide-y divide-[var(--border)]">

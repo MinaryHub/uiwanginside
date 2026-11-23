@@ -18,10 +18,14 @@ const fmt = (n: number) => n.toLocaleString("ko-KR");
 export default function PopulationPanel({
   onSelectDong,
   activeDong,
+  homeDong,
+  onToggleHomeDong,
 }: {
   /** 누르면 지도에서 해당 동 경계를 강조한다 */
   onSelectDong: (d: { name: string; lat: number; lng: number }) => void;
   activeDong: string | null;
+  homeDong?: string | null;
+  onToggleHomeDong?: (name: string) => void;
 }) {
   const [sort, setSort] = useState<SortKey>("population");
 
@@ -113,13 +117,14 @@ export default function PopulationPanel({
         {rows.map((d) => {
           const share = (d.population / TOTAL_POPULATION) * 100;
           const on = activeDong === d.name;
+          const isHome = homeDong === d.name;
           return (
-            <li key={d.name}>
+            <li key={d.name} className="flex items-center gap-1">
               <button
                 type="button"
                 onClick={() => onSelectDong(d)}
                 aria-pressed={on}
-                className={`w-full rounded-[var(--radius)] border-2 px-2 py-1.5 text-left transition ${
+                className={`min-w-0 flex-1 rounded-[var(--radius)] border-2 px-2 py-1.5 text-left transition ${
                   on ? "border-[var(--info)]" : "border-transparent hover:bg-[var(--surface-2)]"
                 }`}
                 style={
@@ -131,6 +136,11 @@ export default function PopulationPanel({
               >
                 <div className="flex items-baseline gap-1.5">
                   <span className="text-[length:var(--text-sm)] font-bold">{d.name}</span>
+                  {isHome && (
+                    <span className="rounded bg-[var(--brand-soft)] px-1 text-[11px] font-extrabold text-[var(--brand)]">
+                      내 동네
+                    </span>
+                  )}
                   <span className="text-[length:var(--text-2xs)] text-[var(--text-muted)]">
                     {d.area}km² · {fmt(density(d.population, d.area))}명/km²
                   </span>
@@ -151,6 +161,23 @@ export default function PopulationPanel({
                   />
                 </div>
               </button>
+              {onToggleHomeDong && (
+                <button
+                  type="button"
+                  onClick={() => onToggleHomeDong(d.name)}
+                  aria-pressed={isHome}
+                  aria-label={isHome ? `${d.name} 우리 동네 해제` : `${d.name}을 우리 동네로 지정`}
+                  title={isHome ? "우리 동네 해제" : "우리 동네로 지정 (접속 시 바로 열림)"}
+                  className={`grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius)] border-2 text-sm transition ${
+                    isHome
+                      ? "border-[var(--ink)] shadow-[var(--shadow-sm)]"
+                      : "border-transparent text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
+                  }`}
+                  style={isHome ? { background: "var(--brand-2)", color: "var(--ink)" } : undefined}
+                >
+                  <span aria-hidden>🏠</span>
+                </button>
+              )}
             </li>
           );
         })}

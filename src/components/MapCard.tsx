@@ -1,7 +1,9 @@
 "use client";
 
 import Icon from "@/components/Icon";
+import CardActions from "@/components/CardActions";
 import { useSwipeDismiss } from "@/lib/useSwipeDismiss";
+import type { SharePayload } from "@/lib/share";
 import type { ReactNode } from "react";
 
 /**
@@ -14,6 +16,9 @@ export default function MapCard({
   title,
   subtitle,
   accent,
+  copyAddress,
+  share,
+  headerExtra,
   onClose,
   children,
 }: {
@@ -21,6 +26,12 @@ export default function MapCard({
   subtitle?: ReactNode;
   /** 좌측 색 띠 — 종류를 색으로만 구분하지 않도록 제목과 함께 쓴다 */
   accent?: string;
+  /** 1-탭 주소 복사 대상 */
+  copyAddress?: string;
+  /** 1-탭 위치 공유 대상 */
+  share?: SharePayload;
+  /** 닫기 버튼 왼쪽에 놓을 보조 버튼 (예: 정류소 즐겨찾기) */
+  headerExtra?: ReactNode;
   onClose: () => void;
   children?: ReactNode;
 }) {
@@ -45,7 +56,7 @@ export default function MapCard({
       </div>
       {/* 종류 색은 제목 앞 작은 점 하나로만 */}
       <div className="thin-scroll max-h-[54dvh] overflow-y-auto overscroll-contain px-4 pb-4 pt-1 sm:p-5">
-        <div {...swipe.handlers} className="flex touch-none items-start gap-2 sm:touch-auto">
+        <div {...swipe.handlers} className="flex touch-none items-start gap-1.5 sm:touch-auto">
           <div className="min-w-0 flex-1">
             <h3 className="flex items-center gap-2 truncate text-[length:var(--text-lg)] font-bold">
               {accent && (
@@ -59,6 +70,7 @@ export default function MapCard({
               </div>
             )}
           </div>
+          {headerExtra}
           <button
             type="button"
             onClick={onClose}
@@ -69,6 +81,7 @@ export default function MapCard({
           </button>
         </div>
         {children}
+        {(copyAddress || share) && <CardActions copyAddress={copyAddress} share={share} />}
       </div>
     </div>
   );
