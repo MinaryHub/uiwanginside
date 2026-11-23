@@ -657,9 +657,15 @@ export default function KakaoMap({
      * 찾던 곳이 목록 뒤로 들어간다. 그만큼 왼쪽을 비켜 놓고 맞춘다.
      * 좁은 화면은 시트가 통째로 덮으므로 따질 것이 없다.
      */
-    const wide = (containerRef.current?.clientWidth ?? 0) >= 640;
-    const left = wide && sheetRef.current ? 384 : 48;
-    map.setBounds(b, 48, 48, 48, left);
+    const w = containerRef.current?.clientWidth ?? 0;
+    const h = containerRef.current?.clientHeight ?? 0;
+    const wide = w >= 640;
+    const left = wide && sheetRef.current ? 416 : 36;
+    const top = wide ? 84 : Math.min(132, Math.round(h * 0.2));
+    const bottom = wide
+      ? 112
+      : Math.min(Math.round(h * 0.36), Math.max(140, h - top - 140));
+    map.setBounds(b, top, 36, Math.max(48, bottom), left);
     const c = map.getCenter();
     const here = { lat: c.getLat(), lng: c.getLng() };
     const lv = map.getLevel();

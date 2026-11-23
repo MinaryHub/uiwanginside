@@ -152,7 +152,7 @@ export default function SearchOverlay({
       }}
       className="scrim fade-up absolute inset-0 z-50 flex flex-col"
     >
-      <div className="mx-auto flex max-h-full w-full max-w-[520px] flex-col p-3">
+      <div className="mx-auto flex max-h-full w-full max-w-[520px] flex-col px-3 pb-[calc(12px+env(safe-area-inset-bottom,0px))] pt-[calc(12px+env(safe-area-inset-top,0px))]">
         <div className="flex items-center gap-2 rounded-[var(--radius-full)] border-2 border-[var(--ink)] bg-[var(--surface)] pl-4 pr-1.5 shadow-[var(--shadow-lg)] focus-within:ring-2 focus-within:ring-[var(--brand)]">
           <span className="text-[var(--text-muted)]">
             <Icon name="search" size={18} />
@@ -160,6 +160,9 @@ export default function SearchOverlay({
           <input
             ref={inputRef}
             value={q}
+            type="search"
+            inputMode="search"
+            enterKeyHint="search"
             aria-label="의왕시 장소 검색"
             onChange={(e) => {
               setQ(e.target.value);
@@ -178,7 +181,7 @@ export default function SearchOverlay({
               }
             }}
             placeholder="의왕시 안에서 찾기 — 도서관, 우체국, 가게 이름"
-            className="min-h-[48px] min-w-0 flex-1 bg-transparent text-[length:var(--text-base)] outline-none focus-visible:outline-none"
+            className="min-h-[48px] min-w-0 flex-1 bg-transparent text-[16px] sm:text-[length:var(--text-base)] outline-none focus-visible:outline-none"
           />
           {q && (
             <button

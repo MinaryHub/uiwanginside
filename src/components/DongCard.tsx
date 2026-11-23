@@ -2,6 +2,7 @@
 
 import Icon from "@/components/Icon";
 import { DONG_POPULATION, POPULATION_AS_OF, TOTAL_POPULATION, density } from "@/lib/population";
+import { useSwipeDismiss } from "@/lib/useSwipeDismiss";
 import { HAS_DONG_SCHEDULE } from "@/lib/waste";
 
 /**
@@ -26,6 +27,7 @@ export default function DongCard({
   onClose: () => void;
   onOpenWaste: () => void;
 }) {
+  const swipe = useSwipeDismiss(onClose, 56);
   const d = DONG_POPULATION.find((x) => x.name === name);
   if (!d) return null;
 
@@ -33,8 +35,22 @@ export default function DongCard({
   const share = ((d.population / TOTAL_POPULATION) * 100).toFixed(1);
 
   return (
-    <div className="pop-in absolute inset-x-3 bottom-[calc(var(--dock-h)+8px)] z-30 mx-auto max-w-[440px] overflow-hidden rounded-[var(--radius-xl)] border-2 border-[var(--ink)] bg-[var(--surface)] shadow-[var(--shadow-lg)]">
-      <div className="flex items-center gap-2 px-3.5 pt-3">
+    <div
+      style={
+        swipe.dragging
+          ? { transform: `translateY(${swipe.dragY}px)`, transition: "none" }
+          : undefined
+      }
+      className="pop-in absolute inset-x-3 bottom-[calc(var(--dock-h)+8px)] z-30 mx-auto max-w-[440px] overflow-hidden rounded-[var(--radius-xl)] border-2 border-[var(--ink)] bg-[var(--surface)] shadow-[var(--shadow-lg)] transition-transform duration-150"
+    >
+      <div
+        {...swipe.handlers}
+        className="flex touch-none justify-center pt-2 pb-0.5 sm:hidden"
+        aria-hidden
+      >
+        <span className="h-1 w-10 rounded-full bg-[var(--border-strong)] opacity-35" />
+      </div>
+      <div {...swipe.handlers} className="flex touch-none items-center gap-2 px-3.5 pt-1 sm:touch-auto sm:pt-3">
         <h2 className="min-w-0 flex-1 truncate text-[length:var(--text-base)] font-bold">
           {d.name}
         </h2>

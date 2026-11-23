@@ -5,6 +5,7 @@ import SchoolFacts from "@/components/SchoolFacts";
 import PlaceHours from "@/components/PlaceHours";
 import { formatDistance } from "@/lib/format";
 import { CATEGORY_MAP } from "@/lib/uiwang";
+import { useSwipeDismiss } from "@/lib/useSwipeDismiss";
 import type { MedicalPlace, Place } from "@/lib/types";
 
 /**
@@ -27,6 +28,7 @@ export default function PlaceDetailCard({
   medicalDay: number;
   onClose: () => void;
 }) {
+  const swipe = useSwipeDismiss(onClose, 56);
   const def = CATEGORY_MAP[place.category];
   const distance = formatDistance(place.distance);
   const detailText =
@@ -40,9 +42,23 @@ export default function PlaceDetailCard({
   )},${place.lat},${place.lng}`;
 
   return (
-    <div className="pointer-events-auto pop-in absolute inset-x-3 bottom-[calc(var(--dock-h)+8px)] z-30 mx-auto max-w-[440px] overflow-hidden rounded-[var(--radius-xl)] border-2 border-[var(--ink)] bg-[var(--surface)] shadow-[var(--shadow-lg)]">
-      <div className="thin-scroll max-h-[58vh] overflow-y-auto p-5">
-        <div className="flex items-start gap-2">
+    <div
+      style={
+        swipe.dragging
+          ? { transform: `translateY(${swipe.dragY}px)`, transition: "none" }
+          : undefined
+      }
+      className="pointer-events-auto pop-in absolute inset-x-3 bottom-[calc(var(--dock-h)+8px)] z-30 mx-auto max-w-[440px] overflow-hidden rounded-[var(--radius-xl)] border-2 border-[var(--ink)] bg-[var(--surface)] shadow-[var(--shadow-lg)] transition-transform duration-150"
+    >
+      <div
+        {...swipe.handlers}
+        className="flex touch-none justify-center pt-2 pb-1 sm:hidden"
+        aria-hidden
+      >
+        <span className="h-1 w-10 rounded-full bg-[var(--border-strong)] opacity-35" />
+      </div>
+      <div className="thin-scroll max-h-[56dvh] overflow-y-auto overscroll-contain px-4 pb-4 pt-1 sm:p-5">
+        <div {...swipe.handlers} className="flex touch-none items-start gap-2 sm:touch-auto">
           <div className="min-w-0 flex-1">
             <h3 className="truncate text-[length:var(--text-lg)] font-bold">
               {place.name}

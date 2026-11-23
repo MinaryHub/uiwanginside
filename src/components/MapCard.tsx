@@ -1,6 +1,7 @@
 "use client";
 
 import Icon from "@/components/Icon";
+import { useSwipeDismiss } from "@/lib/useSwipeDismiss";
 import type { ReactNode } from "react";
 
 /**
@@ -23,13 +24,28 @@ export default function MapCard({
   onClose: () => void;
   children?: ReactNode;
 }) {
+  const swipe = useSwipeDismiss(onClose, 56);
+
   return (
     <div
-      className="pop-in absolute inset-x-3 bottom-[calc(var(--dock-h)+8px)] z-30 mx-auto max-w-[440px] overflow-hidden rounded-[var(--radius-xl)] bg-[var(--surface)] shadow-[var(--shadow-lg)] border-2 border-[var(--ink)]"
+      style={
+        swipe.dragging
+          ? { transform: `translateY(${swipe.dragY}px)`, transition: "none" }
+          : undefined
+      }
+      className="pop-in absolute inset-x-3 bottom-[calc(var(--dock-h)+8px)] z-30 mx-auto max-w-[440px] overflow-hidden rounded-[var(--radius-xl)] border-2 border-[var(--ink)] bg-[var(--surface)] shadow-[var(--shadow-lg)] transition-transform duration-150"
     >
+      {/* 모바일 스와이프 닫기 손잡이 */}
+      <div
+        {...swipe.handlers}
+        className="flex touch-none justify-center pt-2 pb-1 sm:hidden"
+        aria-hidden
+      >
+        <span className="h-1 w-10 rounded-full bg-[var(--border-strong)] opacity-35" />
+      </div>
       {/* 종류 색은 제목 앞 작은 점 하나로만 */}
-      <div className="max-h-[52vh] overflow-y-auto p-5 thin-scroll">
-        <div className="flex items-start gap-2">
+      <div className="thin-scroll max-h-[54dvh] overflow-y-auto overscroll-contain px-4 pb-4 pt-1 sm:p-5">
+        <div {...swipe.handlers} className="flex touch-none items-start gap-2 sm:touch-auto">
           <div className="min-w-0 flex-1">
             <h3 className="flex items-center gap-2 truncate text-[length:var(--text-lg)] font-bold">
               {accent && (
