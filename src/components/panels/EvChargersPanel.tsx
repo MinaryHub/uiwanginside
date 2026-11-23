@@ -102,13 +102,16 @@ export default function EvChargersPanel({
 
           <input
             value={keyword}
+            type="search"
+            inputMode="search"
+            enterKeyHint="search"
             aria-label="충전소 이름·주소·운영기관 검색"
             onChange={(e) => {
               setKeyword(e.target.value);
               setLimit(25);
             }}
             placeholder="충전소 이름·동·운영기관으로 찾기"
-            className="mb-2 min-h-[40px] w-full rounded-[var(--radius-full)] border border-transparent bg-[var(--surface-2)] px-3.5 text-[length:var(--text-xs)] outline-none transition focus:border-[var(--brand-2)] focus:bg-[var(--surface)]"
+            className="mb-2 min-h-[44px] w-full rounded-[var(--radius-full)] border border-transparent bg-[var(--surface-2)] px-3.5 text-[16px] outline-none transition focus:border-[var(--brand-2)] focus:bg-[var(--surface)] sm:text-[length:var(--text-xs)]"
           />
 
           {visible.length === 0 ? (

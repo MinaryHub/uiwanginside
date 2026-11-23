@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import useSWR from "swr";
@@ -163,6 +163,41 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
   const [firedAlert, setFiredAlert] = useState<FiredBusAlert | null>(null);
   const [newsQuery, setNewsQuery] = useState("의왕시");
   const [sheetOpen, setSheetOpen] = useState(!!initial.mode);
+  /** 모바일 바텀시트 높이: 기본 'half' 로 지도와 목록을 함께 보고, 스와이프/탭으로 'full' 확장 */
+  const [sheetSnap, setSheetSnap] = useState<"half" | "full">("half");
+  const [sheetDragY, setSheetDragY] = useState(0);
+  const sheetTouchStartY = useRef<number | null>(null);
+
+  const onSheetTouchStart = useCallback((e: TouchEvent) => {
+    if (e.touches.length !== 1) return;
+    sheetTouchStartY.current = e.touches[0].clientY;
+    setSheetDragY(0);
+  }, []);
+
+  const onSheetTouchMove = useCallback((e: TouchEvent) => {
+    if (sheetTouchStartY.current === null || e.touches.length !== 1) return;
+    const dy = e.touches[0].clientY - sheetTouchStartY.current;
+    // 위로는 최대 -90px, 아래로는 최대 220px 까지만 부드럽게 따라오게 제한
+    setSheetDragY(Math.max(-90, Math.min(220, dy)));
+  }, []);
+
+  const onSheetTouchEnd = useCallback(() => {
+    if (sheetTouchStartY.current === null) return;
+    const dy = sheetDragY;
+    sheetTouchStartY.current = null;
+    setSheetDragY(0);
+    if (sheetSnap === "half") {
+      if (dy <= -45) setSheetSnap("full");
+      else if (dy >= 64) setSheetOpen(false);
+    } else {
+      if (dy >= 160) {
+        setSheetOpen(false);
+        setSheetSnap("half");
+      } else if (dy >= 55) {
+        setSheetSnap("half");
+      }
+    }
+  }, [sheetDragY, sheetSnap]);
   /**
    * 좁히기 — 모드 안에서 한 종류만 볼 때.
    * 지도와 목록이 함께 좁혀져야 해서 여기서 들고 있는다.
@@ -458,6 +493,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     setMode((cur) => {
       const off = cur === next;
       setSheetOpen(!off);
+      setSheetSnap("half");
       setSelectedPlaceId(null);
       setMarker(null);
       setTracked(null);
@@ -1160,7 +1196,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
         요약 칸을 누르면 하단 메뉴의 같은 항목이 열린다. 따로 뜨는 창이
         없으니 길을 잃을 일이 없다.
       */}
-      <header className="pointer-events-none absolute inset-x-0 top-0 z-40 p-3">
+      <header className="pointer-events-none absolute inset-x-0 top-0 z-40 px-2.5 pb-2 pt-[calc(10px+env(safe-area-inset-top,0px))] sm:p-3">
         <div className="flex items-center gap-2">
           <div className="glass pointer-events-auto flex h-12 min-w-0 flex-1 items-center gap-2 rounded-[var(--radius-full)] pl-1.5 pr-2">
             <button
@@ -1195,16 +1231,23 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
           </button>
         </div>
 
-        <div className="glass pointer-events-auto mt-2 flex h-11 items-center overflow-hidden rounded-[var(--radius-full)] px-1.5 sm:hidden">
+        <div className="glass pointer-events-auto mt-1.5 flex h-10 items-center overflow-hidden rounded-[var(--radius-full)] px-1.5 sm:hidden">
           {summary}
         </div>
       </header>
 
       {/*
-        지도 컨트롤 — 내 위치와 확대·축소만. 동 고르기는 '우리 동네' 메뉴로
-        옮겼다. 메뉴 안에 또 메뉴를 두지 않는다.
+        지도 컨트롤 — 내 위치와 확대·축소만.
+        모바일에서는 하단 카드/시트가 없을 때 오른손 엄지 닿는 위치(하단 메뉴 바로 위)에 두고,
+        바텀시트나 상세 카드가 열리면 지도가 보이는 위쪽 우측으로 자연스럽게 올린다.
       */}
-      <div className="absolute right-3 top-[128px] z-20 flex flex-col gap-2.5 sm:top-[76px]">
+      <div
+        className={`absolute right-3 z-20 flex flex-col gap-2 sm:bottom-auto sm:top-[76px] sm:gap-2.5 ${
+          !bottomCard && !sheetOpen
+            ? "bottom-[calc(var(--dock-h)+14px)]"
+            : "top-[calc(114px+env(safe-area-inset-top,0px))]"
+        }`}
+      >
         {/*
           내 위치.
           위치는 방문 즉시 묻지 않는다 — 그때 뜨는 권한 팝업은 대부분
@@ -1246,9 +1289,9 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
       {/*
         오늘 공기 — 첫 화면에서 메뉴를 열지 않아도 보인다.
         얼굴과 한마디가 먼저, 누르면 날씨·공기 메뉴가 열린다.
-        내용 카드나 하단 카드가 떠 있을 때는 비켜 준다.
+        내용 카드·하단 카드·상단 추적/알림 배너가 떠 있을 때는 비켜 준다.
       */}
-      {airGrade && !sheetOpen && !bottomCard && (
+      {airGrade && !sheetOpen && !bottomCard && !tracked && !busAlert && !locNotice && !firedAlert && (
         <button
           type="button"
           onClick={() => {
@@ -1256,7 +1299,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
             toggleMode("weather");
           }}
           title="공기 자세히 보기"
-          className="glass press pop-in absolute left-3 top-[128px] z-20 flex items-center gap-2 rounded-[var(--radius-lg)] py-2 pl-2.5 pr-3.5 text-left sm:top-[76px]"
+          className="glass press pop-in absolute left-3 top-[calc(114px+env(safe-area-inset-top,0px))] z-20 flex items-center gap-2 rounded-[var(--radius-lg)] py-2 pl-2.5 pr-3.5 text-left sm:top-[76px]"
           style={{ background: AIR_STYLE[airGrade].tint, color: "#23201c" }}
         >
           <span aria-hidden className="text-[1.9rem] leading-none">
@@ -1276,7 +1319,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
         되는 이야기라 잠깐 떴다 사라지는 자리에 둔다.
       */}
       {locNotice && (
-        <div className="pointer-events-none absolute inset-x-0 top-[128px] z-40 flex justify-center px-16 sm:top-[76px]">
+        <div className="pointer-events-none absolute inset-x-0 top-[calc(114px+env(safe-area-inset-top,0px))] z-40 flex justify-center px-4 sm:top-[76px] sm:px-16">
           <button
             type="button"
             onClick={() => setLocNotice(null)}
@@ -1289,7 +1332,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
 
       {/* 버스 도착 알림 발동 배너 */}
       {firedAlert && (
-        <div className="pointer-events-none absolute inset-x-0 top-[128px] z-50 flex justify-center px-4 sm:top-[76px]">
+        <div className="pointer-events-none absolute inset-x-0 top-[calc(114px+env(safe-area-inset-top,0px))] z-50 flex justify-center px-3 sm:top-[76px] sm:px-4">
           <button
             type="button"
             onClick={() => setFiredAlert(null)}
@@ -1311,7 +1354,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
 
       {/* 버스 노선 경로 추적 / 도착 알림 대기 중 플로팅 칩 */}
       {(tracked || busAlert) && !firedAlert && !locNotice && (
-        <div className="pointer-events-none absolute inset-x-0 top-[128px] z-20 flex flex-wrap justify-center gap-1.5 px-16 sm:top-[76px]">
+        <div className="pointer-events-none absolute inset-x-0 top-[calc(114px+env(safe-area-inset-top,0px))] z-20 flex flex-wrap justify-center gap-1.5 px-3 sm:top-[76px] sm:px-16">
           {tracked && (
             <button
               type="button"
@@ -1675,44 +1718,82 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
 
       {/*
         내용 카드 — 메뉴를 누르면 바로 이것이 뜬다. 안에 탭이 없다.
-        위로는 상단 바, 아래로는 메뉴를 가리지 않는다. 지금 무엇을 보고
-        있는지(메뉴)와 오늘 날씨(상단)가 늘 보여야 한다.
+        모바일에서는 기본 반높이(half)로 열려 지도와 목록을 함께 보고,
+        상단 손잡이를 위·아래로 쓸거나 눌러 전체(full)↔반높이↔닫기를 한 손으로 조작한다.
+        넓은 화면에서는 왼쪽 400px 사이드바로 고정된다.
       */}
       {def && sheetOpen && (
         <aside
           key={def.id}
           aria-label={def.label}
-          className="pop-in absolute inset-x-3 bottom-[calc(var(--dock-h)+6px)] top-[128px] z-30 flex flex-col overflow-hidden rounded-[var(--radius-xl)] border-2 border-[var(--frame)] bg-[var(--surface)] shadow-[var(--shadow-lg)] sm:right-auto sm:top-[76px] sm:w-[400px]"
+          style={
+            sheetDragY !== 0
+              ? { transform: `translateY(${sheetDragY}px)`, transition: "none" }
+              : undefined
+          }
+          className={`pop-in absolute inset-x-2.5 bottom-[calc(var(--dock-h)+6px)] z-30 flex flex-col overflow-hidden rounded-[var(--radius-xl)] border-2 border-[var(--frame)] bg-[var(--surface)] shadow-[var(--shadow-lg)] transition-[height,top,transform] duration-200 sm:inset-x-auto sm:left-3 sm:top-[76px] sm:h-auto sm:max-h-none sm:w-[400px] ${
+            sheetSnap === "full"
+              ? "top-[calc(114px+env(safe-area-inset-top,0px))]"
+              : "h-[48dvh] max-h-[calc(100dvh-var(--dock-h)-130px-env(safe-area-inset-top,0px))]"
+          }`}
         >
+          {/* 모바일 전용 드래그 손잡이 — 탭하면 반높이↔전체, 아래로 쓸면 축소/닫기 */}
+          <button
+            type="button"
+            onClick={() => setSheetSnap((s) => (s === "half" ? "full" : "half"))}
+            onTouchStart={onSheetTouchStart}
+            onTouchMove={onSheetTouchMove}
+            onTouchEnd={onSheetTouchEnd}
+            onTouchCancel={onSheetTouchEnd}
+            aria-label={sheetSnap === "half" ? "패널 크게 보기" : "패널 반만 보기"}
+            style={{ background: def.tint }}
+            className="flex w-full touch-none items-center justify-center pt-2 pb-1 sm:hidden"
+          >
+            <span className="h-1.5 w-11 rounded-full bg-[#23201c]/30" />
+          </button>
+
           <header
-            className="flex items-center gap-3 border-b-2 border-[var(--ink)] py-3 pl-3 pr-2"
+            onTouchStart={onSheetTouchStart}
+            onTouchMove={onSheetTouchMove}
+            onTouchEnd={onSheetTouchEnd}
+            onTouchCancel={onSheetTouchEnd}
+            className="flex touch-none items-center gap-2.5 border-b-2 border-[var(--ink)] py-2 pl-3 pr-2 sm:touch-auto sm:gap-3 sm:py-3"
             style={{ background: def.tint }}
           >
             <span
               aria-hidden
-              className="grid h-12 w-12 shrink-0 place-items-center rounded-[var(--radius)] border-2 border-[var(--ink)] bg-white text-[1.6rem] shadow-[var(--shadow-sm)]"
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius)] border-2 border-[var(--ink)] bg-white text-[1.4rem] shadow-[var(--shadow-sm)] sm:h-12 sm:w-12 sm:text-[1.6rem]"
             >
               {def.icon}
             </span>
             <div className="min-w-0 flex-1 text-[#23201c]">
-              <h1 className="text-[length:var(--text-lg)] font-extrabold leading-tight">
+              <h1 className="text-[length:var(--text-base)] font-extrabold leading-tight sm:text-[length:var(--text-lg)]">
                 {def.label}
               </h1>
-              <p className="truncate text-[length:var(--text-xs)] font-semibold opacity-80">
+              <p className="truncate text-[length:var(--text-2xs)] font-semibold opacity-80 sm:text-[length:var(--text-xs)]">
                 {def.hint}
               </p>
             </div>
+            {/* 모바일 1-탭 크기 전환 (스와이프 없이도 한 손 조작 가능) */}
+            <button
+              type="button"
+              onClick={() => setSheetSnap((s) => (s === "half" ? "full" : "half"))}
+              aria-label={sheetSnap === "half" ? "크게 보기" : "지도와 함께 보기"}
+              className="press inline-flex h-10 shrink-0 items-center justify-center rounded-[var(--radius-full)] border-2 border-[var(--ink)] bg-white px-2.5 text-[12px] font-extrabold text-[#23201c] shadow-[var(--shadow-sm)] sm:hidden"
+            >
+              {sheetSnap === "half" ? "크게 ▲" : "지도 ▼"}
+            </button>
             <button
               type="button"
               onClick={() => setSheetOpen(false)}
               aria-label="닫기"
-              className="press grid h-11 w-11 shrink-0 place-items-center rounded-[var(--radius-full)] border-2 border-[var(--ink)] bg-white text-[#23201c] shadow-[var(--shadow-sm)]"
+              className="press grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius-full)] border-2 border-[var(--ink)] bg-white text-[#23201c] shadow-[var(--shadow-sm)] sm:h-11 sm:w-11"
             >
               <Icon name="close" size={20} />
             </button>
           </header>
 
-          <div className="thin-scroll min-h-0 flex-1 overflow-y-auto">
+          <div className="thin-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain">
             {/* 응급실은 장소 목록보다 먼저 — 급한 사람이 스크롤할 여유는 없다 */}
             {def.cards.filter((c) => c === "emergency").map(card)}
             {def.categories.length > 0 && def.list !== false && (
@@ -1746,10 +1827,10 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
         <button
           type="button"
           onClick={() => setSheetOpen(true)}
-          className="glass press pop-in absolute bottom-[calc(var(--dock-h)+10px)] left-1/2 z-20 flex min-h-[48px] -translate-x-1/2 items-center gap-2 rounded-[var(--radius-full)] px-5 text-[length:var(--text-sm)] font-extrabold"
+          className="glass press pop-in absolute bottom-[calc(var(--dock-h)+10px)] left-1/2 z-20 flex min-h-[46px] max-w-[calc(100vw-136px)] -translate-x-1/2 items-center gap-2 rounded-[var(--radius-full)] px-4 text-[length:var(--text-sm)] font-extrabold sm:min-h-[48px] sm:max-w-none sm:px-5"
         >
           <span aria-hidden>{def.icon}</span>
-          {def.label} 다시 보기
+          <span className="truncate">{def.label} 다시 보기</span>
         </button>
       )}
 
@@ -1761,9 +1842,9 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
       */}
       <nav
         aria-label="메뉴"
-        className="pointer-events-none absolute inset-x-0 bottom-0 z-40 flex justify-center px-3 pb-[calc(12px+env(safe-area-inset-bottom,0px))]"
+        className="pointer-events-none absolute inset-x-0 bottom-0 z-40 flex justify-center px-2.5 pb-[calc(8px+env(safe-area-inset-bottom,0px))] sm:px-3 sm:pb-[calc(12px+env(safe-area-inset-bottom,0px))]"
       >
-        <ul className="glass pointer-events-auto grid w-full max-w-[640px] grid-cols-4 gap-1.5 rounded-[var(--radius-xl)] p-2 sm:w-auto sm:grid-cols-8">
+        <ul className="glass pointer-events-auto grid w-full max-w-[640px] grid-cols-4 gap-1 rounded-[var(--radius-xl)] p-1.5 sm:w-auto sm:grid-cols-8 sm:gap-1.5 sm:p-2">
           {MODES.map((m) => {
             const on = m.id === mode;
             return (
@@ -1772,7 +1853,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
                   type="button"
                   onClick={() => toggleMode(m.id)}
                   aria-pressed={on}
-                  className={`press flex h-[56px] w-full flex-col items-center justify-center gap-0.5 rounded-[var(--radius)] border-2 sm:h-[64px] sm:w-[68px] ${
+                  className={`press flex h-[50px] w-full flex-col items-center justify-center gap-0.5 rounded-[var(--radius)] border-2 sm:h-[64px] sm:w-[68px] ${
                     on
                       ? "border-[var(--ink)] text-[#23201c] shadow-[var(--shadow-sm)]"
                       : "border-transparent hover:bg-[var(--surface-2)]"
@@ -1782,11 +1863,11 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
                   <span
                     aria-hidden
                     key={on ? "on" : "off"}
-                    className={`text-[1.45rem] leading-none sm:text-[1.6rem] ${on ? "wiggle" : ""}`}
+                    className={`text-[1.35rem] leading-none sm:text-[1.6rem] ${on ? "wiggle" : ""}`}
                   >
                     {m.icon}
                   </span>
-                  <span className="whitespace-nowrap text-[length:var(--text-2xs)] font-extrabold tracking-tight">
+                  <span className="whitespace-nowrap text-[12px] font-extrabold tracking-tight sm:text-[length:var(--text-2xs)]">
                     {m.label}
                   </span>
                 </button>

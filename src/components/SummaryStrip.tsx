@@ -158,7 +158,7 @@ export default function SummaryStrip({
   const headline = top.length ? top[turn % top.length] : null;
 
   return (
-    <div className="thin-scroll flex items-center gap-0.5 overflow-x-auto">
+    <div className="no-scrollbar flex items-center gap-0.5 overflow-x-auto overscroll-x-contain">
       {/*
         기상특보는 이 줄에서 가장 급한 정보다. 발효 중일 때만 나오고
         그때는 맨 앞에 온다. 경보는 주의보보다 위급해 더 진하게 칠한다.

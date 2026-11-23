@@ -164,13 +164,16 @@ export default function PlacesPanel({
 
         <input
           value={keyword}
+          type="search"
+          inputMode="search"
+          enterKeyHint="search"
           aria-label="목록 안에서 이름이나 주소로 찾기"
           onChange={(e) => {
             setKeyword(e.target.value);
             setLimit(20);
           }}
           placeholder="이름·주소로 찾기"
-          className="mb-2 min-h-[42px] w-full rounded-[var(--radius-full)] border border-transparent bg-[var(--surface-2)] px-4 text-[length:var(--text-sm)] outline-none transition focus:border-[var(--brand-2)] focus:bg-[var(--surface)]"
+          className="mb-2 min-h-[44px] w-full rounded-[var(--radius-full)] border border-transparent bg-[var(--surface-2)] px-4 text-[16px] outline-none transition focus:border-[var(--brand-2)] focus:bg-[var(--surface)] sm:text-[length:var(--text-sm)]"
         />
 
         {/*

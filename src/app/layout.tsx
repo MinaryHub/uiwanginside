@@ -21,6 +21,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
   // 확대를 막지 않는다. 글자를 키운 취지와 어긋나고, 저시력 이용자에게
   // 핀치 줌은 마지막 수단이다.
   themeColor: [

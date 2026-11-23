@@ -155,13 +155,16 @@ export default function MedicalPanel({
 
           <input
             value={keyword}
+            type="search"
+            inputMode="search"
+            enterKeyHint="search"
             aria-label="병원·약국 이름 또는 진료과목 검색"
             onChange={(e) => {
               setKeyword(e.target.value);
               setLimit(40);
             }}
             placeholder="병원·약국 이름, 진료과목으로 찾기"
-            className="mb-2 min-h-[40px] w-full rounded-[var(--radius-full)] border border-transparent bg-[var(--surface-2)] px-3.5 text-[length:var(--text-xs)] outline-none transition focus:border-[var(--brand-2)] focus:bg-[var(--surface)]"
+            className="mb-2 min-h-[44px] w-full rounded-[var(--radius-full)] border border-transparent bg-[var(--surface-2)] px-3.5 text-[16px] outline-none transition focus:border-[var(--brand-2)] focus:bg-[var(--surface)] sm:text-[length:var(--text-xs)]"
           />
 
           {visible.length === 0 ? (
