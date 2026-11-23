@@ -35,10 +35,12 @@ export type CardId =
   | "air"
   | "shelter"
   | "medical"
+  | "subway"
   | "traffic"
   | "cctv"
   | "transit"
   | "ev"
+  | "currency"
   | "libraries"
   | "waste"
   | "population"
@@ -109,31 +111,31 @@ export const MODES: ModeDef[] = [
     label: "버스·교통",
     icon: "🚌",
     tint: "#a8d8ff",
-    hint: "버스 도착 · 사고·정체 · CCTV · 전기차 충전",
+    hint: "1호선 의왕역 · 버스 도착 · 사고·정체 · 전기차 충전",
     // 주차장은 카카오(PK6) 대신 표준데이터(PKG)를 쓴다 — 요금과 운영시간이 있다
     categories: ["SW8", "PKG"],
     layers: { places: true, bus: true, incidents: true, traffic: true, cctv: true },
-    cards: ["transit", "traffic", "ev", "cctv"],
+    cards: ["subway", "transit", "traffic", "ev", "cctv"],
   },
   {
     id: "food",
     label: "맛집",
     icon: "🍜",
     tint: "#ffc98a",
-    hint: "음식점 · 카페",
+    hint: "음식점 · 카페 · 의왕사랑상품권 가맹점",
     categories: ["FD6", "CE7"],
     layers: { ...NO_LAYERS, places: true },
-    cards: [],
+    cards: ["currency"],
   },
   {
     id: "life",
     label: "생활",
     icon: "🛒",
     tint: "#b8efc0",
-    hint: "마트 · 편의점 · 학교 · 도서관 · 공원 · 화장실",
+    hint: "마트 · 학교 · 도서관 · 의왕사랑상품권 · 공원",
     categories: ["MT1", "CS2", "BK9", "OL7", "SC4", "PO3", "CT1", "PARK", "WC", "SEC"],
     layers: { ...NO_LAYERS, places: true },
-    cards: ["libraries"],
+    cards: ["currency", "libraries"],
   },
   {
     id: "waste",

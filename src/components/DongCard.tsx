@@ -19,11 +19,15 @@ import { HAS_DONG_SCHEDULE } from "@/lib/waste";
 export default function DongCard({
   name,
   factoryCount,
+  isHome = false,
+  onToggleHome,
   onClose,
   onOpenWaste,
 }: {
   name: string;
   factoryCount?: number;
+  isHome?: boolean;
+  onToggleHome?: (name: string) => void;
   onClose: () => void;
   onOpenWaste: () => void;
 }) {
@@ -50,10 +54,26 @@ export default function DongCard({
       >
         <span className="h-1 w-10 rounded-full bg-[var(--border-strong)] opacity-35" />
       </div>
-      <div {...swipe.handlers} className="flex touch-none items-center gap-2 px-3.5 pt-1 sm:touch-auto sm:pt-3">
+      <div {...swipe.handlers} className="flex touch-none items-center gap-1.5 px-3.5 pt-1 sm:touch-auto sm:pt-3">
         <h2 className="min-w-0 flex-1 truncate text-[length:var(--text-base)] font-bold">
           {d.name}
         </h2>
+        {onToggleHome && (
+          <button
+            type="button"
+            onClick={() => onToggleHome(d.name)}
+            aria-pressed={isHome}
+            className={`press inline-flex min-h-[36px] shrink-0 items-center gap-1 rounded-[var(--radius-full)] border-2 px-2.5 text-[length:var(--text-2xs)] font-extrabold transition ${
+              isHome
+                ? "border-[var(--ink)] shadow-[var(--shadow-sm)]"
+                : "border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-muted)]"
+            }`}
+            style={isHome ? { background: "var(--brand-2)", color: "var(--ink)" } : undefined}
+          >
+            <span aria-hidden>🏠</span>
+            <span>{isHome ? "내 동네" : "내 동네 지정"}</span>
+          </button>
+        )}
         <button
           type="button"
           onClick={onClose}

@@ -180,6 +180,16 @@ export const DATASET_GROUPS: DatasetGroup[] = [
         kind: "live",
       },
       {
+        id: "seoul-subway",
+        name: "수도권 전철 실시간 도착정보 (1호선 의왕역)",
+        provider: "서울 열린데이터광장",
+        link: "https://data.seoul.go.kr/dataList/OA-12764/F/1/datasetView.do",
+        refresh: "30초",
+        shows: "의왕역 1호선 상행(서울·구로)·하행(수원·천안) 실시간 열차 도착",
+        mode: "transit",
+        kind: "live",
+      },
+      {
         id: "std-parking",
         name: "전국주차장정보표준데이터",
         provider: "행정안전부",
@@ -231,6 +241,16 @@ export const DATASET_GROUPS: DatasetGroup[] = [
     title: "생활 · 시설",
     emoji: "🏘️",
     items: [
+      {
+        id: "gg-local-currency",
+        name: "지역화폐 가맹점 현황 (의왕사랑상품권)",
+        provider: "경기데이터드림",
+        link: "https://data.gg.go.kr/portal/data/service/selectServicePage.do?infId=3NPA52LBMO36CQEQ1G3629524670",
+        refresh: "6시간",
+        shows: "의왕사랑상품권 사용 가능 음식점·카페·마트·병의원 가맹점",
+        mode: "life",
+        kind: "live",
+      },
       {
         id: "gg-libraries",
         name: "경기도 공공도서관 · 의왕시 관내 도서관 현황",

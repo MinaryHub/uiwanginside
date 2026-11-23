@@ -25,6 +25,8 @@ export default function StopCard({
   onTrackRoute,
   busAlert,
   onToggleAlert,
+  isSaved = false,
+  onToggleSave,
   onClose,
 }: {
   stop: BusStop;
@@ -32,6 +34,8 @@ export default function StopCard({
   onTrackRoute: (routeId: string, routeName: string) => void;
   busAlert?: { stationId: string; routeId: string } | null;
   onToggleAlert?: (stop: BusStop, routeId: string, routeName: string, predictSec: number) => void;
+  isSaved?: boolean;
+  onToggleSave?: (stop: BusStop) => void;
   onClose: () => void;
 }) {
   const arrivals = stop.arrivals ?? [];
@@ -42,6 +46,28 @@ export default function StopCard({
       title={stop.name}
       accent="var(--info)"
       onClose={onClose}
+      share={{
+        title: `${stop.name} 정류소`,
+        text: stop.mobileNo ? `정류소 번호 ${stop.mobileNo}` : "의왕시 버스정류소",
+        lat: stop.lat,
+        lng: stop.lng,
+      }}
+      headerExtra={
+        onToggleSave ? (
+          <button
+            type="button"
+            onClick={() => onToggleSave(stop)}
+            aria-pressed={isSaved}
+            aria-label={isSaved ? "자주 타는 정류소 해제" : "자주 타는 정류소 저장"}
+            title={isSaved ? "자주 타는 정류소 해제" : "자주 타는 정류소 저장"}
+            className={`press grid h-11 w-11 shrink-0 place-items-center rounded-[var(--radius-full)] text-lg transition ${
+              isSaved ? "bg-[var(--warn-soft)]" : "hover:bg-[var(--surface-2)]"
+            }`}
+          >
+            <span aria-hidden>{isSaved ? "⭐" : "☆"}</span>
+          </button>
+        ) : undefined
+      }
       subtitle={
         <span className="flex items-center gap-1.5">
           <span>정류소</span>

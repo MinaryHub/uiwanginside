@@ -421,6 +421,56 @@ export interface NoticesPayload {
   updatedAt: string;
 }
 
+/** 의왕역(1호선) 실시간 열차 도착 1건 */
+export interface SubwayArrival {
+  id: string;
+  /** "up"=상행(서울/구로/광운대 방면), "down"=하행(수원/천안/신창 방면) */
+  direction: "up" | "down";
+  /** 예: "광운대행 - 당정방면" */
+  trainLineNm: string;
+  /** 예: "전역 도착", "3분 후 (군포)" */
+  arvlMsg: string;
+  /** 도착 예정 초 (0 이면 곧 도착/진입) */
+  etaSec: number | null;
+  /** "급행" | "일반" | "ITX" 등 */
+  trainType: string;
+  /** 마지막 열차 여부 */
+  isLast: boolean;
+  /** 수신 시각 */
+  receivedAt: string;
+}
+
+export interface SubwayPayload {
+  stationName: string;
+  lineName: string;
+  lat: number;
+  lng: number;
+  up: SubwayArrival[];
+  down: SubwayArrival[];
+  source: "seoul-live" | "seoul-sample";
+  updatedAt: string;
+}
+
+/** 의왕사랑상품권(경기지역화폐) 가맹점 1건 */
+export interface LocalCurrencyMerchant {
+  id: string;
+  name: string;
+  industry: string;
+  category: "food" | "cafe" | "mart" | "medical" | "life";
+  address: string;
+  dong: string;
+  lat: number | null;
+  lng: number | null;
+  phone: string;
+}
+
+export interface LocalCurrencyPayload {
+  merchants: LocalCurrencyMerchant[];
+  totalCount: number;
+  source: "gg";
+  updatedAt: string;
+}
+
 export interface ApiEnvelope<T> {
   /** false = 데이터를 가져오지 못했다. 이때 data 는 비어 있다. */
   ok: boolean;

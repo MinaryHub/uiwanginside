@@ -13,6 +13,8 @@ import { UIWANG_FACTORIES } from "./uiwang-factories";
 import { fetchEvChargers } from "./evChargers";
 import { fetchUiwangShelters } from "./shelters";
 import { fetchUiwangLibraries } from "./libraries";
+import { fetchUiwangSubway } from "./subway";
+import { fetchLocalCurrency } from "./localCurrency";
 
 /**
  * 각 외부 API 를 실제로 1회씩 호출해 키 상태를 진단한다.
@@ -528,6 +530,42 @@ async function checkLibraries(): Promise<Partial<HealthCheck>> {
   }
 }
 
+async function checkSubway(): Promise<Partial<HealthCheck>> {
+  const key = process.env.SEOUL_SUBWAY_KEY;
+  const t0 = Date.now();
+  try {
+    const data = await fetchUiwangSubway(key);
+    const total = data.up.length + data.down.length;
+    return {
+      status: data.source === "seoul-live" ? "live" : "fallback",
+      detail:
+        data.source === "seoul-live"
+          ? `의왕역 1호선 열차 ${total}편 조회됨`
+          : `샘플 키 동작 중 (열차 ${total}편 · SEOUL_SUBWAY_KEY 등록 권장)`,
+      fallback: data.source === "seoul-sample" ? "서울 열린데이터광장 sample 키" : undefined,
+      latencyMs: Date.now() - t0,
+    };
+  } catch (e) {
+    return { status: "error", detail: msg(e), latencyMs: Date.now() - t0 };
+  }
+}
+
+async function checkLocalCurrency(): Promise<Partial<HealthCheck>> {
+  const ggKey = process.env.GG_DATA_KEY;
+  if (!ggKey) return { status: "missing", detail: "GG_DATA_KEY 없음" };
+  const t0 = Date.now();
+  try {
+    const data = await fetchLocalCurrency(ggKey);
+    return {
+      status: "live",
+      detail: `의왕사랑상품권 가맹점 ${data.merchants.length}곳 로드 (전체 ${data.totalCount.toLocaleString("ko-KR")}곳)`,
+      latencyMs: Date.now() - t0,
+    };
+  } catch (e) {
+    return { status: "error", detail: msg(e), latencyMs: Date.now() - t0 };
+  }
+}
+
 interface Spec extends Omit<HealthCheck, "status" | "detail" | "configured"> {
   isConfigured: () => boolean;
 }
@@ -618,6 +656,20 @@ const SPECS: Spec[] = [
     howTo: "data.gg.go.kr(PublicLbrry) 또는 data.go.kr → '경기도 의왕시_관내 도서관' 활용신청",
   },
   {
+    id: "subway",
+    label: "의왕역 1호선 실시간 도착",
+    envVars: ["SEOUL_SUBWAY_KEY"],
+    isConfigured: () => !!process.env.SEOUL_SUBWAY_KEY,
+    howTo: "data.seoul.go.kr → 실시간 지하철 도착정보 인증키 신청 (미설정 시 샘플 키 5건 조회)",
+  },
+  {
+    id: "local-currency",
+    label: "의왕사랑상품권 가맹점",
+    envVars: ["GG_DATA_KEY"],
+    isConfigured: () => !!process.env.GG_DATA_KEY,
+    howTo: "data.gg.go.kr → OpenAPI 인증키 (기존 GG_DATA_KEY 재사용 · RegionMnyFacltStus)",
+  },
+  {
     id: "kma",
     label: "기상청 (날씨·특보)",
     envVars: ["KMA_SERVICE_KEY"],
@@ -706,6 +758,8 @@ export async function runHealthChecks(origin: string, bypassCache = false): Prom
       evChargers,
       shelters,
       libraries,
+      subway,
+      localCurrency,
       kma,
       naver,
       its,
@@ -724,6 +778,8 @@ export async function runHealthChecks(origin: string, bypassCache = false): Prom
       checkEvChargers(),
       checkShelters(),
       checkLibraries(),
+      checkSubway(),
+      checkLocalCurrency(),
       checkKma(),
       checkNaver(),
       checkIts(),
@@ -744,6 +800,8 @@ export async function runHealthChecks(origin: string, bypassCache = false): Prom
       "ev-chargers": evChargers,
       shelters,
       libraries,
+      subway,
+      "local-currency": localCurrency,
       kma,
       naver,
       its,

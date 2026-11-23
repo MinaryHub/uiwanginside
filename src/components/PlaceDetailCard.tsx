@@ -1,6 +1,7 @@
 "use client";
 
 import Icon from "@/components/Icon";
+import CardActions from "@/components/CardActions";
 import SchoolFacts from "@/components/SchoolFacts";
 import PlaceHours from "@/components/PlaceHours";
 import { formatDistance } from "@/lib/format";
@@ -125,6 +126,16 @@ export default function PlaceDetailCard({
             </a>
           )}
         </div>
+
+        <CardActions
+          copyAddress={place.roadAddress || place.address || undefined}
+          share={{
+            title: place.name,
+            text: place.roadAddress || place.address || def.label,
+            lat: place.lat,
+            lng: place.lng,
+          }}
+        />
 
         {/* 학교는 이름·주소만으로는 부족하다 — 학부모가 볼 것을 덧붙인다 */}
         {place.category === "SC4" && <SchoolFacts name={place.name} />}
