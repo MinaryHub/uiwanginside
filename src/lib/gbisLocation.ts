@@ -1,4 +1,12 @@
-import { timedFetch, parseDataGoKr, retryTransient, normalizeServiceKey, asArray } from "./fetcher";
+import {
+  timedFetch,
+  parseDataGoKr,
+  retryTransient,
+  normalizeServiceKey,
+  asArray,
+  createTtlCache,
+  createInFlight,
+} from "./fetcher";
 import { fetchStationIndex } from "./busStations";
 import type { BusPosition } from "./types";
 
@@ -16,6 +24,11 @@ import type { BusPosition } from "./types";
 
 const GBIS_LOCATION =
   "https://apis.data.go.kr/6410000/buslocationservice/v2/getBusLocationListv2";
+
+/** 노선별 16초 캐시 + single-flight — 여러 사용자가 같은 노선을 봐도 16초에 1회만 GBIS 를 호출한다 */
+const routeCache = createTtlCache<GbisLocationResult>(16_000, 120);
+const routeInFlight = createInFlight<GbisLocationResult>();
+const STALE_MAX_MS = 2 * 60_000;
 
 interface RawLoc {
   plateNo?: string;
@@ -44,48 +57,66 @@ export async function fetchGbisPositions(
   ggKey: string,
   routeId: string,
 ): Promise<GbisLocationResult> {
-  const url = `${GBIS_LOCATION}?serviceKey=${normalizeServiceKey(serviceKey)}&routeId=${routeId}&format=json`;
+  const hit = routeCache.get(routeId);
+  if (hit) return hit;
 
-  const [json, stationIndex] = await Promise.all([
-    retryTransient(async () => {
-      const res = await timedFetch(url, {}, 12_000);
-      return parseDataGoKr(await res.text()) as {
-        response?: { msgHeader?: { resultCode?: number }; msgBody?: { busLocationList?: RawLoc | RawLoc[] } };
-      };
-    }, "gbis:positions"),
-    fetchStationIndex(ggKey),
-  ]);
+  return routeInFlight(routeId, async () => {
+    const again = routeCache.get(routeId);
+    if (again) return again;
 
-  const code = json?.response?.msgHeader?.resultCode;
-  // 0 정상, 4 데이터 없음(운행 종료 등)
-  if (code != null && Number(code) !== 0 && Number(code) !== 4) {
-    throw new Error(`GBIS resultCode ${code}`);
-  }
+    const url = `${GBIS_LOCATION}?serviceKey=${normalizeServiceKey(serviceKey)}&routeId=${routeId}&format=json`;
+    try {
+      const [json, stationIndex] = await Promise.all([
+        retryTransient(async () => {
+          const res = await timedFetch(url, {}, 12_000);
+          return parseDataGoKr(await res.text()) as {
+            response?: {
+              msgHeader?: { resultCode?: number };
+              msgBody?: { busLocationList?: RawLoc | RawLoc[] };
+            };
+          };
+        }, "gbis:positions"),
+        fetchStationIndex(ggKey),
+      ]);
 
-  const positions: BusPosition[] = [];
-  let unresolved = 0;
+      const code = json?.response?.msgHeader?.resultCode;
+      // 0 정상, 4 데이터 없음(운행 종료 등)
+      if (code != null && Number(code) !== 0 && Number(code) !== 4) {
+        throw new Error(`GBIS resultCode ${code}`);
+      }
 
-  for (const b of asArray<RawLoc>(json?.response?.msgBody?.busLocationList)) {
-    const st = stationIndex.get(String(b.stationId ?? ""));
-    if (!st) {
-      // 의왕 인접 시 밖(서울 구간 등) — 좌표를 모르니 지도에 찍지 않는다
-      unresolved++;
-      continue;
+      const positions: BusPosition[] = [];
+      let unresolved = 0;
+
+      for (const b of asArray<RawLoc>(json?.response?.msgBody?.busLocationList)) {
+        const st = stationIndex.get(String(b.stationId ?? ""));
+        if (!st) {
+          // 의왕 인접 시 밖(서울 구간 등) — 좌표를 모르니 지도에 찍지 않는다
+          unresolved++;
+          continue;
+        }
+        const seats = num(b.remainSeatCnt);
+        const crowd = num(b.crowded);
+        positions.push({
+          vehicleNo: String(b.plateNo ?? ""),
+          nodeName: st.name,
+          nodeOrder: num(b.stationSeq),
+          lat: st.lat,
+          lng: st.lng,
+          crowded: crowd === null || crowd <= 0 ? null : crowd,
+          remainSeats: seats === null || seats < 0 ? null : seats,
+          lowPlate: Number(b.lowPlate) === 1,
+        });
+      }
+
+      positions.sort((a, b) => (a.nodeOrder ?? 0) - (b.nodeOrder ?? 0));
+      const result: GbisLocationResult = { positions, unresolved };
+      routeCache.set(routeId, result);
+      return result;
+    } catch (err) {
+      const stale = routeCache.getStale(routeId, STALE_MAX_MS);
+      if (stale) return stale;
+      throw err;
     }
-    const seats = num(b.remainSeatCnt);
-    const crowd = num(b.crowded);
-    positions.push({
-      vehicleNo: String(b.plateNo ?? ""),
-      nodeName: st.name,
-      nodeOrder: num(b.stationSeq),
-      lat: st.lat,
-      lng: st.lng,
-      crowded: crowd === null || crowd <= 0 ? null : crowd,
-      remainSeats: seats === null || seats < 0 ? null : seats,
-      lowPlate: Number(b.lowPlate) === 1,
-    });
-  }
-
-  positions.sort((a, b) => (a.nodeOrder ?? 0) - (b.nodeOrder ?? 0));
-  return { positions, unresolved };
+  });
 }

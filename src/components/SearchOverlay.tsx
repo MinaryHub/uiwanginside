@@ -113,10 +113,10 @@ export default function SearchOverlay({
   const dq = useDebounced(q.trim(), 300);
   const { data, error, isLoading } = useSWR<ApiEnvelope<SearchPayload>>(
     dq.length >= 2
-      ? `/api/search?q=${encodeURIComponent(dq)}&lat=${center.lat.toFixed(4)}&lng=${center.lng.toFixed(4)}`
+      ? `/api/search?q=${encodeURIComponent(dq)}&lat=${center.lat.toFixed(3)}&lng=${center.lng.toFixed(3)}`
       : null,
     swrFetcher,
-    { keepPreviousData: true, revalidateOnFocus: false },
+    { keepPreviousData: true, revalidateOnFocus: false, dedupingInterval: 60_000 },
   );
 
   const results = useMemo(() => data?.data.places ?? [], [data]);

@@ -1,10 +1,10 @@
-import { timedFetch, ok, fail, nowISO, createTtlCache } from "@/lib/fetcher";
+import { timedFetch, ok, fail, nowISO } from "@/lib/fetcher";
+import { fetchWithSharedCache } from "@/lib/sharedCache";
 import type { NewsPayload, NewsItem } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 const CACHE_SEC = 300;
-const newsCache = createTtlCache<NewsPayload>(CACHE_SEC * 1000, 40);
 
 function stripTags(s: string) {
   return s
@@ -63,39 +63,56 @@ export async function GET(req: Request) {
     return fail(EMPTY, "네이버 검색 인증키가 설정되지 않았습니다.");
   }
 
-  const cached = newsCache.get(query);
-  if (cached) return ok(cached, undefined, CACHE_SEC);
-
   const useNcp = isNcpCredential(id, secret);
+  const normKey = query.replace(/\s+/g, " ").toLowerCase();
+  const isDefault = normKey === "의왕시" || normKey === "의왕";
 
   try {
-    const url = useNcp
-      ? `${NCP_NEWS}?query=${encodeURIComponent(query)}&display=20&sort=date&format=json`
-      : `${LEGACY_NEWS}?query=${encodeURIComponent(query)}&display=20&sort=date`;
-    const res = await timedFetch(url, {
-      headers: useNcp
-        ? { "X-NCP-APIGW-API-KEY-ID": id, "X-NCP-APIGW-API-KEY": secret }
-        : { "X-Naver-Client-Id": id, "X-Naver-Client-Secret": secret },
+    const cached = await fetchWithSharedCache<NewsPayload>({
+      key: `news:${normKey}`,
+      ttlMs: CACHE_SEC * 1000,
+      staleMaxMs: 2 * 3600_000,
+      failCooldownMs: 60_000,
+      // 기본 의왕시 피드는 모든 방문자가 공통으로 보므로 L2 DB 캐시를 공유한다
+      useDb: isDefault,
+      fetcher: async () => {
+        const url = useNcp
+          ? `${NCP_NEWS}?query=${encodeURIComponent(query)}&display=20&sort=date&format=json`
+          : `${LEGACY_NEWS}?query=${encodeURIComponent(query)}&display=20&sort=date`;
+        const res = await timedFetch(url, {
+          headers: useNcp
+            ? { "X-NCP-APIGW-API-KEY-ID": id, "X-NCP-APIGW-API-KEY": secret }
+            : { "X-Naver-Client-Id": id, "X-Naver-Client-Secret": secret },
+        });
+        if (!res.ok) {
+          throw new HttpStatusError(
+            res.status,
+            `naver ${res.status}: ${(await res.text()).slice(0, 140)}`,
+          );
+        }
+        const json = (await res.json()) as {
+          items?: {
+            title?: string;
+            link?: string;
+            originallink?: string;
+            description?: string;
+            pubDate?: string;
+          }[];
+        };
+        const items: NewsItem[] = (json.items ?? []).map((it) => {
+          const link = it.originallink || it.link || "";
+          return {
+            title: stripTags(it.title ?? ""),
+            link,
+            description: stripTags(it.description ?? ""),
+            publishedAt: safeIsoDate(it.pubDate),
+            source: hostOf(link),
+          };
+        });
+        return { value: { items, source: "naver", updatedAt: nowISO() } };
+      },
     });
-    if (!res.ok) {
-      throw new HttpStatusError(res.status, `naver ${res.status}: ${(await res.text()).slice(0, 140)}`);
-    }
-    const json = (await res.json()) as {
-      items?: { title?: string; link?: string; originallink?: string; description?: string; pubDate?: string }[];
-    };
-    const items: NewsItem[] = (json.items ?? []).map((it) => {
-      const link = it.originallink || it.link || "";
-      return {
-        title: stripTags(it.title ?? ""),
-        link,
-        description: stripTags(it.description ?? ""),
-        publishedAt: safeIsoDate(it.pubDate),
-        source: hostOf(link),
-      };
-    });
-    const payload: NewsPayload = { items, source: "naver", updatedAt: nowISO() };
-    newsCache.set(query, payload);
-    return ok(payload, undefined, CACHE_SEC);
+    return ok(cached.value, cached.notice, cached.stale ? 60 : CACHE_SEC);
   } catch (e) {
     console.error("[news]", e);
     const status = e instanceof HttpStatusError ? e.status : null;

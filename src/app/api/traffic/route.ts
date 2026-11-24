@@ -1,5 +1,5 @@
 import { after } from "next/server";
-import { timedFetch, ok, fail, nowISO, asArray } from "@/lib/fetcher";
+import { timedFetch, ok, fail, nowISO, asArray, createInFlight } from "@/lib/fetcher";
 import { UIWANG } from "@/lib/uiwang";
 import { cityTiles, spaceMeanSpeed, roadLevel } from "@/lib/traffic";
 import { UIWANG_ROADS, UIWANG_ROAD_NAMES } from "@/lib/uiwang-roads";
@@ -32,28 +32,66 @@ interface Snapshot {
   failedAgo: number;
 }
 
+/** DB 미연결 환경·동일 인스턴스 동시 요청 방어용 L1 스냅샷 */
+let memSnap: { payload: TrafficPayload | null; at: number; failedAt: number } = {
+  payload: null,
+  at: 0,
+  failedAt: 0,
+};
+
+interface TrafficResult {
+  ok: boolean;
+  payload: TrafficPayload;
+  notice?: string;
+  cacheSec?: number;
+}
+const trafficInFlight = createInFlight<TrafficResult>();
+
+function readMemSnapshot(): Snapshot | null {
+  if (!memSnap.payload && !memSnap.failedAt) return null;
+  return {
+    payload: memSnap.payload,
+    age: memSnap.at ? Date.now() - memSnap.at : Infinity,
+    failedAgo: memSnap.failedAt ? Date.now() - memSnap.failedAt : Infinity,
+  };
+}
+
 async function readSnapshot(): Promise<Snapshot | null> {
-  if (!hasDb()) return null;
+  const mem = readMemSnapshot();
+  if (mem?.payload && mem.age < FRESH_MS) return mem;
+  if (!hasDb()) return mem;
   try {
     await ensureSchema();
     const sql = getSql();
     const rows = (await sql`
       SELECT payload, at, failed_at FROM traffic_snapshot WHERE id = 'latest'
     `) as { payload: TrafficPayload | null; at: string | null; failed_at: string | null }[];
-    if (rows.length === 0) return null;
+    if (rows.length === 0) return mem;
     const r = rows[0];
+    const atMs = r.at ? new Date(r.at).getTime() : 0;
+    const failedMs = r.failed_at ? new Date(r.failed_at).getTime() : 0;
+    if (r.payload && atMs > memSnap.at) {
+      memSnap = { payload: r.payload, at: atMs, failedAt: failedMs };
+    } else if (failedMs > memSnap.failedAt) {
+      memSnap.failedAt = failedMs;
+    }
     return {
-      payload: r.payload,
-      age: r.at ? Date.now() - new Date(r.at).getTime() : Infinity,
-      failedAgo: r.failed_at ? Date.now() - new Date(r.failed_at).getTime() : Infinity,
+      payload: r.payload ?? mem?.payload ?? null,
+      age: atMs ? Date.now() - atMs : mem?.age ?? Infinity,
+      failedAgo: failedMs ? Date.now() - failedMs : mem?.failedAgo ?? Infinity,
     };
   } catch (e) {
     console.error("[traffic:read]", e);
-    return null;
+    return mem;
   }
 }
 
 async function writeSnapshot(payload: TrafficPayload | null, failed: boolean) {
+  if (failed) {
+    memSnap.failedAt = Date.now();
+  } else if (payload) {
+    memSnap = { payload, at: Date.now(), failedAt: 0 };
+  }
   if (!hasDb()) return;
   try {
     await ensureSchema();
@@ -168,123 +206,150 @@ export async function GET() {
     return staleOr("ITS 에 연결되지 않습니다.", snap);
   }
 
-  try {
-    const [evResult, tiled] = await Promise.all([
-      timedFetch(
-        `${ITS}/eventInfo?apiKey=${encodeURIComponent(key)}&type=all&eventType=all&${BBOX}&getType=json`,
-        {},
-        12_000,
-      )
-        .then(async (r) => (r.ok ? ((await r.json()) as { body?: { items?: ItsEvent | ItsEvent[] } }) : null))
-        .catch(() => null),
-      fetchTiles(key),
-    ]);
+  const res = await trafficInFlight("latest", async (): Promise<TrafficResult> => {
+    const again = readMemSnapshot();
+    if (again?.payload && again.age < FRESH_MS) {
+      return { ok: true, payload: again.payload, cacheSec: CACHE_SEC };
+    }
+    if (again && again.failedAgo < RETRY_MS) {
+      return staleResult("ITS 에 연결되지 않습니다.", again);
+    }
 
-    const incidents: Incident[] = [];
-    if (evResult) {
-      const rows = asArray<ItsEvent>(evResult?.body?.items);
-      for (const [i, r] of rows.entries()) {
-        const eventType = r.eventType ?? "";
-        const detail = r.eventDetailType ?? "";
-        const lanes = Number(r.lanesBlocked);
-        incidents.push({
-          id: `${r.linkId ?? "ev"}-${i}`,
-          kind: classify(eventType, detail),
-          type: detail || eventType || "돌발상황",
-          message:
-            (r.message ?? detail ?? "") +
-            (Number.isFinite(lanes) && lanes > 0 ? ` · ${lanes}개 차로 차단` : ""),
-          road: r.roadName || r.roadNo || "",
-          lat: parseCoord(r.coordY),
-          lng: parseCoord(r.coordX),
-          startedAt: parseItsDate(r.startDate),
+    try {
+      const [evResult, tiled] = await Promise.all([
+        timedFetch(
+          `${ITS}/eventInfo?apiKey=${encodeURIComponent(key)}&type=all&eventType=all&${BBOX}&getType=json`,
+          {},
+          12_000,
+        )
+          .then(async (r) => (r.ok ? ((await r.json()) as { body?: { items?: ItsEvent | ItsEvent[] } }) : null))
+          .catch(() => null),
+        fetchTiles(key),
+      ]);
+
+      const incidents: Incident[] = [];
+      if (evResult) {
+        const rows = asArray<ItsEvent>(evResult?.body?.items);
+        for (const [i, r] of rows.entries()) {
+          const eventType = r.eventType ?? "";
+          const detail = r.eventDetailType ?? "";
+          const lanes = Number(r.lanesBlocked);
+          incidents.push({
+            id: `${r.linkId ?? "ev"}-${i}`,
+            kind: classify(eventType, detail),
+            type: detail || eventType || "돌발상황",
+            message:
+              (r.message ?? detail ?? "") +
+              (Number.isFinite(lanes) && lanes > 0 ? ` · ${lanes}개 차로 차단` : ""),
+            road: r.roadName || r.roadNo || "",
+            lat: parseCoord(r.coordY),
+            lng: parseCoord(r.coordX),
+            startedAt: parseItsDate(r.startDate),
+          });
+        }
+      }
+
+      const inCity = incidents.filter(
+        (i) => i.lat == null || i.lng == null || isInsideUiwang(i.lat, i.lng),
+      );
+
+      const seenIncident = new Set<string>();
+      const deduped = inCity.filter((i) => {
+        const k =
+          i.lat != null && i.lng != null
+            ? `${i.type}|${i.lat.toFixed(5)}|${i.lng.toFixed(5)}`
+            : `${i.type}|${i.road}|${i.message}`;
+        if (seenIncident.has(k)) return false;
+        seenIncident.add(k);
+        return true;
+      });
+
+      const bucket = new Map<string, { road: string; tile: number; s: Samples }>();
+      for (const { tile, rows } of tiled) {
+        for (const r of rows) {
+          const name = (r.roadName ?? "").trim();
+          const speed = Number(r.speed);
+          const travelTime = Number(r.travelTime);
+          if (!name || name === "-") continue;
+          if (!UIWANG_ROAD_NAMES.has(name)) continue;
+          if (!Number.isFinite(speed) || speed <= 0) continue;
+          if (!Number.isFinite(travelTime) || travelTime <= 0) continue;
+          const k = `${name}|${tile}`;
+          const cur = bucket.get(k) ?? { road: name, tile, s: [] };
+          cur.s.push({ speed, travelTime });
+          bucket.set(k, cur);
+        }
+      }
+
+      const speeds: RoadSpeed[] = [...bucket.values()].map((b) => ({
+        road: b.road,
+        tile: b.tile,
+        speed: Math.round(spaceMeanSpeed(b.s) * 10) / 10,
+        links: b.s.length,
+      }));
+
+      const worstByRoad = new Map<string, TrafficLink>();
+      for (const s of speeds) {
+        const cur = worstByRoad.get(s.road);
+        if (cur && cur.speed <= s.speed) continue;
+        worstByRoad.set(s.road, {
+          id: `${s.road}-${s.tile}`,
+          name: s.road,
+          speed: s.speed,
+          level: roadLevel(s.speed, EXPRESSWAY_NAMES.has(s.road)),
+          lat: null,
+          lng: null,
         });
       }
-    }
+      const roadLinks = [...worstByRoad.values()].sort((a, b) => a.speed - b.speed);
 
-    const inCity = incidents.filter(
-      (i) => i.lat == null || i.lng == null || isInsideUiwang(i.lat, i.lng),
-    );
-
-    const seenIncident = new Set<string>();
-    const deduped = inCity.filter((i) => {
-      const k =
-        i.lat != null && i.lng != null
-          ? `${i.type}|${i.lat.toFixed(5)}|${i.lng.toFixed(5)}`
-          : `${i.type}|${i.road}|${i.message}`;
-      if (seenIncident.has(k)) return false;
-      seenIncident.add(k);
-      return true;
-    });
-
-    const bucket = new Map<string, { road: string; tile: number; s: Samples }>();
-    for (const { tile, rows } of tiled) {
-      for (const r of rows) {
-        const name = (r.roadName ?? "").trim();
-        const speed = Number(r.speed);
-        const travelTime = Number(r.travelTime);
-        if (!name || name === "-") continue;
-        if (!UIWANG_ROAD_NAMES.has(name)) continue;
-        if (!Number.isFinite(speed) || speed <= 0) continue;
-        if (!Number.isFinite(travelTime) || travelTime <= 0) continue;
-        const k = `${name}|${tile}`;
-        const cur = bucket.get(k) ?? { road: name, tile, s: [] };
-        cur.s.push({ speed, travelTime });
-        bucket.set(k, cur);
+      const payload: TrafficPayload = {
+        incidents: deduped,
+        links: roadLinks.slice(0, 12),
+        speeds,
+        source: "its",
+        updatedAt: nowISO(),
+      };
+      if (speeds.length === 0 && deduped.length === 0) {
+        memSnap.failedAt = Date.now();
+        after(() => writeSnapshot(null, true));
+        return staleResult("ITS 에서 소통정보를 받지 못했습니다.", snap);
       }
-    }
-
-    const speeds: RoadSpeed[] = [...bucket.values()].map((b) => ({
-      road: b.road,
-      tile: b.tile,
-      speed: Math.round(spaceMeanSpeed(b.s) * 10) / 10,
-      links: b.s.length,
-    }));
-
-    const worstByRoad = new Map<string, TrafficLink>();
-    for (const s of speeds) {
-      const cur = worstByRoad.get(s.road);
-      if (cur && cur.speed <= s.speed) continue;
-      worstByRoad.set(s.road, {
-        id: `${s.road}-${s.tile}`,
-        name: s.road,
-        speed: s.speed,
-        level: roadLevel(s.speed, EXPRESSWAY_NAMES.has(s.road)),
-        lat: null,
-        lng: null,
-      });
-    }
-    const roadLinks = [...worstByRoad.values()].sort((a, b) => a.speed - b.speed);
-
-    const payload: TrafficPayload = {
-      incidents: deduped,
-      links: roadLinks.slice(0, 12),
-      speeds,
-      source: "its",
-      updatedAt: nowISO(),
-    };
-    if (speeds.length === 0 && deduped.length === 0) {
+      memSnap = { payload, at: Date.now(), failedAt: 0 };
+      after(() => writeSnapshot(payload, false));
+      const notice = !evResult
+        ? "돌발상황 조회에 일시 실패해 소통정보만 표시합니다."
+        : deduped.length === 0
+          ? "현재 의왕시 범위에 보고된 돌발상황이 없습니다."
+          : undefined;
+      return { ok: true, payload, notice, cacheSec: CACHE_SEC };
+    } catch (e) {
+      console.error("[traffic]", e);
+      memSnap.failedAt = Date.now();
       after(() => writeSnapshot(null, true));
-      return staleOr("ITS 에서 소통정보를 받지 못했습니다.", snap);
+      return staleResult(`ITS API 호출 실패: ${e instanceof Error ? e.message : e}`, snap);
     }
-    after(() => writeSnapshot(payload, false));
-    const notice = !evResult
-      ? "돌발상황 조회에 일시 실패해 소통정보만 표시합니다."
-      : deduped.length === 0
-        ? "현재 의왕시 범위에 보고된 돌발상황이 없습니다."
-        : undefined;
-    return ok(payload, notice, CACHE_SEC);
-  } catch (e) {
-    console.error("[traffic]", e);
-    after(() => writeSnapshot(null, true));
-    return staleOr(`ITS API 호출 실패: ${e instanceof Error ? e.message : e}`, snap);
+  });
+
+  return res.ok
+    ? ok(res.payload, res.notice, res.cacheSec ?? CACHE_SEC)
+    : fail(res.payload, res.notice ?? "ITS 조회 실패");
+}
+
+function staleResult(reason: string, snap: Snapshot | null): TrafficResult {
+  if (snap?.payload && snap.age < STALE_MAX_MS) {
+    const min = Math.max(1, Math.round(snap.age / 60_000));
+    return {
+      ok: true,
+      payload: snap.payload,
+      notice: `${reason} — ${min}분 전 값을 보여주고 있습니다.`,
+      cacheSec: 30,
+    };
   }
+  return { ok: false, payload: EMPTY, notice: reason };
 }
 
 function staleOr(reason: string, snap: Snapshot | null) {
-  if (snap?.payload && snap.age < STALE_MAX_MS) {
-    const min = Math.max(1, Math.round(snap.age / 60_000));
-    return ok(snap.payload, `${reason} — ${min}분 전 값을 보여주고 있습니다.`, 30);
-  }
-  return fail(EMPTY, reason);
+  const r = staleResult(reason, snap);
+  return r.ok ? ok(r.payload, r.notice, r.cacheSec ?? 30) : fail(r.payload, r.notice ?? reason);
 }

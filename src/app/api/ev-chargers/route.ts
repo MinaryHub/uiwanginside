@@ -1,5 +1,6 @@
 import { ok, fail } from "@/lib/fetcher";
 import { fetchEvChargers } from "@/lib/evChargers";
+import { fetchWithSharedCache } from "@/lib/sharedCache";
 import type { EvChargersPayload } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -21,8 +22,14 @@ export async function GET() {
   }
 
   try {
-    const data = await fetchEvChargers(key);
-    return ok(data, undefined, 120);
+    const cached = await fetchWithSharedCache<EvChargersPayload>({
+      key: "ev-chargers",
+      ttlMs: 3 * 60_000,
+      staleMaxMs: 60 * 60_000,
+      failCooldownMs: 60_000,
+      fetcher: async () => ({ value: await fetchEvChargers(key) }),
+    });
+    return ok(cached.value, cached.notice, cached.stale ? 60 : 120);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return fail(EMPTY(), `전기차 충전소 조회 실패: ${message}`);

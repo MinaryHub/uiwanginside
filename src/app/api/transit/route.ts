@@ -6,6 +6,7 @@ import {
   parseDataGoKr,
   normalizeServiceKey,
   createTtlCache,
+  createInFlight,
 } from "@/lib/fetcher";
 import { fetchOverpassBusStops } from "@/lib/overpass";
 import { fetchUiwangStations, nearestStations } from "@/lib/busStations";
@@ -16,7 +17,11 @@ export const dynamic = "force-dynamic";
 
 /** 도착정보는 수십 초 단위로 바뀐다 */
 const CACHE_SEC = 20;
-const transitCache = createTtlCache<{ payload: TransitPayload; notice?: string }>(15_000, 60);
+const transitCache = createTtlCache<{ payload: TransitPayload; notice?: string }>(20_000, 80);
+/** 정류소 단위 캐시 + single-flight — 인접 사용자가 같은 정류소를 조회할 때 GBIS 중복 호출을 막는다 */
+const stationArrivalCache = createTtlCache<BusArrival[]>(20_000, 250);
+const stationArrivalInFlight = createInFlight<BusArrival[]>();
+const STATION_STALE_MS = 3 * 60_000;
 
 /** 경기버스 도착정보 (공공데이터포털 6410000) */
 const ARRIVAL =
@@ -54,44 +59,61 @@ function seconds(sec: unknown, min: unknown): number | null {
 const EMPTY: TransitPayload = { stops: [], source: "gbis", updatedAt: "" };
 
 async function fetchArrivals(key: string, stationId: string): Promise<BusArrival[]> {
-  const res = await timedFetch(
-    `${ARRIVAL}?serviceKey=${normalizeServiceKey(key)}&stationId=${stationId}`,
-    {},
-    10_000,
-  );
-  const json = parseDataGoKr(await res.text()) as {
-    response?: {
-      msgHeader?: { resultCode?: number };
-      msgBody?: { busArrivalList?: unknown };
-    };
-  };
-  const code = json?.response?.msgHeader?.resultCode;
-  // 0 정상, 4 데이터 없음(운행 종료 등)
-  if (code != null && Number(code) !== 0 && Number(code) !== 4) {
-    throw new Error(`GBIS resultCode ${code}`);
-  }
-  const raw = json?.response?.msgBody?.busArrivalList;
-  const rows: RawArrival[] = Array.isArray(raw) ? raw : raw ? [raw as RawArrival] : [];
+  const hit = stationArrivalCache.get(stationId);
+  if (hit) return hit;
 
-  return rows
-    .map((a): BusArrival => {
-      const seats = num(a.remainSeatCnt1);
-      const crowd = num(a.crowded1);
-      return {
-        routeId: String(a.routeId ?? ""),
-        routeName: String(a.routeName ?? a.routeId ?? ""),
-        destName: a.routeDestName ? String(a.routeDestName) : "",
-        predictSec: seconds(a.predictTimeSec1, a.predictTime1),
-        predictSec2: seconds(a.predictTimeSec2, a.predictTime2),
-        remainSeats: seats === null || seats < 0 ? null : seats,
-        crowded: crowd === null || crowd <= 0 ? null : crowd,
-        stationsLeft: num(a.locationNo1),
-        plateNo: String(a.plateNo1 ?? ""),
-        lowPlate: Number(a.lowPlate1) === 1,
+  return stationArrivalInFlight(stationId, async () => {
+    const again = stationArrivalCache.get(stationId);
+    if (again) return again;
+
+    try {
+      const res = await timedFetch(
+        `${ARRIVAL}?serviceKey=${normalizeServiceKey(key)}&stationId=${stationId}`,
+        {},
+        10_000,
+      );
+      const json = parseDataGoKr(await res.text()) as {
+        response?: {
+          msgHeader?: { resultCode?: number };
+          msgBody?: { busArrivalList?: unknown };
+        };
       };
-    })
-    .filter((a) => a.routeName)
-    .sort((x, y) => (x.predictSec ?? 9e9) - (y.predictSec ?? 9e9));
+      const code = json?.response?.msgHeader?.resultCode;
+      // 0 정상, 4 데이터 없음(운행 종료 등)
+      if (code != null && Number(code) !== 0 && Number(code) !== 4) {
+        throw new Error(`GBIS resultCode ${code}`);
+      }
+      const raw = json?.response?.msgBody?.busArrivalList;
+      const rows: RawArrival[] = Array.isArray(raw) ? raw : raw ? [raw as RawArrival] : [];
+
+      const arrivals = rows
+        .map((a): BusArrival => {
+          const seats = num(a.remainSeatCnt1);
+          const crowd = num(a.crowded1);
+          return {
+            routeId: String(a.routeId ?? ""),
+            routeName: String(a.routeName ?? a.routeId ?? ""),
+            destName: a.routeDestName ? String(a.routeDestName) : "",
+            predictSec: seconds(a.predictTimeSec1, a.predictTime1),
+            predictSec2: seconds(a.predictTimeSec2, a.predictTime2),
+            remainSeats: seats === null || seats < 0 ? null : seats,
+            crowded: crowd === null || crowd <= 0 ? null : crowd,
+            stationsLeft: num(a.locationNo1),
+            plateNo: String(a.plateNo1 ?? ""),
+            lowPlate: Number(a.lowPlate1) === 1,
+          };
+        })
+        .filter((a) => a.routeName)
+        .sort((x, y) => (x.predictSec ?? 9e9) - (y.predictSec ?? 9e9));
+
+      stationArrivalCache.set(stationId, arrivals);
+      return arrivals;
+    } catch (err) {
+      const stale = stationArrivalCache.getStale(stationId, STATION_STALE_MS);
+      if (stale) return stale;
+      throw err;
+    }
+  });
 }
 
 async function osmOnly(lat: number, lng: number, limit: number, reason: string) {

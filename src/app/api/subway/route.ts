@@ -1,5 +1,6 @@
 import { ok, fail } from "@/lib/fetcher";
 import { fetchUiwangSubway, UIWANG_STATION } from "@/lib/subway";
+import { fetchWithSharedCache } from "@/lib/sharedCache";
 import type { SubwayPayload } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -19,12 +20,21 @@ const EMPTY = (): SubwayPayload => ({
 export async function GET() {
   const key = process.env.SEOUL_SUBWAY_KEY;
   try {
-    const data = await fetchUiwangSubway(key);
-    const notice =
-      data.source === "seoul-sample"
-        ? "서울 열린데이터광장 샘플 키(최대 5건)로 조회 중 — SEOUL_SUBWAY_KEY 등록 시 전체 열차 표시"
-        : undefined;
-    return ok(data, notice, 20);
+    const cached = await fetchWithSharedCache<SubwayPayload>({
+      key: `subway:${key ? "live" : "sample"}`,
+      ttlMs: 25_000,
+      staleMaxMs: 3 * 60_000,
+      failCooldownMs: 20_000,
+      fetcher: async () => {
+        const data = await fetchUiwangSubway(key);
+        const notice =
+          data.source === "seoul-sample"
+            ? "서울 열린데이터광장 샘플 키(최대 5건)로 조회 중 — SEOUL_SUBWAY_KEY 등록 시 전체 열차 표시"
+            : undefined;
+        return { value: data, notice };
+      },
+    });
+    return ok(cached.value, cached.notice, cached.stale ? 15 : 20);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return fail(

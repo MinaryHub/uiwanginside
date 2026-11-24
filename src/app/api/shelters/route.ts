@@ -1,5 +1,6 @@
 import { ok, fail } from "@/lib/fetcher";
 import { fetchUiwangShelters } from "@/lib/shelters";
+import { fetchWithSharedCache } from "@/lib/sharedCache";
 import type { SheltersPayload } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -23,8 +24,14 @@ export async function GET() {
   }
 
   try {
-    const data = await fetchUiwangShelters({ safetyKey, moisKey });
-    return ok(data, undefined, 3600);
+    const cached = await fetchWithSharedCache<SheltersPayload>({
+      key: "shelters",
+      ttlMs: 6 * 3600_000,
+      staleMaxMs: 48 * 3600_000,
+      failCooldownMs: 120_000,
+      fetcher: async () => ({ value: await fetchUiwangShelters({ safetyKey, moisKey }) }),
+    });
+    return ok(cached.value, cached.notice, cached.stale ? 300 : 3600);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return fail(EMPTY(), `무더위·한파 쉼터 조회 실패: ${message}`);

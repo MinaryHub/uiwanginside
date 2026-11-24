@@ -9,6 +9,7 @@ import {
   normalizeServiceKey,
   asArray,
 } from "@/lib/fetcher";
+import { fetchWithSharedCache } from "@/lib/sharedCache";
 import { UIWANG } from "@/lib/uiwang";
 import { haversine } from "@/lib/geo";
 import type { EmergencyPayload, EmergencyRoom } from "@/lib/types";
@@ -73,7 +74,6 @@ interface Base {
 }
 
 const listCache = createTtlCache<Base[]>(6 * 60 * 60_000, 2);
-const bedCache = createTtlCache<EmergencyPayload>(60_000, 2);
 
 async function nearbyList(key: string): Promise<Base[]> {
   const hit = listCache.get("list");
@@ -119,51 +119,58 @@ export async function GET() {
   const key = process.env.EMERGENCY_SERVICE_KEY ?? process.env.KMA_SERVICE_KEY;
   if (!key) return fail(EMPTY, "응급의료 인증키가 설정되지 않았습니다.");
 
-  const cached = bedCache.get("beds");
-  if (cached) return ok(cached, undefined, 60);
-
-  let base: Base[];
   try {
-    base = await nearbyList(key);
+    const cached = await fetchWithSharedCache<EmergencyPayload>({
+      key: "emergency:beds",
+      ttlMs: 60_000,
+      staleMaxMs: 30 * 60_000,
+      failCooldownMs: 45_000,
+      fetcher: async () => {
+        const base = await nearbyList(key);
+        if (!base.length) throw new Error("근처 응급실을 찾지 못했습니다.");
+
+        let beds = new Map<string, Raw>();
+        let notice: string | undefined;
+        const settled = await Promise.allSettled(
+          REGIONS.map((r) => call("getEmrrmRltmUsefulSckbdInfoInqire", key, { STAGE1: r })),
+        );
+        const rows = settled.flatMap((s) => (s.status === "fulfilled" ? s.value : []));
+        if (rows.length > 0) {
+          beds = new Map(rows.filter((r) => r.hpid).map((r) => [r.hpid!, r]));
+        }
+        const rejected = settled.filter((s) => s.status === "rejected");
+        if (rejected.length === REGIONS.length) {
+          const err = rejected[0].status === "rejected" ? rejected[0].reason : "";
+          console.error("[emergency:beds]", err);
+          notice = `실시간 병상 조회 실패 — ${err instanceof Error ? err.message : err}`;
+        } else if (rejected.length > 0) {
+          notice = "일부 지역 실시간 병상 조회가 지연되어 가용 정보만 표시합니다.";
+        }
+
+        const rooms: EmergencyRoom[] = base.map((b) => {
+          const r = beds.get(b.id);
+          return {
+            ...b,
+            phone: r?.dutyTel3 || b.phone,
+            beds: num(r?.hvec),
+            totalBeds: num(r?.hvs01),
+            ct: yn(r?.hvctayn),
+            mri: yn(r?.hvmriayn),
+            ventilator: yn(r?.hvventiayn),
+            reportedAt: kstStamp(r?.hvidate),
+          };
+        });
+
+        return {
+          value: { rooms, source: "nmc", updatedAt: nowISO() },
+          notice,
+          customTtlMs: notice ? 30_000 : undefined,
+        };
+      },
+    });
+    return ok(cached.value, cached.notice, cached.stale || cached.notice ? 30 : 60);
   } catch (e) {
-    console.error("[emergency:list]", e);
-    return fail(EMPTY, `응급실 목록 조회 실패 — ${e instanceof Error ? e.message : e}`);
+    console.error("[emergency]", e);
+    return fail(EMPTY, `응급실 조회 실패 — ${e instanceof Error ? e.message : e}`);
   }
-  if (!base.length) return fail(EMPTY, "근처 응급실을 찾지 못했습니다.");
-
-  let beds = new Map<string, Raw>();
-  let notice: string | undefined;
-  const settled = await Promise.allSettled(
-    REGIONS.map((r) => call("getEmrrmRltmUsefulSckbdInfoInqire", key, { STAGE1: r })),
-  );
-  const rows = settled.flatMap((s) => (s.status === "fulfilled" ? s.value : []));
-  if (rows.length > 0) {
-    beds = new Map(rows.filter((r) => r.hpid).map((r) => [r.hpid!, r]));
-  }
-  const rejected = settled.filter((s) => s.status === "rejected");
-  if (rejected.length === REGIONS.length) {
-    const err = rejected[0].status === "rejected" ? rejected[0].reason : "";
-    console.error("[emergency:beds]", err);
-    notice = `실시간 병상 조회 실패 — ${err instanceof Error ? err.message : err}`;
-  } else if (rejected.length > 0) {
-    notice = "일부 지역 실시간 병상 조회가 지연되어 가용 정보만 표시합니다.";
-  }
-
-  const rooms: EmergencyRoom[] = base.map((b) => {
-    const r = beds.get(b.id);
-    return {
-      ...b,
-      phone: r?.dutyTel3 || b.phone,
-      beds: num(r?.hvec),
-      totalBeds: num(r?.hvs01),
-      ct: yn(r?.hvctayn),
-      mri: yn(r?.hvmriayn),
-      ventilator: yn(r?.hvventiayn),
-      reportedAt: kstStamp(r?.hvidate),
-    };
-  });
-
-  const payload: EmergencyPayload = { rooms, source: "nmc", updatedAt: nowISO() };
-  if (!notice) bedCache.set("beds", payload);
-  return ok(payload, notice, notice ? undefined : 60);
 }

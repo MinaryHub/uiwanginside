@@ -1,5 +1,6 @@
 import { ok, fail } from "@/lib/fetcher";
 import { fetchLocalCurrency } from "@/lib/localCurrency";
+import { fetchWithSharedCache } from "@/lib/sharedCache";
 import type { LocalCurrencyPayload } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -22,8 +23,14 @@ export async function GET() {
   }
 
   try {
-    const data = await fetchLocalCurrency(ggKey);
-    return ok(data, undefined, 3600);
+    const cached = await fetchWithSharedCache<LocalCurrencyPayload>({
+      key: "local-currency",
+      ttlMs: 6 * 3600_000,
+      staleMaxMs: 48 * 3600_000,
+      failCooldownMs: 120_000,
+      fetcher: async () => ({ value: await fetchLocalCurrency(ggKey) }),
+    });
+    return ok(cached.value, cached.notice, cached.stale ? 300 : 3600);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return fail(EMPTY(), `의왕사랑상품권 가맹점 조회 실패: ${message}`);
