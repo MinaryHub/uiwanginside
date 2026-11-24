@@ -102,16 +102,27 @@ interface NaverItem {
   pubDate: string;
 }
 
+const NCP_NEWS = "https://naverapihub.apigw.ntruss.com/search/v1/news";
+const LEGACY_NEWS = "https://openapi.naver.com/v1/search/news.json";
+
 async function fetchMunicipalNews(clientId: string, clientSecret: string): Promise<CityNoticeItem[]> {
   const query = "의왕시 (모집 OR 행사 OR 공고 OR 지원 OR 개관 OR 축제)";
-  const url = `https://openapi.naver.com/v1/search/news.json?query=${encodeURIComponent(query)}&display=18&sort=date`;
+  const useNcp = clientSecret.length > 20 || clientId.length === 10;
+  const url = useNcp
+    ? `${NCP_NEWS}?query=${encodeURIComponent(query)}&display=18&sort=date&format=json`
+    : `${LEGACY_NEWS}?query=${encodeURIComponent(query)}&display=18&sort=date`;
   const res = await timedFetch(
     url,
     {
-      headers: {
-        "X-Naver-Client-Id": clientId,
-        "X-Naver-Client-Secret": clientSecret,
-      },
+      headers: useNcp
+        ? {
+            "X-NCP-APIGW-API-KEY-ID": clientId,
+            "X-NCP-APIGW-API-KEY": clientSecret,
+          }
+        : {
+            "X-Naver-Client-Id": clientId,
+            "X-Naver-Client-Secret": clientSecret,
+          },
     },
     8_000,
   );
