@@ -1,5 +1,5 @@
 import { after } from "next/server";
-import { timedFetch, ok, fail, createTtlCache } from "@/lib/fetcher";
+import { timedFetch, ok, fail, createTtlCache, createInFlight } from "@/lib/fetcher";
 import { fetchOverpassPlaces } from "@/lib/overpass";
 import { haversine, isInsideUiwang } from "@/lib/geo";
 import { UIWANG, CATEGORY_MAP, type CategoryKey } from "@/lib/uiwang";
@@ -163,15 +163,18 @@ async function searchCategory(
 }
 
 /**
- * 5분 캐시. 좌표는 소수점 3자리(약 100m)로 뭉뚱그려 키를 만든다.
+ * 10분 캐시 + single-flight. 좌표는 소수점 3자리(약 100m)로 뭉뚱그려 키를 만든다.
  */
-const cache = createTtlCache<{
+type PlacesCacheEntry = {
   places: Place[];
   source: PlaceSource;
   total: number;
   notice?: string;
-}>(5 * 60_000);
-const CACHE_TTL_SEC = 300;
+};
+const cache = createTtlCache<PlacesCacheEntry>(10 * 60_000, 150);
+const placesInFlight = createInFlight<PlacesCacheEntry>();
+const CACHE_TTL_SEC = 600;
+const STALE_MAX_MS = 30 * 60_000;
 
 export async function GET(req: Request) {
   const sp = new URL(req.url).searchParams;
@@ -238,62 +241,79 @@ export async function GET(req: Request) {
   }
 
   const cacheKey = `${wanted.slice().sort().join(",")}|${roundRect(rect)}`;
-  const cached = cache.get(cacheKey);
-  if (cached) {
-    const places = cached.places
+  const sendEntry = (entry: PlacesCacheEntry) => {
+    const places = entry.places
       .map((p) => ({ ...p, distance: haversine(lat, lng, p.lat, p.lng) }))
       .sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
     return ok(
-      { places, source: cached.source, total: cached.total },
-      cached.notice,
-      cached.source === "kakao" ? CACHE_TTL_SEC : undefined,
+      { places, source: entry.source, total: entry.total },
+      entry.notice,
+      entry.source === "kakao" ? CACHE_TTL_SEC : 300,
     );
-  }
+  };
+
+  const cached = cache.get(cacheKey);
+  if (cached) return sendEntry(cached);
 
   const key = process.env.KAKAO_REST_KEY;
 
-  // 1순위: 카카오 로컬 (전화번호·상세페이지까지 제공)
-  if (key) {
-    try {
-      const results = await Promise.all(
-        codes.map((c) => searchCategory(key, c, rect, { lat, lng })),
-      );
-      const places = [...results.flatMap((r) => r.places), ...facilities];
-      places.sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
-      const payload = {
-        places,
-        source: "kakao" as const,
-        total: results.reduce((s, r) => s + r.total, 0) + facilities.length,
-      };
-      cache.set(cacheKey, payload);
-      return ok(payload, undefined, CACHE_TTL_SEC);
-    } catch (e) {
-      console.error("[places:kakao]", e);
-    }
-  }
-
-  // 2순위: OpenStreetMap — 무인증이지만 샘플이 아닌 실제 데이터
   try {
-    const places = [
-      ...(await fetchOverpassPlaces(codes, rect, { lat, lng })).filter((p) =>
-        isInsideUiwang(p.lat, p.lng),
-      ),
-      ...facilities,
-    ];
-    places.sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
-    const notice = key
-      ? "카카오 로컬 호출에 실패해 OpenStreetMap 데이터로 대체했습니다. (© OpenStreetMap contributors)"
-      : "KAKAO_REST_KEY 미설정 — OpenStreetMap 실제 데이터로 표시 중입니다. (© OpenStreetMap contributors)";
-    cache.set(cacheKey, { places, source: "osm", total: places.length, notice });
-    return ok({ places, source: "osm" as const, total: places.length }, notice);
-  } catch (e) {
-    console.error("[places:osm]", e);
-    if (facilities.length > 0) {
-      return ok(
-        { places: facilities, source: "public" as PlaceSource, total: facilities.length },
-        "카카오·OpenStreetMap 조회에 실패해 공공 표준데이터 시설만 표시합니다.",
-      );
-    }
+    const entry = await placesInFlight(cacheKey, async (): Promise<PlacesCacheEntry> => {
+      const again = cache.get(cacheKey);
+      if (again) return again;
+
+      // 1순위: 카카오 로컬 (전화번호·상세페이지까지 제공)
+      if (key) {
+        try {
+          const results = await Promise.all(
+            codes.map((c) => searchCategory(key, c, rect, { lat, lng })),
+          );
+          const places = [...results.flatMap((r) => r.places), ...facilities];
+          places.sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
+          const payload: PlacesCacheEntry = {
+            places,
+            source: "kakao",
+            total: results.reduce((s, r) => s + r.total, 0) + facilities.length,
+          };
+          cache.set(cacheKey, payload);
+          return payload;
+        } catch (e) {
+          console.error("[places:kakao]", e);
+        }
+      }
+
+      // 2순위: OpenStreetMap — 무인증이지만 샘플이 아닌 실제 데이터
+      try {
+        const places = [
+          ...(await fetchOverpassPlaces(codes, rect, { lat, lng })).filter((p) =>
+            isInsideUiwang(p.lat, p.lng),
+          ),
+          ...facilities,
+        ];
+        places.sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
+        const notice = key
+          ? "카카오 로컬 호출에 실패해 OpenStreetMap 데이터로 대체했습니다. (© OpenStreetMap contributors)"
+          : "KAKAO_REST_KEY 미설정 — OpenStreetMap 실제 데이터로 표시 중입니다. (© OpenStreetMap contributors)";
+        const payload: PlacesCacheEntry = { places, source: "osm", total: places.length, notice };
+        cache.set(cacheKey, payload, 5 * 60_000);
+        return payload;
+      } catch (e) {
+        console.error("[places:osm]", e);
+        const stale = cache.getStale(cacheKey, STALE_MAX_MS);
+        if (stale) return stale;
+        if (facilities.length > 0) {
+          return {
+            places: facilities,
+            source: "public",
+            total: facilities.length,
+            notice: "카카오·OpenStreetMap 조회에 실패해 공공 표준데이터 시설만 표시합니다.",
+          };
+        }
+        throw e;
+      }
+    });
+    return sendEntry(entry);
+  } catch {
     return fail(
       { places: [], source: "osm" as const, total: 0 },
       "카카오·OpenStreetMap 모두 조회에 실패했습니다.",

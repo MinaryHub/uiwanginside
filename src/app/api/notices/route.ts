@@ -1,10 +1,5 @@
-import {
-  createInFlight,
-  createTtlCache,
-  fail,
-  ok,
-  timedFetch,
-} from "@/lib/fetcher";
+import { fail, ok, timedFetch } from "@/lib/fetcher";
+import { fetchWithSharedCache } from "@/lib/sharedCache";
 import type { CityNoticeItem, CityNoticeKind, NoticesPayload } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -21,9 +16,6 @@ export const maxDuration = 20;
 const GG_EVENTS = "https://openapi.gg.go.kr/GGCULTUREVENTSTUS";
 const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/126.0 Safari/537.36";
-
-const cache = createTtlCache<NoticesPayload>(10 * 60_000, 2);
-const inFlight = createInFlight<NoticesPayload>();
 
 function stripHtml(s: string): string {
   return s
@@ -180,45 +172,46 @@ export async function GET() {
     return fail(EMPTY(), "GG_DATA_KEY 또는 NAVER_CLIENT_ID/SECRET 이 설정되지 않았습니다.");
   }
 
-  const hit = cache.get("uiwang");
-  if (hit) {
-    return ok(hit, undefined, 300);
-  }
-
   try {
-    const payload = await inFlight("uiwang", async () => {
-      const [ggRes, nvRes] = await Promise.allSettled([
-        ggKey ? fetchGgEvents(ggKey) : Promise.resolve([]),
-        naverId && naverSecret ? fetchMunicipalNews(naverId, naverSecret) : Promise.resolve([]),
-      ]);
+    const cached = await fetchWithSharedCache<NoticesPayload>({
+      key: "notices:uiwang",
+      ttlMs: 10 * 60_000,
+      staleMaxMs: 6 * 3600_000,
+      failCooldownMs: 60_000,
+      fetcher: async () => {
+        const [ggRes, nvRes] = await Promise.allSettled([
+          ggKey ? fetchGgEvents(ggKey) : Promise.resolve([]),
+          naverId && naverSecret ? fetchMunicipalNews(naverId, naverSecret) : Promise.resolve([]),
+        ]);
 
-      const ggItems = ggRes.status === "fulfilled" ? ggRes.value : [];
-      const nvItems = nvRes.status === "fulfilled" ? nvRes.value : [];
+        const ggItems = ggRes.status === "fulfilled" ? ggRes.value : [];
+        const nvItems = nvRes.status === "fulfilled" ? nvRes.value : [];
 
-      if (ggItems.length === 0 && nvItems.length === 0) {
-        const err =
-          (ggRes.status === "rejected" && ggRes.reason) ||
-          (nvRes.status === "rejected" && nvRes.reason);
-        if (err) throw err;
-      }
+        if (ggItems.length === 0 && nvItems.length === 0) {
+          const err =
+            (ggRes.status === "rejected" && ggRes.reason) ||
+            (nvRes.status === "rejected" && nvRes.reason);
+          if (err) throw err;
+        }
 
-      const source: NoticesPayload["source"] =
-        ggItems.length > 0 && nvItems.length > 0
-          ? "gg+naver"
-          : ggItems.length > 0
-            ? "gg"
-            : "naver";
+        const source: NoticesPayload["source"] =
+          ggItems.length > 0 && nvItems.length > 0
+            ? "gg+naver"
+            : ggItems.length > 0
+              ? "gg"
+              : "naver";
 
-      const result: NoticesPayload = {
-        items: [...ggItems, ...nvItems],
-        source,
-        updatedAt: new Date().toISOString(),
-      };
-      cache.set("uiwang", result);
-      return result;
+        return {
+          value: {
+            items: [...ggItems, ...nvItems],
+            source,
+            updatedAt: new Date().toISOString(),
+          },
+        };
+      },
     });
 
-    return ok(payload, undefined, 300);
+    return ok(cached.value, cached.notice, cached.stale ? 60 : 300);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return fail(EMPTY(), `시정 공지·행사 조회 실패: ${message}`);

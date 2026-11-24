@@ -1,4 +1,5 @@
-import { timedFetch, ok, fail, createTtlCache, normalizeServiceKey, asArray } from "@/lib/fetcher";
+import { timedFetch, ok, fail, normalizeServiceKey, asArray } from "@/lib/fetcher";
+import { fetchWithSharedCache } from "@/lib/sharedCache";
 import { isInsideUiwang, flatMetres } from "@/lib/geo";
 
 export const dynamic = "force-dynamic";
@@ -14,60 +15,63 @@ interface Pt {
   y: number;
 }
 
-/** 노선 조합이 아니라 개별 routeId 단위로 캐시해 한 노선만 바뀌어도 나머지를 재사용한다 */
-const routeCache = createTtlCache<[number, number][]>(CACHE_SEC * 1000, 300);
-
+/** 노선 조합이 아니라 개별 routeId 단위로 L1/L2 공용 캐시(24시간)한다 */
 async function fetchPath(key: string, routeId: string): Promise<[number, number][]> {
-  const cached = routeCache.get(routeId);
-  if (cached) return cached;
+  const cached = await fetchWithSharedCache<[number, number][]>({
+    key: `bus-route:${routeId}`,
+    ttlMs: CACHE_SEC * 1000,
+    staleMaxMs: 7 * 24 * 3600_000,
+    failCooldownMs: 120_000,
+    fetcher: async () => {
+      const res = await timedFetch(
+        `${GBIS}?serviceKey=${normalizeServiceKey(key)}&routeId=${routeId}&format=json`,
+        {},
+        10_000,
+      );
+      if (!res.ok) throw new Error(`gbis ${res.status}`);
+      const json = await res.json();
+      const code = json?.response?.msgHeader?.resultCode;
+      if (code !== 0 && code !== "0") {
+        throw new Error(`${code}: ${json?.response?.msgHeader?.resultMessage ?? ""}`);
+      }
+      const raw = asArray<Pt>(json?.response?.msgBody?.busRouteLineList);
 
-  const res = await timedFetch(
-    `${GBIS}?serviceKey=${normalizeServiceKey(key)}&routeId=${routeId}&format=json`,
-    {},
-    10_000,
-  );
-  if (!res.ok) throw new Error(`gbis ${res.status}`);
-  const json = await res.json();
-  const code = json?.response?.msgHeader?.resultCode;
-  if (code !== 0 && code !== "0") {
-    throw new Error(`${code}: ${json?.response?.msgHeader?.resultMessage ?? ""}`);
-  }
-  const raw = asArray<Pt>(json?.response?.msgBody?.busRouteLineList);
+      const ordered = raw
+        .slice()
+        .sort((a, b) => a.lineSeq - b.lineSeq)
+        .map((p) => [Number(p.y), Number(p.x)] as [number, number])
+        .filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng));
 
-  const ordered = raw
-    .slice()
-    .sort((a, b) => a.lineSeq - b.lineSeq)
-    .map((p) => [Number(p.y), Number(p.x)] as [number, number])
-    .filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng));
+      const keepIdx = new Set<number>();
+      ordered.forEach((p, i) => {
+        if (isInsideUiwang(p[0], p[1])) keepIdx.add(i);
+      });
+      const near = new Set(keepIdx);
+      for (const i of keepIdx) {
+        for (let j = i - 1; j >= 0; j--) {
+          if (flatMetres(ordered[i][0], ordered[i][1], ordered[j][0], ordered[j][1]) > MARGIN_M) break;
+          near.add(j);
+        }
+        for (let j = i + 1; j < ordered.length; j++) {
+          if (flatMetres(ordered[i][0], ordered[i][1], ordered[j][0], ordered[j][1]) > MARGIN_M) break;
+          near.add(j);
+        }
+      }
 
-  const keepIdx = new Set<number>();
-  ordered.forEach((p, i) => {
-    if (isInsideUiwang(p[0], p[1])) keepIdx.add(i);
+      const out: [number, number][] = [];
+      for (let i = 0; i < ordered.length; i++) {
+        if (!near.has(i)) continue;
+        const p: [number, number] = [
+          Number(ordered[i][0].toFixed(6)),
+          Number(ordered[i][1].toFixed(6)),
+        ];
+        const prev = out[out.length - 1];
+        if (!prev || flatMetres(prev[0], prev[1], p[0], p[1]) > THIN_M) out.push(p);
+      }
+      return { value: out };
+    },
   });
-  const near = new Set(keepIdx);
-  for (const i of keepIdx) {
-    for (let j = i - 1; j >= 0; j--) {
-      if (flatMetres(ordered[i][0], ordered[i][1], ordered[j][0], ordered[j][1]) > MARGIN_M) break;
-      near.add(j);
-    }
-    for (let j = i + 1; j < ordered.length; j++) {
-      if (flatMetres(ordered[i][0], ordered[i][1], ordered[j][0], ordered[j][1]) > MARGIN_M) break;
-      near.add(j);
-    }
-  }
-
-  const out: [number, number][] = [];
-  for (let i = 0; i < ordered.length; i++) {
-    if (!near.has(i)) continue;
-    const p: [number, number] = [
-      Number(ordered[i][0].toFixed(6)),
-      Number(ordered[i][1].toFixed(6)),
-    ];
-    const prev = out[out.length - 1];
-    if (!prev || flatMetres(prev[0], prev[1], p[0], p[1]) > THIN_M) out.push(p);
-  }
-  if (out.length > 1) routeCache.set(routeId, out);
-  return out;
+  return cached.value;
 }
 
 export async function GET(req: Request) {

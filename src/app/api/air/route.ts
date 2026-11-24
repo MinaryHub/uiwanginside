@@ -3,11 +3,11 @@ import {
   ok,
   fail,
   nowISO,
-  createTtlCache,
   parseDataGoKr,
   isTransientDataGoKrError,
   normalizeServiceKey,
 } from "@/lib/fetcher";
+import { fetchWithSharedCache } from "@/lib/sharedCache";
 import type { AirPayload, AirStation, AirGrade, AirForecast } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -107,16 +107,12 @@ function gradeOf(code: string | undefined, value: number | null, kind: "pm10" | 
 }
 
 const EMPTY: AirPayload = { stations: [], source: "airkorea", updatedAt: "" };
-const cache = createTtlCache<AirPayload>(9 * 60_000, 4);
 
 export async function GET() {
   const key = process.env.AIRKOREA_SERVICE_KEY ?? process.env.KMA_SERVICE_KEY;
   if (!key) {
     return fail(EMPTY, "에어코리아 인증키가 설정되지 않았습니다.");
   }
-
-  const cached = cache.get("air");
-  if (cached) return ok(cached, undefined, CACHE_SEC);
 
   const encodedKey = normalizeServiceKey(key);
 
@@ -142,53 +138,63 @@ export async function GET() {
   }
 
   try {
-    const forecastP = loadForecast(key).catch((e) => {
-      console.warn("[air:forecast]", e instanceof Error ? e.message : e);
-      return { forecast: [] as AirForecast[], at: undefined };
+    const cached = await fetchWithSharedCache<AirPayload>({
+      key: "air",
+      ttlMs: 9 * 60_000,
+      staleMaxMs: 2 * 3600_000,
+      failCooldownMs: 60_000,
+      fetcher: async () => {
+        const forecastP = loadForecast(key).catch((e) => {
+          console.warn("[air:forecast]", e instanceof Error ? e.message : e);
+          return { forecast: [] as AirForecast[], at: undefined };
+        });
+
+        const settled = await Promise.allSettled(UIWANG_STATIONS.map((n) => loadWithRetry(n)));
+        const stations = UIWANG_STATIONS.map((name, i): AirStation | null => {
+          const s = settled[i];
+          if (s.status !== "fulfilled" || !s.value) return null;
+          const r = s.value;
+          const pm10 = num(r.pm10Value);
+          const pm25 = num(r.pm25Value);
+          return {
+            name,
+            pm10,
+            pm25,
+            o3: num(r.o3Value),
+            no2: num(r.no2Value),
+            pm10Grade: gradeOf(r.pm10Grade, pm10, "pm10"),
+            pm25Grade: gradeOf(r.pm25Grade, pm25, "pm25"),
+            khai: num(r.khaiValue),
+            khaiGrade: r.khaiGrade ? (GRADE_LABEL[r.khaiGrade] ?? null) : null,
+            measuredAt: r.dataTime ?? "",
+          };
+        }).filter((s): s is AirStation => s !== null);
+
+        if (stations.length === 0) {
+          const firstErr = settled.find((s) => s.status === "rejected");
+          if (firstErr && firstErr.status === "rejected") throw firstErr.reason;
+          throw new Error("의왕 측정소 데이터를 찾지 못했습니다.");
+        }
+
+        const { forecast, at } = await forecastP;
+        const payload: AirPayload = {
+          stations,
+          forecast,
+          forecastAt: at,
+          source: "airkorea",
+          updatedAt: nowISO(),
+        };
+        const partial = stations.length < UIWANG_STATIONS.length;
+        return {
+          value: payload,
+          notice: partial
+            ? "일부 측정소 응답이 지연되어 수신된 측정소만 표시합니다."
+            : undefined,
+          customTtlMs: partial ? 2 * 60_000 : undefined,
+        };
+      },
     });
-
-    const settled = await Promise.allSettled(UIWANG_STATIONS.map((n) => loadWithRetry(n)));
-    const stations = UIWANG_STATIONS.map((name, i): AirStation | null => {
-      const s = settled[i];
-      if (s.status !== "fulfilled" || !s.value) return null;
-      const r = s.value;
-      const pm10 = num(r.pm10Value);
-      const pm25 = num(r.pm25Value);
-      return {
-        name,
-        pm10,
-        pm25,
-        o3: num(r.o3Value),
-        no2: num(r.no2Value),
-        pm10Grade: gradeOf(r.pm10Grade, pm10, "pm10"),
-        pm25Grade: gradeOf(r.pm25Grade, pm25, "pm25"),
-        khai: num(r.khaiValue),
-        khaiGrade: r.khaiGrade ? (GRADE_LABEL[r.khaiGrade] ?? null) : null,
-        measuredAt: r.dataTime ?? "",
-      };
-    }).filter((s): s is AirStation => s !== null);
-
-    if (stations.length === 0) {
-      const firstErr = settled.find((s) => s.status === "rejected");
-      if (firstErr && firstErr.status === "rejected") throw firstErr.reason;
-      return fail(EMPTY, "의왕 측정소 데이터를 찾지 못했습니다.");
-    }
-
-    const { forecast, at } = await forecastP;
-    const payload: AirPayload = {
-      stations,
-      forecast,
-      forecastAt: at,
-      source: "airkorea",
-      updatedAt: nowISO(),
-    };
-    const partial = stations.length < UIWANG_STATIONS.length;
-    cache.set("air", payload, partial ? 2 * 60_000 : undefined);
-    return ok(
-      payload,
-      partial ? "일부 측정소 응답이 지연되어 수신된 측정소만 표시합니다." : undefined,
-      partial ? 60 : CACHE_SEC,
-    );
+    return ok(cached.value, cached.notice, cached.stale || cached.notice ? 60 : CACHE_SEC);
   } catch (e) {
     console.error("[air]", e);
     const reason = e instanceof Error ? e.message : String(e);

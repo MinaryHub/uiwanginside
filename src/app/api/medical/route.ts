@@ -4,12 +4,12 @@ import {
   ok,
   fail,
   nowISO,
-  createTtlCache,
   parseDataGoKr,
   normalizeServiceKey,
   asArray,
   kstDateParts,
 } from "@/lib/fetcher";
+import { fetchWithSharedCache } from "@/lib/sharedCache";
 import type { DayHours, MedicalPayload, MedicalPlace } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -159,8 +159,6 @@ const EMPTY: MedicalPayload = {
   updatedAt: "",
 };
 
-const cache = createTtlCache<{ payload: MedicalPayload; notice?: string }>(10 * 60_000, 8);
-
 export async function GET() {
   const key = process.env.EMERGENCY_SERVICE_KEY ?? process.env.KMA_SERVICE_KEY;
   if (!key) {
@@ -169,11 +167,46 @@ export async function GET() {
 
   const { isoDow: day, hhmm } = kstDateParts();
   const prevDay = day === 1 ? 7 : day - 1;
-  const cacheKey = `d${day}`;
-  const cached = cache.get(cacheKey);
-  if (cached) {
-    // 캐시된 목록에 "지금 열림" 만 다시 계산한다 (시간이 흐르므로)
-    const places = cached.payload.places.map((p) => {
+
+  try {
+    const cached = await fetchWithSharedCache<MedicalPayload>({
+      key: `medical:d${day}`,
+      // 병·의원/약국 진료시간표는 하루 동안 거의 바뀌지 않는다
+      ttlMs: 30 * 60_000,
+      staleMaxMs: 12 * 3600_000,
+      failCooldownMs: 90_000,
+      fetcher: async () => {
+        const [hos, pha] = await Promise.allSettled([
+          fetchList(HOSPITAL, key, "hospital", day, hhmm),
+          fetchList(PHARMACY, key, "pharmacy", day, hhmm),
+        ]);
+
+        const places = [
+          ...(hos.status === "fulfilled" ? hos.value : []),
+          ...(pha.status === "fulfilled" ? pha.value : []),
+        ].filter((p) => p.name);
+
+        const failed: string[] = [];
+        if (hos.status === "rejected") failed.push(`병·의원: ${reasonOf(hos.reason)}`);
+        if (pha.status === "rejected") failed.push(`약국: ${reasonOf(pha.reason)}`);
+
+        if (places.length === 0) {
+          throw new Error(
+            failed.length ? `응급의료 API — ${failed.join(" / ")}` : "의왕시 조회 결과가 없습니다.",
+          );
+        }
+
+        const notice = failed.length ? `일부 미연동 — ${failed.join(" / ")}` : undefined;
+        return {
+          value: { places, day, source: "nmc", updatedAt: nowISO() },
+          notice,
+          customTtlMs: notice ? 2 * 60_000 : undefined,
+        };
+      },
+    });
+
+    // 캐시된 목록에 "지금 열림" 만 현재 시각으로 다시 계산한다
+    const places = cached.value.places.map((p) => {
       const prev = p.weeklyHours?.[prevDay];
       return {
         ...p,
@@ -186,40 +219,16 @@ export async function GET() {
         ),
       };
     });
+
     return ok(
-      { ...cached.payload, places, updatedAt: nowISO() },
+      { ...cached.value, places, updatedAt: nowISO() },
       cached.notice,
-      cached.notice ? undefined : CDN_CACHE_SEC,
+      cached.notice ? 60 : CDN_CACHE_SEC,
     );
+  } catch (e) {
+    console.error("[medical]", e);
+    return fail(EMPTY, reasonOf(e));
   }
-
-  const [hos, pha] = await Promise.allSettled([
-    fetchList(HOSPITAL, key, "hospital", day, hhmm),
-    fetchList(PHARMACY, key, "pharmacy", day, hhmm),
-  ]);
-
-  const places = [
-    ...(hos.status === "fulfilled" ? hos.value : []),
-    ...(pha.status === "fulfilled" ? pha.value : []),
-  ].filter((p) => p.name);
-
-  const failed: string[] = [];
-  if (hos.status === "rejected") failed.push(`병·의원: ${reasonOf(hos.reason)}`);
-  if (pha.status === "rejected") failed.push(`약국: ${reasonOf(pha.reason)}`);
-
-  if (places.length === 0) {
-    console.error("[medical]", failed.join(" / "));
-    return fail(
-      EMPTY,
-      failed.length ? `응급의료 API — ${failed.join(" / ")}` : "의왕시 조회 결과가 없습니다.",
-    );
-  }
-
-  const notice = failed.length ? `일부 미연동 — ${failed.join(" / ")}` : undefined;
-  const payload: MedicalPayload = { places, day, source: "nmc", updatedAt: nowISO() };
-  // 일부 실패는 2분만 짧게 캐시해 승인/복구 직후 반영되게 한다
-  cache.set(cacheKey, { payload, notice }, notice ? 2 * 60_000 : undefined);
-  return ok(payload, notice, notice ? undefined : CDN_CACHE_SEC);
 }
 
 function reasonOf(e: unknown): string {

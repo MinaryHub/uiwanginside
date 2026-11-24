@@ -123,6 +123,23 @@ export function ensureSchema(): Promise<void> {
       )
     `;
 
+    /**
+     * 서버리스 인스턴스 공용 외부 API 캐시 (L2).
+     *
+     * 동시 접속으로 Vercel 인스턴스가 여러 개 떠도 같은 공공 API 를
+     * 인스턴스마다 중복 호출하지 않게 막고, 상류 API 호출 제한(429/99)이나
+     * 일시 장애 시 마지막 정상 응답(stale)을 안전하게 되돌려 준다.
+     */
+    await sql`
+      CREATE TABLE IF NOT EXISTS api_cache (
+        key        TEXT PRIMARY KEY,
+        payload    JSONB       NOT NULL,
+        notice     TEXT,
+        at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+        expires_at TIMESTAMPTZ NOT NULL
+      )
+    `;
+
     ensured = true;
   })().finally(() => {
     ensuring = null;

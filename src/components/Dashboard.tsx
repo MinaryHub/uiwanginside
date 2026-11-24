@@ -120,17 +120,28 @@ const NO_EV: EvStation[] = [];
 const NO_SHELTERS: ShelterItem[] = [];
 const NO_LIBRARIES: LibraryItem[] = [];
 
+/** CDN 캐시 히트율을 높이기 위해 좌표를 약 200m 격자로 맞춘다 */
+const snapCoord = (v: number) => (Math.round(v * 500) / 500).toFixed(3);
+const roundRect = (rect: string) =>
+  rect
+    .split(",")
+    .map((v) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n.toFixed(3) : v;
+    })
+    .join(",");
+
 const POLL = {
   weather: 10 * 60_000,
   air: 10 * 60_000,
   medical: 10 * 60_000,
-  // 응급실 병상은 기관이 몇 분마다 올린다
-  emergency: 60_000,
-  traffic: 60_000,
+  // 응급실 병상·교통 소통은 기관 갱신 주기에 맞춰 여유 있게 조회한다
+  emergency: 90_000,
+  traffic: 90_000,
   transit: 30_000,
   news: 5 * 60_000,
-  // GBIS 는 16초에 한 번만 새 값을 준다 (실측 15.8초). 그보다 자주 물으면 헛조회다.
-  busPositions: 16_000,
+  // GBIS 는 16초에 한 번만 새 값을 준다. 동시 접속 여유를 두고 20초로 맞춘다.
+  busPositions: 20_000,
 };
 
 /**
@@ -231,7 +242,7 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
   const def = mode ? MODE_MAP[mode] : null;
 
   const dCenter = useDebounced(center, 500);
-  const geo = `lat=${dCenter.lat.toFixed(4)}&lng=${dCenter.lng.toFixed(4)}`;
+  const geo = `lat=${snapCoord(dCenter.lat)}&lng=${snapCoord(dCenter.lng)}`;
 
   /**
    * 장소 조회에 쓰는 화면 범위.
@@ -311,33 +322,54 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
 
   const places = useSWR<ApiEnvelope<PlacesPayload>>(
     def?.categories.length && searchArea
-      ? `/api/places?categories=${def.categories.join(",")}` +
-          `&rect=${searchArea.rect}&lat=${searchArea.lat.toFixed(4)}` +
-          `&lng=${searchArea.lng.toFixed(4)}`
+      ? `/api/places?categories=${[...def.categories].sort().join(",")}` +
+          `&rect=${roundRect(searchArea.rect)}&lat=${searchArea.lat.toFixed(3)}` +
+          `&lng=${searchArea.lng.toFixed(3)}`
       : null,
     swrFetcher,
-    { keepPreviousData: true, revalidateOnFocus: false },
+    {
+      keepPreviousData: true,
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      dedupingInterval: 60_000,
+    },
   );
   const weather = useSWR<ApiEnvelope<WeatherPayload>>("/api/weather", swrFetcher, {
     refreshInterval: POLL.weather,
     keepPreviousData: true,
+    revalidateOnFocus: false,
+    revalidateOnReconnect: false,
+    dedupingInterval: 5 * 60_000,
   });
   const air = useSWR<ApiEnvelope<AirPayload>>("/api/air", swrFetcher, {
     refreshInterval: POLL.air,
     keepPreviousData: true,
+    revalidateOnFocus: false,
+    revalidateOnReconnect: false,
+    dedupingInterval: 5 * 60_000,
   });
   const traffic = useSWR<ApiEnvelope<TrafficPayload>>("/api/traffic", swrFetcher, {
     refreshInterval: POLL.traffic,
     keepPreviousData: true,
+    focusThrottleInterval: 60_000,
+    dedupingInterval: 45_000,
   });
   const medical = useSWR<ApiEnvelope<MedicalPayload>>("/api/medical", swrFetcher, {
     refreshInterval: POLL.medical,
     keepPreviousData: true,
+    revalidateOnFocus: false,
+    revalidateOnReconnect: false,
+    dedupingInterval: 5 * 60_000,
   });
   const emergency = useSWR<ApiEnvelope<EmergencyPayload>>(
     needs("emergency") ? "/api/emergency" : null,
     swrFetcher,
-    { refreshInterval: POLL.emergency, keepPreviousData: true },
+    {
+      refreshInterval: POLL.emergency,
+      keepPreviousData: true,
+      focusThrottleInterval: 60_000,
+      dedupingInterval: 45_000,
+    },
   );
   const transit = useSWR<ApiEnvelope<TransitPayload>>(
     def?.layers.bus || needs("transit") || !!busAlert ? `/api/transit?${geo}` : null,
@@ -345,6 +377,8 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
     {
       refreshInterval: busAlert ? 15_000 : POLL.transit,
       keepPreviousData: true,
+      focusThrottleInterval: 20_000,
+      dedupingInterval: 15_000,
       onSuccess(env) {
         const alert = busAlertRef.current;
         if (!alert || !env?.ok) return;
@@ -370,42 +404,65 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
   const news = useSWR<ApiEnvelope<NewsPayload>>(
     `/api/news?q=${encodeURIComponent(newsQuery)}`,
     swrFetcher,
-    { refreshInterval: POLL.news, keepPreviousData: true },
+    {
+      refreshInterval: POLL.news,
+      keepPreviousData: true,
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      dedupingInterval: 3 * 60_000,
+    },
   );
   const factories = useSWR<ApiEnvelope<FactoriesPayload>>(
     needs("industry") || needs("compare") || activeDong ? "/api/factories" : null,
     swrFetcher,
-    { revalidateOnFocus: false, dedupingInterval: 30 * 60_000 },
+    { revalidateOnFocus: false, revalidateOnReconnect: false, dedupingInterval: 30 * 60_000 },
   );
   const evChargers = useSWR<ApiEnvelope<EvChargersPayload>>(
     needs("ev") || needs("compare") ? "/api/ev-chargers" : null,
     swrFetcher,
-    { refreshInterval: 3 * 60_000, keepPreviousData: true },
+    {
+      refreshInterval: 3 * 60_000,
+      keepPreviousData: true,
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      dedupingInterval: 2 * 60_000,
+    },
   );
   const shelters = useSWR<ApiEnvelope<SheltersPayload>>(
     needs("shelter") ? "/api/shelters" : null,
     swrFetcher,
-    { revalidateOnFocus: false, dedupingInterval: 60 * 60_000 },
+    { revalidateOnFocus: false, revalidateOnReconnect: false, dedupingInterval: 60 * 60_000 },
   );
   const libraries = useSWR<ApiEnvelope<LibrariesPayload>>(
     needs("libraries") ? "/api/libraries" : null,
     swrFetcher,
-    { revalidateOnFocus: false, dedupingInterval: 60 * 60_000 },
+    { revalidateOnFocus: false, revalidateOnReconnect: false, dedupingInterval: 60 * 60_000 },
   );
   const notices = useSWR<ApiEnvelope<NoticesPayload>>(
     needs("notices") ? "/api/notices" : null,
     swrFetcher,
-    { refreshInterval: POLL.news, keepPreviousData: true },
+    {
+      refreshInterval: POLL.news,
+      keepPreviousData: true,
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      dedupingInterval: 3 * 60_000,
+    },
   );
   const subway = useSWR<ApiEnvelope<SubwayPayload>>(
     needs("subway") ? "/api/subway" : null,
     swrFetcher,
-    { refreshInterval: 30_000, keepPreviousData: true },
+    {
+      refreshInterval: 30_000,
+      keepPreviousData: true,
+      focusThrottleInterval: 20_000,
+      dedupingInterval: 15_000,
+    },
   );
   const localCurrency = useSWR<ApiEnvelope<LocalCurrencyPayload>>(
     needs("currency") ? "/api/local-currency" : null,
     swrFetcher,
-    { revalidateOnFocus: false, dedupingInterval: 60 * 60_000 },
+    { revalidateOnFocus: false, revalidateOnReconnect: false, dedupingInterval: 60 * 60_000 },
   );
 
   const dongFactoryCounts = useMemo(() => {
@@ -448,14 +505,21 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
   /** 지금 지도에 띄우고 있는 노선. 쉽게 바뀌지 않는다 */
   const [picked, setPicked] = useState({ at: "", fleet: EMPTY_FLEET });
 
-  const fleetKey = picked.fleet.routes
+  // 노선 순서가 달라져도 같은 CDN URL 로 묶이도록 ID 순으로 정렬한다
+  const fleetKey = [...picked.fleet.routes]
+    .sort((a, b) => a.id.localeCompare(b.id))
     .map((r) => `${r.id}:${encodeURIComponent(r.name)}`)
     .join(",");
 
   const busFleet = useSWR<ApiEnvelope<BusFleetPayload>>(
     fleetKey ? `/api/bus-positions?routes=${fleetKey}` : null,
     swrFetcher,
-    { refreshInterval: POLL.busPositions, keepPreviousData: true },
+    {
+      refreshInterval: POLL.busPositions,
+      keepPreviousData: true,
+      focusThrottleInterval: 20_000,
+      dedupingInterval: 15_000,
+    },
   );
 
   /*
@@ -476,7 +540,12 @@ export default function Dashboard({ appKey }: { appKey?: string }) {
       ? `/api/bus-positions?routeId=${tracked.id}&routeName=${encodeURIComponent(tracked.name)}`
       : null,
     swrFetcher,
-    { refreshInterval: POLL.busPositions, keepPreviousData: true },
+    {
+      refreshInterval: POLL.busPositions,
+      keepPreviousData: true,
+      focusThrottleInterval: 20_000,
+      dedupingInterval: 15_000,
+    },
   );
 
   // ── 동작 ──────────────────────────────────────────────

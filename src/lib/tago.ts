@@ -103,6 +103,10 @@ export interface BusPositionResult {
   cityName: string;
 }
 
+const posCache = createTtlCache<BusPositionResult>(16_000, 120);
+const posInFlight = createInFlight<BusPositionResult>();
+const POS_STALE_MS = 2 * 60_000;
+
 /**
  * GBIS 노선ID 로 현재 운행 중인 버스 위치를 조회한다.
  * 색인에 없으면(서울 노선 등) null 을 돌려 호출부가 안내하게 한다.
@@ -115,29 +119,48 @@ export async function fetchBusPositions(
   const cityCode = index.get(gbisRouteId);
   if (!cityCode) return null;
 
-  const url =
-    `${TAGO}/BusLcInfoInqireService/getRouteAcctoBusLcList` +
-    `?serviceKey=${normalizeServiceKey(key)}&cityCode=${cityCode}&routeId=GGB${gbisRouteId}` +
-    `&_type=json&numOfRows=100&pageNo=1`;
-  const json = await retryTransient(async () => {
-    const res = await timedFetch(url, {}, 12_000);
-    return parseDataGoKr(await res.text()) as {
-      response?: { body?: { items?: { item?: RawPos | RawPos[] } } };
-    };
-  }, "tago:positions");
+  const hit = posCache.get(gbisRouteId);
+  if (hit) return hit;
 
-  const positions: BusPosition[] = [];
-  for (const p of asArray<RawPos>(json?.response?.body?.items?.item)) {
-    const lat = num(p.gpslati);
-    const lng = num(p.gpslong);
-    if (lat === null || lng === null) continue;
-    positions.push({
-      vehicleNo: String(p.vehicleno ?? ""),
-      nodeName: String(p.nodenm ?? ""),
-      nodeOrder: num(p.nodeord),
-      lat,
-      lng,
-    });
-  }
-  return { positions, cityName: CITIES[cityCode] ?? String(cityCode) };
+  return posInFlight(gbisRouteId, async () => {
+    const again = posCache.get(gbisRouteId);
+    if (again) return again;
+
+    const url =
+      `${TAGO}/BusLcInfoInqireService/getRouteAcctoBusLcList` +
+      `?serviceKey=${normalizeServiceKey(key)}&cityCode=${cityCode}&routeId=GGB${gbisRouteId}` +
+      `&_type=json&numOfRows=100&pageNo=1`;
+    try {
+      const json = await retryTransient(async () => {
+        const res = await timedFetch(url, {}, 12_000);
+        return parseDataGoKr(await res.text()) as {
+          response?: { body?: { items?: { item?: RawPos | RawPos[] } } };
+        };
+      }, "tago:positions");
+
+      const positions: BusPosition[] = [];
+      for (const p of asArray<RawPos>(json?.response?.body?.items?.item)) {
+        const lat = num(p.gpslati);
+        const lng = num(p.gpslong);
+        if (lat === null || lng === null) continue;
+        positions.push({
+          vehicleNo: String(p.vehicleno ?? ""),
+          nodeName: String(p.nodenm ?? ""),
+          nodeOrder: num(p.nodeord),
+          lat,
+          lng,
+        });
+      }
+      const result: BusPositionResult = {
+        positions,
+        cityName: CITIES[cityCode] ?? String(cityCode),
+      };
+      posCache.set(gbisRouteId, result);
+      return result;
+    } catch (e) {
+      const stale = posCache.getStale(gbisRouteId, POS_STALE_MS);
+      if (stale) return stale;
+      throw e;
+    }
+  });
 }

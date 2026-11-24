@@ -66,13 +66,15 @@ export function kstDateParts(offsetMs = 0) {
 
 /**
  * CDN 캐시 헤더. maxAge 초 동안 캐시하고, 그 뒤 2배 구간은 갱신하는 동안
- * 이전 응답을 그대로 내보낸다(stale-while-revalidate).
+ * 이전 응답을 그대로 내보낸다(stale-while-revalidate). 상류 일시 장애 시에는
+ * stale-if-error 로 캐시된 정상 응답을 유지해 동시 접속 폭발을 흡수한다.
  * 브라우저는 캐시하지 않아 새로고침 시 항상 최신을 받는다.
  */
 function cacheHeader(maxAge?: number) {
-  return maxAge && maxAge > 0
-    ? `public, max-age=0, s-maxage=${maxAge}, stale-while-revalidate=${maxAge * 2}`
-    : "no-store";
+  if (!maxAge || maxAge <= 0) return "no-store";
+  const swr = Math.min(86_400, maxAge * 2);
+  const sie = Math.min(86_400, maxAge * 6);
+  return `public, max-age=0, s-maxage=${maxAge}, stale-while-revalidate=${swr}, stale-if-error=${sie}`;
 }
 
 export function ok<T>(data: T, notice?: string, maxAge?: number) {
@@ -152,12 +154,21 @@ export async function retryTransient<T>(
 
 /** 프로세스 메모리 TTL 캐시 — 같은 좌표 반복 조회로 외부 API 를 낭비하지 않는다 */
 export function createTtlCache<T>(ttlMs: number, maxEntries = 200) {
-  const store = new Map<string, { at: number; value: T }>();
+  const store = new Map<string, { at: number; savedAt: number; value: T }>();
   return {
     get(key: string): T | undefined {
       const hit = store.get(key);
       if (!hit) return undefined;
       if (Date.now() - hit.at > ttlMs) {
+        return undefined;
+      }
+      return hit.value;
+    },
+    /** 만료된 항목이라도 maxStaleMs 이내라면 상류 장애 시 폴백으로 돌려준다 */
+    getStale(key: string, maxStaleMs: number): T | undefined {
+      const hit = store.get(key);
+      if (!hit) return undefined;
+      if (Date.now() - hit.savedAt > maxStaleMs) {
         store.delete(key);
         return undefined;
       }
@@ -171,11 +182,12 @@ export function createTtlCache<T>(ttlMs: number, maxEntries = 200) {
         const oldest = store.keys().next().value;
         if (oldest !== undefined) store.delete(oldest);
       }
+      const now = Date.now();
       const at =
         customTtlMs != null && customTtlMs < ttlMs
-          ? Date.now() - (ttlMs - customTtlMs)
-          : Date.now();
-      store.set(key, { at, value });
+          ? now - (ttlMs - customTtlMs)
+          : now;
+      store.set(key, { at, savedAt: now, value });
     },
   };
 }
